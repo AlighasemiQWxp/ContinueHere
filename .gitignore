@@ -1,0 +1,25 @@
+/target/
+
+# Rust tooling
+**/*.rs.bk
+*.pdb
+
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
