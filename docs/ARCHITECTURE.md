@@ -87,6 +87,22 @@ is the only feature object registered at the project level. Controllers
 coordinate multi-step behavior; managers own stable feature APIs; backends
 isolate infrastructure and platform code.
 
+## Shared models
+
+Shared models are small, immutable value types used across feature boundaries.
+They define stable device identifiers, protocol versions, platforms,
+capabilities, and device snapshots without owning feature behavior.
+
+The models do not discover devices, generate identities, persist data,
+serialize protocol messages, or publish state-change events. Those
+responsibilities remain with their owning roadmap phases. Model fields stay
+private and are exposed through narrow constructors and read-only methods.
+
+Shared identifiers use dedicated types instead of plain strings so unrelated
+identifiers cannot be mixed accidentally. Capability collections prevent
+duplicates while preserving a simple representation suited to the small number
+of capabilities expected per device.
+
 ## Visibility and dependencies
 
 - Keep types private unless another module or crate must use them.

@@ -17,7 +17,7 @@ after its implementation and validation requirements are satisfied.
   - Formatting and linting policy
   - Architecture and GitHub documentation
   - Continuous integration after local validation
-- [ ] 03. Shared models
+- [x] 03. Shared models
   - Stable identifiers and protocol version
   - Platform, capability, and device state models
 

@@ -1,4 +1,25 @@
-use continuehere::{ContinueHere, DeviceManager, LocalizationManager, SettingsManager};
+use continuehere::{
+    Capability, ContinueHere, Device, DeviceId, DeviceManager, DeviceState, LocalizationManager,
+    Platform, ProtocolVersion, SettingsManager,
+};
+
+#[test]
+fn shared_models_are_available_through_the_public_api() {
+    let id = DeviceId::new("desktop-1").expect("identifier should be valid");
+    let device = Device::new(
+        id,
+        "Desktop",
+        Platform::Windows,
+        ProtocolVersion::CURRENT,
+        [Capability::UrlHandoff, Capability::FileTransfer],
+        DeviceState::Available,
+    );
+
+    assert_eq!(device.id().as_str(), "desktop-1");
+    assert_eq!(device.display_name(), "Desktop");
+    assert!(device.supports(Capability::UrlHandoff));
+    assert_eq!(device.state(), DeviceState::Available);
+}
 
 #[tokio::test(flavor = "current_thread")]
 async fn builder_exposes_the_core_managers() {

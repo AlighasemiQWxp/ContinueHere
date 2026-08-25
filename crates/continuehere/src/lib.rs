@@ -25,6 +25,9 @@ pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
 pub use locales::LocalizationManager;
 pub use managers::DeviceManager;
+pub use models::{
+    Capability, Device, DeviceId, DeviceIdError, DeviceState, Platform, ProtocolVersion,
+};
 pub use settings::SettingsManager;
 
 pub type Result<T> = std::result::Result<T, Error>;

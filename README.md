@@ -16,6 +16,7 @@ The architectural foundation is complete. It currently provides:
 - Strongly typed access to main systems and their capabilities
 - Ordered module startup, reverse-order shutdown, and startup rollback
 - Reusable handle ownership and lifecycle primitives
+- Shared device identifiers, protocol versions, and device-description models
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 Discovery, pairing, secure transport, handoff features, persistent settings, and
