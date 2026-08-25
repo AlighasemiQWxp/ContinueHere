@@ -12,7 +12,8 @@ The architectural foundation is complete. It currently provides:
 
 - A Rust workspace with a dedicated `continuehere` library crate
 - A `ContinueHere` application composition root
-- Strongly typed access to core managers
+- Hierarchical main-system and child-module ownership
+- Strongly typed access to main systems and their capabilities
 - Ordered module startup, reverse-order shutdown, and startup rollback
 - Reusable handle ownership and lifecycle primitives
 - Automated tests for the public API, module lifecycle, and handle behavior
@@ -42,10 +43,11 @@ ContinueHere/
 └── docs/                 Architecture and roadmap documentation
 ```
 
-The application root owns the main modules. Frequently used core modules are
-accessed directly through typed methods, while the dynamic registry is reserved
-for optional lifecycle-managed modules. Additional details are available in the
-[architecture guide](docs/ARCHITECTURE.md).
+The application root owns a typed project module collection. Every system has a
+main module that constructs and owns its private child modules. Frequently used
+capabilities are accessed through typed methods, while the dynamic registry is
+reserved for optional lifecycle-managed modules. Additional details are
+available in the [architecture guide](docs/ARCHITECTURE.md).
 
 ## Development
 

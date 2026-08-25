@@ -4,8 +4,9 @@
 
 ContinueHere uses a modular Rust workspace. The application composition root
 owns the main systems, constructs their dependencies, and controls their
-lifecycle. Feature code is added incrementally without coupling unrelated
-systems together.
+lifecycle. Every system has one main module. Each main module privately owns,
+constructs, and controls the child modules that belong to that system. Feature
+code is added incrementally without coupling unrelated systems together.
 
 ## Workspace boundaries
 
@@ -19,22 +20,41 @@ depend on an application or user-interface implementation.
 
 ## Application root
 
-`ContinueHereBuilder` constructs a `ContinueHere` instance. `ContinueHere` owns:
+`ContinueHereBuilder` constructs and starts a `ContinueHere` instance.
+`ContinueHere` owns `ProjectModules`, the private project-wide module owner.
+`ProjectModules` registers every main system as a strongly typed field and owns
+the optional dynamic module registry.
 
-- `CoreModules`, which stores frequently used, strongly typed managers
-- `ModuleRegistry`, which stores optional lifecycle-managed modules
+Known main systems and child modules use typed fields instead of runtime lookup.
+The dynamic registry is reserved for genuinely optional or replaceable modules
+and is never used as a general service locator on normal hot paths.
 
-Core managers are accessed through narrow typed methods. The registry is not a
-general service locator and is not used for normal hot-path module access.
+The current hierarchy is:
+
+```text
+ContinueHere
+└── ProjectModules
+    ├── SettingsManager
+    │   └── SettingsModules
+    │       └── LocalizationManager
+    ├── DeviceManager
+    └── ModuleRegistry
+```
+
+`SettingsModules` is the private typed child-module registry for the Settings
+system. Public convenience methods may delegate through this ownership tree,
+but they do not change which system owns a module.
 
 ## Module lifecycle
 
-Optional modules implement a shared lifecycle contract:
+Main systems and dynamic modules implement a shared lifecycle contract:
 
-1. Modules start in registration order.
-2. If startup fails, previously started modules stop in reverse order.
-3. Normal shutdown stops every started module in reverse order.
-4. Shutdown continues after an error and returns the first failure.
+1. Project main systems start in registration order.
+2. A main system starts its child modules in registration order.
+3. If startup fails, previously started modules stop in reverse order.
+4. Normal shutdown stops every started module in reverse order.
+5. A main system stops its children before the project stops an earlier system.
+6. Shutdown continues after an error and returns the first failure.
 
 This gives resources a predictable dependency order and keeps partial startup
 from leaving active modules behind.
@@ -62,8 +82,10 @@ discovery, pairing, transport, security, transfer, handoff, settings,
 localization, managers, controllers, backends, models, and utilities.
 
 Each feature should be implemented independently and should communicate through
-small typed APIs or events. Controllers coordinate multi-step behavior; managers
-own stable feature APIs; backends isolate infrastructure and platform code.
+small typed APIs or events. A feature's main module owns its child modules and
+is the only feature object registered at the project level. Controllers
+coordinate multi-step behavior; managers own stable feature APIs; backends
+isolate infrastructure and platform code.
 
 ## Visibility and dependencies
 

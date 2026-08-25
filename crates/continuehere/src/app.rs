@@ -1,14 +1,13 @@
 use crate::{
     Result,
-    core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
+    core::{module::Module, modules::ProjectModules, registry::ModuleRegistry},
     locales::LocalizationManager,
     managers::DeviceManager,
     settings::SettingsManager,
 };
 
 pub struct ContinueHere {
-    core: CoreModules,
-    optional_modules: ModuleRegistry,
+    modules: ProjectModules,
 }
 
 impl ContinueHere {
@@ -17,26 +16,23 @@ impl ContinueHere {
     }
 
     pub fn settings(&self) -> &SettingsManager {
-        self.core.settings()
+        self.modules.settings()
     }
 
     pub fn localization(&self) -> &LocalizationManager {
-        self.core.localization()
+        self.modules.settings().localization()
     }
 
     pub fn devices(&self) -> &DeviceManager {
-        self.core.devices()
+        self.modules.devices()
     }
 
     pub async fn shutdown(mut self) -> Result<()> {
-        self.optional_modules.stop_all().await
+        self.modules.stop_all().await
     }
 
-    fn new(core: CoreModules, optional_modules: ModuleRegistry) -> Self {
-        Self {
-            core,
-            optional_modules,
-        }
+    fn new(modules: ProjectModules) -> Self {
+        Self { modules }
     }
 }
 
@@ -50,14 +46,10 @@ impl ContinueHereBuilder {
         Self::default()
     }
 
-    pub async fn build(mut self) -> Result<ContinueHere> {
-        let core = CoreModules::new();
-        let start_result = self.optional_modules.start_all().await;
-
-        match start_result {
-            Ok(()) => Ok(ContinueHere::new(core, self.optional_modules)),
-            Err(error) => Err(error),
-        }
+    pub async fn build(self) -> Result<ContinueHere> {
+        let mut modules = ProjectModules::new(self.optional_modules);
+        modules.start_all().await?;
+        Ok(ContinueHere::new(modules))
     }
 
     #[allow(

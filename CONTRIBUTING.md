@@ -6,6 +6,8 @@ clear ownership, small public APIs, and strict boundaries between features.
 ## Development principles
 
 - Keep modules focused on one responsibility.
+- Register one main module per system at the project root.
+- Construct and own system child modules inside their main module.
 - Prefer constructor-injected dependencies over global access.
 - Keep implementation details private and expose only required capabilities.
 - Use events for communication when one system should react to another.
