@@ -12,11 +12,14 @@ categories.workspace = true
 publish = false
 
 [dependencies]
+atomic-write-file.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt"] }
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true

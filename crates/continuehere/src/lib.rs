@@ -3,6 +3,7 @@ mod app;
 mod backends;
 mod controllers;
 mod core;
+mod directories;
 mod discovery;
 #[allow(
     dead_code,
@@ -23,11 +24,12 @@ mod utils;
 
 pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
+pub use directories::DirectoryManager;
 pub use locales::LocalizationManager;
 pub use managers::DeviceManager;
 pub use models::{
     Capability, Device, DeviceId, DeviceIdError, DeviceState, Platform, ProtocolVersion,
 };
-pub use settings::SettingsManager;
+pub use settings::{DirectorySettings, DirectorySettingsListener, SettingsManager};
 
 pub type Result<T> = std::result::Result<T, Error>;

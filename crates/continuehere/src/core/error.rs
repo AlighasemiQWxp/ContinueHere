@@ -23,4 +23,21 @@ pub enum Error {
         #[source]
         source: Box<dyn StdError + Send + Sync + 'static>,
     },
+
+    #[error("settings operation failed: {source}")]
+    Settings {
+        #[source]
+        source: Box<dyn StdError + Send + Sync + 'static>,
+    },
+}
+
+impl Error {
+    pub(crate) fn settings<E>(source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        Self::Settings {
+            source: Box::new(source),
+        }
+    }
 }

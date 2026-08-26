@@ -1,6 +1,9 @@
+use std::path::PathBuf;
+
 use crate::{
     Result,
     core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
+    directories::DirectoryManager,
     locales::LocalizationManager,
     managers::DeviceManager,
     settings::SettingsManager,
@@ -11,12 +14,16 @@ pub struct ContinueHere {
 }
 
 impl ContinueHere {
-    pub fn builder() -> ContinueHereBuilder {
-        ContinueHereBuilder::new()
+    pub fn builder(project_directory: impl Into<PathBuf>) -> ContinueHereBuilder {
+        ContinueHereBuilder::new(project_directory)
     }
 
     pub fn settings(&self) -> &SettingsManager {
         self.modules.settings()
+    }
+
+    pub fn directories(&self) -> &DirectoryManager {
+        self.modules.directories()
     }
 
     pub fn localization(&self) -> &LocalizationManager {
@@ -36,18 +43,21 @@ impl ContinueHere {
     }
 }
 
-#[derive(Default)]
 pub struct ContinueHereBuilder {
+    project_directory: PathBuf,
     optional_modules: ModuleRegistry,
 }
 
 impl ContinueHereBuilder {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(project_directory: impl Into<PathBuf>) -> Self {
+        Self {
+            project_directory: project_directory.into(),
+            optional_modules: ModuleRegistry::default(),
+        }
     }
 
     pub async fn build(self) -> Result<ContinueHere> {
-        let mut modules = CoreModules::new(self.optional_modules);
+        let mut modules = CoreModules::new(self.optional_modules, self.project_directory)?;
         modules.start_all().await?;
         Ok(ContinueHere::new(modules))
     }

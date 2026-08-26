@@ -25,7 +25,13 @@ after its implementation and validation requirements are satisfied.
 
 ## B. Core application
 
-- [ ] 04. Settings
+- [x] 04. Settings
+  - Versioned binary `settings.bin` in the supplied project directory
+  - Atomic persistence with bounded and validated section payloads
+  - Typed per-system settings capabilities and change events
+  - Persistent default directory for received files
+  - Temporary per-transfer destination overrides
+  - Missing-file defaults and explicit malformed-file errors
 - [ ] 05. Localization with English, Persian, fallback, and RTL support
 - [ ] 06. Device identity
 - [ ] 07. Protocol and security design

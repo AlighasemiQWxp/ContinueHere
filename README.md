@@ -17,11 +17,13 @@ The architectural foundation is complete. It currently provides:
 - Ordered module startup, reverse-order shutdown, and startup rollback
 - Reusable handle ownership and lifecycle primitives
 - Shared device identifiers, protocol versions, and device-description models
+- Versioned binary settings with atomic persistence
+- Typed default and per-transfer destination directory handling
 - Automated tests for the public API, module lifecycle, and handle behavior
 
-Discovery, pairing, secure transport, handoff features, persistent settings, and
-desktop/mobile interfaces are planned work. See the [project roadmap](docs/ROADMAP.md)
-for the intended development order.
+Discovery, pairing, secure transport, handoff features, and desktop/mobile
+interfaces are planned work. See the [project roadmap](docs/ROADMAP.md) for the
+intended development order.
 
 ## Design goals
 
@@ -51,6 +53,16 @@ capabilities instead of owning one another. Frequently used capabilities are
 accessed through typed methods, while the dynamic registry is reserved for
 optional lifecycle-managed modules. Additional details are available in the
 [architecture guide](docs/ARCHITECTURE.md).
+
+The application supplies an absolute project directory when constructing the
+core. ContinueHere stores its local preferences at `settings.bin` inside that
+directory:
+
+```rust
+let app = ContinueHere::builder(project_directory).build().await?;
+```
+
+The generated root `settings.bin` is ignored by Git.
 
 ## Development
 

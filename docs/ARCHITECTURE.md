@@ -35,6 +35,7 @@ The current hierarchy is:
 ContinueHere
 └── CoreModules
     ├── SettingsManager
+    ├── DirectoryManager
     ├── LocalizationManager
     ├── DeviceManager
     └── ModuleRegistry
@@ -54,6 +55,12 @@ operations needed for one system. The system's main module and the future
 Settings user interface use the same capability, so settings have one path and
 one authoritative owner.
 
+`DirectorySettings` is the first concrete capability. `SettingsManager` owns it
+and injects the same underlying capability into `DirectoryManager`. It stores
+the default destination directory for received files. A destination selected
+for one transfer is a temporary override resolved by `DirectoryManager`; it
+does not modify the saved default.
+
 For example, the Localization system will use a localization-specific settings
 capability when its persisted preferences are implemented. `CoreModules`
 constructs the main systems and injects that capability without making either
@@ -61,6 +68,36 @@ main system own the other.
 
 Settings capabilities are introduced only when a system has real settings to
 expose. Empty gateways are not created speculatively.
+
+## Settings persistence
+
+`SettingsManager` owns the only persistent settings store. The application
+supplies its project directory during construction, and the store uses the
+fixed path `<project directory>/settings.bin`.
+
+The file has a versioned binary envelope containing independently versioned
+system sections. Section identifiers and payload lengths allow newer unknown
+sections to be preserved without exposing a string-based settings API. Known
+sections are decoded and validated through their typed settings capabilities.
+
+The version-1 envelope uses the `CHSETBIN` magic bytes, a little-endian root
+version and section count, then a sequence of UTF-8 section identifiers,
+little-endian section versions, payload lengths, and opaque payload bytes. The
+version-1 `directories` payload is the UTF-8 representation of an absolute
+default transfer directory. The complete file and every section are bounded
+before allocation or decoding.
+
+Writes replace the complete small settings document atomically. Runtime state
+and change events update only after the new file has committed successfully, so
+a failed write leaves both the old file and the old active setting intact.
+
+The settings file contains preferences only. Device identity, trusted-device
+credentials, security keys, transfer history, and temporary per-transfer paths
+remain with their owning systems.
+
+Native file-picker integration remains an application-interface responsibility.
+The picker supplies an absolute directory to `DirectoryManager`, which resolves
+that one-transfer selection or falls back to the persisted default.
 
 ## Module lifecycle
 

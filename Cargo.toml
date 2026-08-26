@@ -14,8 +14,10 @@ keywords = ["handoff", "cross-platform", "continuity", "device"]
 categories = ["network-programming"]
 
 [workspace.dependencies]
+atomic-write-file = "0.3"
 async-trait = "0.1"
 thiserror = "2"
+tokio = { version = "1", features = ["sync"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
