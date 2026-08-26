@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use crate::{
     Error,
     core::{error::ModuleError, module::Module},
+    directories::{DirectoryChangedDelegate, DirectoryChangedSubscription},
     settings::{DirectorySettings, validate_directory_path},
 };
 
@@ -19,6 +20,13 @@ impl DirectoryManager {
 
     pub fn default_transfer_directory(&self) -> PathBuf {
         self.settings.default_transfer_directory()
+    }
+
+    pub fn on_directory_changed(
+        &self,
+        delegate: DirectoryChangedDelegate,
+    ) -> DirectoryChangedSubscription {
+        self.settings.on_directory_changed(delegate)
     }
 
     pub fn resolve_transfer_directory(
@@ -51,10 +59,12 @@ impl Module for DirectoryManager {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use tempfile::tempdir;
 
     use super::DirectoryManager;
-    use crate::settings::SettingsManager;
+    use crate::{directories::DirectoryChangedDelegate, settings::SettingsManager};
 
     #[test]
     fn selected_transfer_directory_is_a_temporary_override() {
@@ -63,6 +73,15 @@ mod tests {
         let settings = SettingsManager::new(project.path().to_path_buf())
             .expect("settings manager should be created");
         let manager = DirectoryManager::new(settings.directories().shared());
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let recorded_changes = Arc::clone(&changes);
+        let _subscription =
+            manager.on_directory_changed(DirectoryChangedDelegate::new(move |directory| {
+                recorded_changes
+                    .lock()
+                    .expect("recorded changes should be available")
+                    .push(directory.to_path_buf());
+            }));
 
         assert_eq!(
             manager
@@ -71,6 +90,12 @@ mod tests {
             selected
         );
         assert_eq!(manager.default_transfer_directory(), project.path());
+        assert!(
+            changes
+                .lock()
+                .expect("recorded changes should be available")
+                .is_empty()
+        );
     }
 
     #[test]
@@ -90,6 +115,36 @@ mod tests {
                 .resolve_transfer_directory(None)
                 .expect("default directory should resolve"),
             saved
+        );
+    }
+
+    #[test]
+    fn main_system_exposes_its_directory_changed_event() {
+        let project = tempdir().expect("temporary project directory should be available");
+        let saved = project.path().join("saved");
+        let settings = SettingsManager::new(project.path().to_path_buf())
+            .expect("settings manager should be created");
+        let manager = DirectoryManager::new(settings.directories().shared());
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let recorded_changes = Arc::clone(&changes);
+        let _subscription =
+            manager.on_directory_changed(DirectoryChangedDelegate::new(move |directory| {
+                recorded_changes
+                    .lock()
+                    .expect("recorded changes should be available")
+                    .push(directory.to_path_buf());
+            }));
+
+        settings
+            .directories()
+            .set_default_transfer_directory(saved.clone())
+            .expect("default directory should save");
+
+        assert_eq!(
+            *changes
+                .lock()
+                .expect("recorded changes should be available"),
+            vec![saved]
         );
     }
 }

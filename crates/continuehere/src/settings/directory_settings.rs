@@ -3,9 +3,10 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use tokio::sync::watch;
-
-use crate::Error;
+use crate::{
+    Error,
+    directories::{DirectoryChangedDelegate, DirectoryChangedEvent, DirectoryChangedSubscription},
+};
 
 use super::{error::SettingsError, store::SettingsStore};
 
@@ -18,22 +19,23 @@ pub struct DirectorySettings {
 
 struct DirectorySettingsInner {
     store: Arc<Mutex<SettingsStore>>,
-    default_transfer_directory: watch::Sender<PathBuf>,
+    default_transfer_directory: Mutex<PathBuf>,
+    directory_changed: DirectoryChangedEvent,
 }
 
 impl DirectorySettings {
     pub(super) fn new(store: Arc<Mutex<SettingsStore>>, default_directory: PathBuf) -> Self {
-        let (default_transfer_directory, _) = watch::channel(default_directory);
         Self {
             inner: Arc::new(DirectorySettingsInner {
                 store,
-                default_transfer_directory,
+                default_transfer_directory: Mutex::new(default_directory),
+                directory_changed: DirectoryChangedEvent::default(),
             }),
         }
     }
 
     pub fn default_transfer_directory(&self) -> PathBuf {
-        self.inner.default_transfer_directory.borrow().clone()
+        self.lock_default_transfer_directory().clone()
     }
 
     pub fn set_default_transfer_directory(
@@ -52,16 +54,17 @@ impl DirectorySettings {
         store
             .write_section(SECTION_NAME, SECTION_VERSION, payload)
             .map_err(Error::settings)?;
-        self.inner
-            .default_transfer_directory
-            .send_replace(directory);
+        *self.lock_default_transfer_directory() = directory.clone();
+        drop(store);
+        self.inner.directory_changed.publish(&directory);
         Ok(())
     }
 
-    pub fn subscribe(&self) -> DirectorySettingsListener {
-        DirectorySettingsListener {
-            receiver: self.inner.default_transfer_directory.subscribe(),
-        }
+    pub fn on_directory_changed(
+        &self,
+        delegate: DirectoryChangedDelegate,
+    ) -> DirectoryChangedSubscription {
+        self.inner.directory_changed.subscribe(delegate)
     }
 
     pub(crate) fn shared(&self) -> Self {
@@ -84,9 +87,7 @@ impl DirectorySettings {
         }
 
         let directory = decode_directory(section.payload())?;
-        self.inner
-            .default_transfer_directory
-            .send_replace(directory);
+        *self.lock_default_transfer_directory() = directory;
         Ok(())
     }
 
@@ -96,20 +97,12 @@ impl DirectorySettings {
             .lock()
             .map_err(|_| SettingsError::StateUnavailable)
     }
-}
 
-pub struct DirectorySettingsListener {
-    receiver: watch::Receiver<PathBuf>,
-}
-
-impl DirectorySettingsListener {
-    pub fn current(&self) -> PathBuf {
-        self.receiver.borrow().clone()
-    }
-
-    pub async fn changed(&mut self) -> Option<PathBuf> {
-        self.receiver.changed().await.ok()?;
-        Some(self.receiver.borrow_and_update().clone())
+    fn lock_default_transfer_directory(&self) -> MutexGuard<'_, PathBuf> {
+        self.inner
+            .default_transfer_directory
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
     }
 }
 
@@ -149,10 +142,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::DirectorySettings;
-    use crate::settings::store::SettingsStore;
+    use crate::{directories::DirectoryChangedDelegate, settings::store::SettingsStore};
 
-    #[tokio::test]
-    async fn setting_a_directory_persists_and_notifies() {
+    #[test]
+    fn setting_a_directory_persists_and_notifies() {
         let project = tempdir().expect("temporary project directory should be available");
         let first = project.path().join("first");
         let second = project.path().join("second");
@@ -160,13 +153,26 @@ mod tests {
             project.path().join("settings.bin"),
         )));
         let settings = DirectorySettings::new(Arc::clone(&store), first);
-        let mut listener = settings.subscribe();
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let recorded_changes = Arc::clone(&changes);
+        let _subscription =
+            settings.on_directory_changed(DirectoryChangedDelegate::new(move |directory| {
+                recorded_changes
+                    .lock()
+                    .expect("recorded changes should be available")
+                    .push(directory.to_path_buf());
+            }));
 
         settings
             .set_default_transfer_directory(second.clone())
             .expect("directory should save");
 
-        assert_eq!(listener.changed().await, Some(second.clone()));
+        assert_eq!(
+            *changes
+                .lock()
+                .expect("recorded changes should be available"),
+            vec![second.clone()]
+        );
         assert_eq!(settings.default_transfer_directory(), second);
         assert!(project.path().join("settings.bin").is_file());
     }
@@ -206,7 +212,15 @@ mod tests {
         settings
             .set_default_transfer_directory(first.clone())
             .expect("first directory should save");
-        let listener = settings.subscribe();
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let recorded_changes = Arc::clone(&changes);
+        let _subscription =
+            settings.on_directory_changed(DirectoryChangedDelegate::new(move |directory| {
+                recorded_changes
+                    .lock()
+                    .expect("recorded changes should be available")
+                    .push(directory.to_path_buf());
+            }));
 
         fs::rename(&path, project.path().join("settings.backup"))
             .expect("settings file should move inside the temporary directory");
@@ -214,6 +228,42 @@ mod tests {
 
         assert!(settings.set_default_transfer_directory(second).is_err());
         assert_eq!(settings.default_transfer_directory(), first);
-        assert_eq!(listener.current(), first);
+        assert!(
+            changes
+                .lock()
+                .expect("recorded changes should be available")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn dropping_a_subscription_stops_notifications() {
+        let project = tempdir().expect("temporary project directory should be available");
+        let next = project.path().join("next");
+        let store = Arc::new(Mutex::new(SettingsStore::new(
+            project.path().join("settings.bin"),
+        )));
+        let settings = DirectorySettings::new(store, project.path().to_path_buf());
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let recorded_changes = Arc::clone(&changes);
+        let subscription =
+            settings.on_directory_changed(DirectoryChangedDelegate::new(move |directory| {
+                recorded_changes
+                    .lock()
+                    .expect("recorded changes should be available")
+                    .push(directory.to_path_buf());
+            }));
+
+        drop(subscription);
+        settings
+            .set_default_transfer_directory(next)
+            .expect("directory should save");
+
+        assert!(
+            changes
+                .lock()
+                .expect("recorded changes should be available")
+                .is_empty()
+        );
     }
 }

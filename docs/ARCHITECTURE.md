@@ -61,6 +61,13 @@ the default destination directory for received files. A destination selected
 for one transfer is a temporary override resolved by `DirectoryManager`; it
 does not modify the saved default.
 
+The directory system defines its own `DirectoryChangedDelegate` and exposes the
+`on_directory_changed` event through both `DirectorySettings` and
+`DirectoryManager`. The event fires only after a changed default directory has
+been persisted successfully. A temporary per-transfer override does not change
+shared state and therefore does not fire the event. Dropping the returned
+`DirectoryChangedSubscription` unregisters that listener.
+
 For example, the Localization system will use a localization-specific settings
 capability when its persisted preferences are implemented. `CoreModules`
 constructs the main systems and injects that capability without making either
@@ -88,8 +95,9 @@ default transfer directory. The complete file and every section are bounded
 before allocation or decoding.
 
 Writes replace the complete small settings document atomically. Runtime state
-and change events update only after the new file has committed successfully, so
-a failed write leaves both the old file and the old active setting intact.
+updates and system-owned delegates run only after the new file has committed
+successfully, so a failed write leaves the old file and active setting intact
+and does not publish a false change.
 
 The settings file contains preferences only. Device identity, trusted-device
 credentials, security keys, transfer history, and temporary per-transfer paths

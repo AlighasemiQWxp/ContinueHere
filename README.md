@@ -19,6 +19,7 @@ The architectural foundation is complete. It currently provides:
 - Shared device identifiers, protocol versions, and device-description models
 - Versioned binary settings with atomic persistence
 - Typed default and per-transfer destination directory handling
+- Directory-change delegates with automatically released subscriptions
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 Discovery, pairing, secure transport, handoff features, and desktop/mobile

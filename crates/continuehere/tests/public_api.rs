@@ -1,6 +1,9 @@
+use std::sync::{Arc, Mutex};
+
 use continuehere::{
-    Capability, ContinueHere, Device, DeviceId, DeviceManager, DeviceState, DirectoryManager,
-    DirectorySettings, LocalizationManager, Platform, ProtocolVersion, SettingsManager,
+    Capability, ContinueHere, Device, DeviceId, DeviceManager, DeviceState,
+    DirectoryChangedDelegate, DirectoryManager, DirectorySettings, LocalizationManager, Platform,
+    ProtocolVersion, SettingsManager,
 };
 use tempfile::tempdir;
 
@@ -51,10 +54,26 @@ async fn default_transfer_directory_persists_through_the_public_api() {
         .build()
         .await
         .expect("ContinueHere should build");
+    let changes = Arc::new(Mutex::new(Vec::new()));
+    let recorded_changes = Arc::clone(&changes);
+    let _subscription = app
+        .directories()
+        .on_directory_changed(DirectoryChangedDelegate::new(move |directory| {
+            recorded_changes
+                .lock()
+                .expect("recorded changes should be available")
+                .push(directory.to_path_buf());
+        }));
     app.settings()
         .directories()
         .set_default_transfer_directory(saved.clone())
         .expect("default directory should save");
+    assert_eq!(
+        *changes
+            .lock()
+            .expect("recorded changes should be available"),
+        vec![saved.clone()]
+    );
     app.shutdown().await.expect("ContinueHere should stop");
 
     let loaded = ContinueHere::builder(project.path())

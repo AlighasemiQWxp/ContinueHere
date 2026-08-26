@@ -28,7 +28,7 @@ after its implementation and validation requirements are satisfied.
 - [x] 04. Settings
   - Versioned binary `settings.bin` in the supplied project directory
   - Atomic persistence with bounded and validated section payloads
-  - Typed per-system settings capabilities and change events
+  - Typed per-system settings capabilities and delegate-based change events
   - Persistent default directory for received files
   - Temporary per-transfer destination overrides
   - Missing-file defaults and explicit malformed-file errors

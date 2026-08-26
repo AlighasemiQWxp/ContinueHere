@@ -15,7 +15,6 @@ publish = false
 atomic-write-file.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
