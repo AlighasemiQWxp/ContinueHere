@@ -21,9 +21,9 @@ depend on an application or user-interface implementation.
 ## Application root
 
 `ContinueHereBuilder` constructs and starts a `ContinueHere` instance.
-`ContinueHere` owns `ProjectModules`, the private project-wide module owner.
-`ProjectModules` registers every main system as a strongly typed field and owns
-the optional dynamic module registry.
+`ContinueHere` owns `CoreModules`, the private project-wide module owner.
+`CoreModules` registers every main system as a strongly typed field and owns the
+optional dynamic module registry.
 
 Known main systems and child modules use typed fields instead of runtime lookup.
 The dynamic registry is reserved for genuinely optional or replaceable modules
@@ -33,17 +33,34 @@ The current hierarchy is:
 
 ```text
 ContinueHere
-└── ProjectModules
+└── CoreModules
     ├── SettingsManager
-    │   └── SettingsModules
-    │       └── LocalizationManager
+    ├── LocalizationManager
     ├── DeviceManager
     └── ModuleRegistry
 ```
 
-`SettingsModules` is the private typed child-module registry for the Settings
-system. Public convenience methods may delegate through this ownership tree,
-but they do not change which system owns a module.
+Every independent system owns its own main module directly under `CoreModules`.
+A main module may privately own child modules that are part of the same system,
+but it must not own another independent main system. In particular,
+`SettingsManager` does not own systems merely because they have configurable
+settings.
+
+## Settings communication
+
+Systems communicate with `SettingsManager` through narrow, typed settings
+capabilities. A capability exposes only the read, write, and change-event
+operations needed for one system. The system's main module and the future
+Settings user interface use the same capability, so settings have one path and
+one authoritative owner.
+
+For example, the Localization system will use a localization-specific settings
+capability when its persisted preferences are implemented. `CoreModules`
+constructs the main systems and injects that capability without making either
+main system own the other.
+
+Settings capabilities are introduced only when a system has real settings to
+expose. Empty gateways are not created speculatively.
 
 ## Module lifecycle
 
@@ -53,7 +70,7 @@ Main systems and dynamic modules implement a shared lifecycle contract:
 2. A main system starts its child modules in registration order.
 3. If startup fails, previously started modules stop in reverse order.
 4. Normal shutdown stops every started module in reverse order.
-5. A main system stops its children before the project stops an earlier system.
+5. A main system stops its own children before an earlier main system stops.
 6. Shutdown continues after an error and returns the first failure.
 
 This gives resources a predictable dependency order and keeps partial startup
@@ -82,10 +99,10 @@ discovery, pairing, transport, security, transfer, handoff, settings,
 localization, managers, controllers, backends, models, and utilities.
 
 Each feature should be implemented independently and should communicate through
-small typed APIs or events. A feature's main module owns its child modules and
-is the only feature object registered at the project level. Controllers
-coordinate multi-step behavior; managers own stable feature APIs; backends
-isolate infrastructure and platform code.
+small typed APIs or events. Every independent system has one main module under
+`CoreModules`. A main module owns only child modules from its own system.
+Controllers coordinate multi-step behavior; managers own stable feature APIs;
+backends isolate infrastructure and platform code.
 
 ## Shared models
 

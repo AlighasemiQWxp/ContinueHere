@@ -1,13 +1,13 @@
 use crate::{
     Result,
-    core::{module::Module, modules::ProjectModules, registry::ModuleRegistry},
+    core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
     locales::LocalizationManager,
     managers::DeviceManager,
     settings::SettingsManager,
 };
 
 pub struct ContinueHere {
-    modules: ProjectModules,
+    modules: CoreModules,
 }
 
 impl ContinueHere {
@@ -20,7 +20,7 @@ impl ContinueHere {
     }
 
     pub fn localization(&self) -> &LocalizationManager {
-        self.modules.settings().localization()
+        self.modules.localization()
     }
 
     pub fn devices(&self) -> &DeviceManager {
@@ -31,7 +31,7 @@ impl ContinueHere {
         self.modules.stop_all().await
     }
 
-    fn new(modules: ProjectModules) -> Self {
+    fn new(modules: CoreModules) -> Self {
         Self { modules }
     }
 }
@@ -47,7 +47,7 @@ impl ContinueHereBuilder {
     }
 
     pub async fn build(self) -> Result<ContinueHere> {
-        let mut modules = ProjectModules::new(self.optional_modules);
+        let mut modules = CoreModules::new(self.optional_modules);
         modules.start_all().await?;
         Ok(ContinueHere::new(modules))
     }

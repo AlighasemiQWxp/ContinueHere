@@ -31,13 +31,7 @@ async fn builder_exposes_the_core_managers() {
 
     let _: &SettingsManager = app.settings();
     let _: &LocalizationManager = app.localization();
-    let _: &LocalizationManager = app.settings().localization();
     let _: &DeviceManager = app.devices();
-
-    assert!(std::ptr::eq(
-        app.localization(),
-        app.settings().localization()
-    ));
 
     let shutdown_result = app.shutdown().await;
     if let Err(error) = shutdown_result {

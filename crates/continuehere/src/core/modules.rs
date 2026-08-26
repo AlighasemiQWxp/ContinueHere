@@ -1,28 +1,38 @@
-use crate::{Error, Result, managers::DeviceManager, settings::SettingsManager};
+use crate::{
+    Error, Result, locales::LocalizationManager, managers::DeviceManager, settings::SettingsManager,
+};
 
 use super::{module::Module, registry::ModuleRegistry};
 
-pub(crate) struct ProjectModules {
+pub(crate) struct CoreModules {
     settings: SettingsManager,
+    localization: LocalizationManager,
     devices: DeviceManager,
     optional: ModuleRegistry,
     settings_started: bool,
+    localization_started: bool,
     devices_started: bool,
 }
 
-impl ProjectModules {
+impl CoreModules {
     pub(crate) fn new(optional: ModuleRegistry) -> Self {
         Self {
             settings: SettingsManager::new(),
+            localization: LocalizationManager::new(),
             devices: DeviceManager::new(),
             optional,
             settings_started: false,
+            localization_started: false,
             devices_started: false,
         }
     }
 
     pub(crate) fn settings(&self) -> &SettingsManager {
         &self.settings
+    }
+
+    pub(crate) fn localization(&self) -> &LocalizationManager {
+        &self.localization
     }
 
     pub(crate) fn devices(&self) -> &DeviceManager {
@@ -32,6 +42,12 @@ impl ProjectModules {
     pub(crate) async fn start_all(&mut self) -> Result<()> {
         start_module(&mut self.settings).await?;
         self.settings_started = true;
+
+        if let Err(error) = start_module(&mut self.localization).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.localization_started = true;
 
         if let Err(error) = start_module(&mut self.devices).await {
             self.rollback_main_systems().await;
@@ -56,6 +72,12 @@ impl ProjectModules {
             keep_first_error(&mut first_error, result);
         }
 
+        if self.localization_started {
+            let result = stop_module(&mut self.localization).await;
+            self.localization_started = false;
+            keep_first_error(&mut first_error, result);
+        }
+
         if self.settings_started {
             let result = stop_module(&mut self.settings).await;
             self.settings_started = false;
@@ -72,6 +94,11 @@ impl ProjectModules {
         if self.devices_started {
             let _ = self.devices.stop().await;
             self.devices_started = false;
+        }
+
+        if self.localization_started {
+            let _ = self.localization.stop().await;
+            self.localization_started = false;
         }
 
         if self.settings_started {
@@ -117,7 +144,7 @@ mod tests {
 
     use crate::core::error::ModuleError;
 
-    use super::{Module, ModuleRegistry, ProjectModules};
+    use super::{CoreModules, Module, ModuleRegistry};
 
     struct FailingOptionalModule;
 
@@ -137,15 +164,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn project_starts_and_stops_all_main_systems() {
-        let mut modules = ProjectModules::new(ModuleRegistry::default());
+    async fn core_starts_and_stops_all_main_systems() {
+        let mut modules = CoreModules::new(ModuleRegistry::default());
 
-        modules.start_all().await.expect("project should start");
+        modules.start_all().await.expect("core should start");
         assert!(modules.settings_started);
+        assert!(modules.localization_started);
         assert!(modules.devices_started);
 
-        modules.stop_all().await.expect("project should stop");
+        modules.stop_all().await.expect("core should stop");
         assert!(!modules.settings_started);
+        assert!(!modules.localization_started);
         assert!(!modules.devices_started);
     }
 
@@ -155,12 +184,13 @@ mod tests {
         optional
             .register(FailingOptionalModule)
             .expect("optional module should register");
-        let mut modules = ProjectModules::new(optional);
+        let mut modules = CoreModules::new(optional);
 
         let result = modules.start_all().await;
 
         assert!(result.is_err());
         assert!(!modules.settings_started);
+        assert!(!modules.localization_started);
         assert!(!modules.devices_started);
     }
 }

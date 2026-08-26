@@ -7,8 +7,10 @@ after its implementation and validation requirements are satisfied.
 
 - [x] 01. Core architecture
   - Rust workspace and application root
-  - Hierarchical main-system and child-module ownership
+  - Independent main-system ownership under `CoreModules`
+  - Private same-system child-module ownership
   - Typed module access without runtime service lookup
+  - Narrow typed capabilities for cross-system communication
   - Module lifecycle and registry
   - Reusable handle foundation
 - [x] 02. Project quality
