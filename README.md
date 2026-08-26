@@ -94,7 +94,7 @@ Development conventions and the validation workflow are documented in
 
 ## Author
 
-Created and maintained by Dalton.
+Created and maintained by AlighasemiQWxp.
 
 ## License
 
