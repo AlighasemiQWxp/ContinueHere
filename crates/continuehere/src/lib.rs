@@ -29,9 +29,12 @@ pub use locales::{
     Language, LanguageChangedDelegate, LanguageChangedSubscription, LocalizationKey,
     LocalizationManager, TextDirection,
 };
-pub use managers::DeviceManager;
+pub use managers::{
+    DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription, DeviceManager,
+};
 pub use models::{
-    Capability, Device, DeviceId, DeviceIdError, DeviceState, Platform, ProtocolVersion,
+    Capability, Device, DeviceId, DeviceIdError, DeviceState, LocalDeviceIdentity, Platform,
+    ProtocolVersion,
 };
 pub use settings::{DirectorySettings, LocalizationSettings, SettingsManager};
 

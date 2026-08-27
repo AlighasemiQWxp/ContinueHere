@@ -130,6 +130,36 @@ Native file-picker integration remains an application-interface responsibility.
 The picker supplies an absolute directory to `DirectoryManager`, which resolves
 that one-transfer selection or falls back to the persisted default.
 
+## Device identity
+
+`DeviceManager` is the independent main module for the local device system. It
+privately owns the current `LocalDeviceIdentity`, its persistence store, and its
+change event. The identity contains a stable random `DeviceId`, a user-facing
+display name, and the platform detected for the current run.
+
+The permanent identifier is generated once with the operating system's secure
+random source and remains unchanged across normal restarts, display-name
+changes, and network changes. It is an opaque identifier, not a secret or proof
+of trust. Hardware addresses, IP addresses, and hostnames are not used as the
+permanent identifier.
+
+Identity data is stored in the independently versioned
+`<project directory>/device_identity.bin` file. A missing file creates and
+atomically commits a new identity before device-system startup succeeds. An
+existing file is bounded and validated before use. Malformed identity data is
+preserved and reported instead of being silently replaced with a new identity.
+
+The initial display name uses a valid environment-provided system name when
+available and otherwise uses a platform-specific fallback. Display-name changes
+commit to disk before runtime state changes or the system-owned
+`DeviceIdentityChangedDelegate` event is published. Selecting the current name
+does nothing.
+
+Discovery will later combine the local identity with protocol, capability, and
+availability information to construct shared `Device` snapshots. Pairing and
+security remain responsible for proving that a peer owns a claimed identity;
+Phase 6 does not create credentials or establish trust.
+
 ## Module lifecycle
 
 Main systems and dynamic modules implement a shared lifecycle contract:

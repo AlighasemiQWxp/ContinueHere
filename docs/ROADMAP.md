@@ -37,7 +37,12 @@ after its implementation and validation requirements are satisfied.
   - Code-owned translation keys and English fallback
   - Persisted language selection with delegate-based change events
   - Left-to-right and right-to-left direction support
-- [ ] 06. Device identity
+- [x] 06. Device identity
+  - Stable random identifier generated once per installation
+  - Independently versioned and atomically persisted identity file
+  - Typed local identity with display name and runtime platform
+  - Persisted display-name changes with delegate-based events
+  - Explicit separation from settings, discovery, pairing, and security
 - [ ] 07. Protocol and security design
 
 ## C. Device connection

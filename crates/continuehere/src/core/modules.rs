@@ -21,14 +21,14 @@ pub(crate) struct CoreModules {
 
 impl CoreModules {
     pub(crate) fn new(optional: ModuleRegistry, project_directory: PathBuf) -> Result<Self> {
-        let settings = SettingsManager::new(project_directory).map_err(Error::settings)?;
+        let settings = SettingsManager::new(project_directory.clone()).map_err(Error::settings)?;
         let directories = DirectoryManager::new(settings.directories().shared());
         let localization = LocalizationManager::new(settings.localization().shared());
         Ok(Self {
             settings,
             directories,
             localization,
-            devices: DeviceManager::new(),
+            devices: DeviceManager::new(project_directory),
             optional,
             settings_started: false,
             directories_started: false,

@@ -24,6 +24,8 @@ The architectural foundation is complete. It currently provides:
 - Typed translation keys with English fallback
 - Left-to-right and right-to-left text direction
 - Language-change delegates with automatically released subscriptions
+- Stable local device identity with independent atomic persistence
+- Persisted device display names with delegate-based change events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 Discovery, pairing, secure transport, handoff features, and desktop/mobile
@@ -60,14 +62,15 @@ optional lifecycle-managed modules. Additional details are available in the
 [architecture guide](docs/ARCHITECTURE.md).
 
 The application supplies an absolute project directory when constructing the
-core. ContinueHere stores its local preferences at `settings.bin` inside that
-directory:
+core. ContinueHere stores local preferences at `settings.bin` and its separate
+local identity at `device_identity.bin` inside that directory:
 
 ```rust
 let app = ContinueHere::builder(project_directory).build().await?;
 ```
 
-The generated root `settings.bin` is ignored by Git.
+The generated root `settings.bin` and `device_identity.bin` files are ignored by
+Git.
 
 ## Development
 

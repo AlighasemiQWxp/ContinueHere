@@ -29,6 +29,12 @@ pub enum Error {
         #[source]
         source: Box<dyn StdError + Send + Sync + 'static>,
     },
+
+    #[error("device identity operation failed: {source}")]
+    DeviceIdentity {
+        #[source]
+        source: Box<dyn StdError + Send + Sync + 'static>,
+    },
 }
 
 impl Error {
@@ -37,6 +43,15 @@ impl Error {
         E: StdError + Send + Sync + 'static,
     {
         Self::Settings {
+            source: Box::new(source),
+        }
+    }
+
+    pub(crate) fn device_identity<E>(source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        Self::DeviceIdentity {
             source: Box::new(source),
         }
     }

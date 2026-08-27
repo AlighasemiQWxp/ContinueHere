@@ -1,3 +1,3 @@
-mod device_manager;
+pub(crate) mod device;
 
-pub use device_manager::DeviceManager;
+pub use device::{DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription, DeviceManager};

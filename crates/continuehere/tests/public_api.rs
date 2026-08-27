@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use continuehere::{
-    Capability, ContinueHere, Device, DeviceId, DeviceManager, DeviceState,
-    DirectoryChangedDelegate, DirectoryManager, DirectorySettings, Language,
+    Capability, ContinueHere, Device, DeviceId, DeviceIdentityChangedDelegate, DeviceManager,
+    DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, Language,
     LanguageChangedDelegate, LocalizationKey, LocalizationManager, LocalizationSettings, Platform,
     ProtocolVersion, SettingsManager, TextDirection,
 };
@@ -41,11 +41,62 @@ async fn builder_exposes_the_core_managers() {
     let _: &DirectoryManager = app.directories();
     let _: &LocalizationManager = app.localization();
     let _: &DeviceManager = app.devices();
+    let identity = app.devices().identity();
+
+    assert!(!identity.id().as_str().is_empty());
+    assert!(!identity.display_name().is_empty());
+    assert!(project.path().join("device_identity.bin").is_file());
 
     let shutdown_result = app.shutdown().await;
     if let Err(error) = shutdown_result {
         panic!("failed to shut down ContinueHere: {error}");
     }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn local_device_identity_persists_and_publishes_name_changes() {
+    let project = tempdir().expect("temporary project directory should be available");
+    let app = ContinueHere::builder(project.path())
+        .build()
+        .await
+        .expect("ContinueHere should build");
+    let original_id = app.devices().identity().id().clone();
+    let changes = Arc::new(Mutex::new(Vec::new()));
+    let recorded_changes = Arc::clone(&changes);
+    let _subscription = app
+        .devices()
+        .on_identity_changed(DeviceIdentityChangedDelegate::new(move |identity| {
+            recorded_changes
+                .lock()
+                .expect("recorded changes should be available")
+                .push(identity);
+        }));
+
+    app.devices()
+        .set_display_name("Portable Workstation")
+        .expect("display name should save");
+
+    assert_eq!(app.devices().identity().id(), &original_id);
+    assert_eq!(
+        changes
+            .lock()
+            .expect("recorded changes should be available")
+            .as_slice(),
+        &[app.devices().identity()]
+    );
+    app.shutdown().await.expect("ContinueHere should stop");
+
+    let loaded = ContinueHere::builder(project.path())
+        .build()
+        .await
+        .expect("ContinueHere should rebuild");
+
+    assert_eq!(loaded.devices().identity().id(), &original_id);
+    assert_eq!(
+        loaded.devices().identity().display_name(),
+        "Portable Workstation"
+    );
+    loaded.shutdown().await.expect("ContinueHere should stop");
 }
 
 #[tokio::test(flavor = "current_thread")]

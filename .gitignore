@@ -9,6 +9,7 @@
 .env.*
 !.env.example
 /settings.bin
+/device_identity.bin
 
 # Editors
 .idea/
