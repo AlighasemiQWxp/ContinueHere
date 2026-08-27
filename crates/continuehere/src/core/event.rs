@@ -1,1 +1,1 @@
-//! Shared event foundations will be added with the first event-driven feature.
+//! Feature-specific event contracts remain with the systems that own them.

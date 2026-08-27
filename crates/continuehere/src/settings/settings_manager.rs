@@ -10,12 +10,14 @@ use crate::core::{error::ModuleError, module::Module};
 use super::{
     directory_settings::{DirectorySettings, validate_directory_path},
     error::SettingsError,
+    localization_settings::LocalizationSettings,
     store::SettingsStore,
 };
 
 pub struct SettingsManager {
     store: Arc<Mutex<SettingsStore>>,
     directories: DirectorySettings,
+    localization: LocalizationSettings,
 }
 
 impl SettingsManager {
@@ -35,11 +37,20 @@ impl SettingsManager {
             project_directory.join("settings.bin"),
         )));
         let directories = DirectorySettings::new(Arc::clone(&store), project_directory);
-        Ok(Self { store, directories })
+        let localization = LocalizationSettings::new(Arc::clone(&store));
+        Ok(Self {
+            store,
+            directories,
+            localization,
+        })
     }
 
     pub fn directories(&self) -> &DirectorySettings {
         &self.directories
+    }
+
+    pub fn localization(&self) -> &LocalizationSettings {
+        &self.localization
     }
 }
 
@@ -55,6 +66,7 @@ impl Module for SettingsManager {
             .map_err(|_| SettingsError::StateUnavailable)?
             .load()?;
         self.directories.load()?;
+        self.localization.load()?;
         Ok(())
     }
 
@@ -69,7 +81,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use crate::core::module::Module;
+    use crate::{core::module::Module, locales::Language};
 
     use super::SettingsManager;
 
@@ -91,6 +103,25 @@ mod tests {
         loaded.start().await.expect("saved settings should load");
 
         assert_eq!(loaded.directories().default_transfer_directory(), saved);
+    }
+
+    #[tokio::test]
+    async fn manager_loads_the_saved_language() {
+        let project = tempdir().expect("temporary project directory should be available");
+        let mut manager = SettingsManager::new(project.path().to_path_buf())
+            .expect("settings manager should be created");
+        manager.start().await.expect("settings should start");
+        manager
+            .localization()
+            .set_language(Language::Persian)
+            .expect("language should save");
+        manager.stop().await.expect("settings should stop");
+
+        let mut loaded = SettingsManager::new(project.path().to_path_buf())
+            .expect("settings manager should be recreated");
+        loaded.start().await.expect("saved settings should load");
+
+        assert_eq!(loaded.localization().language(), Language::Persian);
     }
 
     #[test]

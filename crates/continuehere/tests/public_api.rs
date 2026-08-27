@@ -2,8 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use continuehere::{
     Capability, ContinueHere, Device, DeviceId, DeviceManager, DeviceState,
-    DirectoryChangedDelegate, DirectoryManager, DirectorySettings, LocalizationManager, Platform,
-    ProtocolVersion, SettingsManager,
+    DirectoryChangedDelegate, DirectoryManager, DirectorySettings, Language,
+    LanguageChangedDelegate, LocalizationKey, LocalizationManager, LocalizationSettings, Platform,
+    ProtocolVersion, SettingsManager, TextDirection,
 };
 use tempfile::tempdir;
 
@@ -36,6 +37,7 @@ async fn builder_exposes_the_core_managers() {
 
     let _: &SettingsManager = app.settings();
     let _: &DirectorySettings = app.settings().directories();
+    let _: &LocalizationSettings = app.settings().localization();
     let _: &DirectoryManager = app.directories();
     let _: &LocalizationManager = app.localization();
     let _: &DeviceManager = app.devices();
@@ -44,6 +46,66 @@ async fn builder_exposes_the_core_managers() {
     if let Err(error) = shutdown_result {
         panic!("failed to shut down ContinueHere: {error}");
     }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn language_selection_persists_and_updates_localization() {
+    let project = tempdir().expect("temporary project directory should be available");
+    let app = ContinueHere::builder(project.path())
+        .build()
+        .await
+        .expect("ContinueHere should build");
+    let changes = Arc::new(Mutex::new(Vec::new()));
+    let recorded_changes = Arc::clone(&changes);
+    let _subscription = app
+        .localization()
+        .on_language_changed(LanguageChangedDelegate::new(move |language| {
+            recorded_changes
+                .lock()
+                .expect("recorded changes should be available")
+                .push(language);
+        }));
+
+    assert_eq!(app.localization().language(), Language::English);
+    assert_eq!(
+        app.localization().text_direction(),
+        TextDirection::LeftToRight
+    );
+    assert_eq!(
+        app.localization().text(LocalizationKey::LanguagePersian),
+        "Persian"
+    );
+
+    app.settings()
+        .localization()
+        .set_language(Language::Persian)
+        .expect("language should save");
+
+    assert_eq!(app.localization().language(), Language::Persian);
+    assert!(app.localization().is_rtl());
+    assert_eq!(
+        app.localization().text(LocalizationKey::LanguagePersian),
+        "فارسی"
+    );
+    assert_eq!(
+        *changes
+            .lock()
+            .expect("recorded changes should be available"),
+        vec![Language::Persian]
+    );
+    app.shutdown().await.expect("ContinueHere should stop");
+
+    let loaded = ContinueHere::builder(project.path())
+        .build()
+        .await
+        .expect("ContinueHere should rebuild");
+
+    assert_eq!(loaded.localization().language(), Language::Persian);
+    assert_eq!(
+        loaded.localization().text_direction(),
+        TextDirection::RightToLeft
+    );
+    loaded.shutdown().await.expect("ContinueHere should stop");
 }
 
 #[tokio::test(flavor = "current_thread")]

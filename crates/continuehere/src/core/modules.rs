@@ -23,10 +23,11 @@ impl CoreModules {
     pub(crate) fn new(optional: ModuleRegistry, project_directory: PathBuf) -> Result<Self> {
         let settings = SettingsManager::new(project_directory).map_err(Error::settings)?;
         let directories = DirectoryManager::new(settings.directories().shared());
+        let localization = LocalizationManager::new(settings.localization().shared());
         Ok(Self {
             settings,
             directories,
-            localization: LocalizationManager::new(),
+            localization,
             devices: DeviceManager::new(),
             optional,
             settings_started: false,

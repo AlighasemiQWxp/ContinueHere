@@ -32,7 +32,11 @@ after its implementation and validation requirements are satisfied.
   - Persistent default directory for received files
   - Temporary per-transfer destination overrides
   - Missing-file defaults and explicit malformed-file errors
-- [ ] 05. Localization with English, Persian, fallback, and RTL support
+- [x] 05. Localization
+  - Typed English and Persian languages with stable codes
+  - Code-owned translation keys and English fallback
+  - Persisted language selection with delegate-based change events
+  - Left-to-right and right-to-left direction support
 - [ ] 06. Device identity
 - [ ] 07. Protocol and security design
 

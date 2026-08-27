@@ -20,6 +20,10 @@ The architectural foundation is complete. It currently provides:
 - Versioned binary settings with atomic persistence
 - Typed default and per-transfer destination directory handling
 - Directory-change delegates with automatically released subscriptions
+- Persisted English and Persian language selection
+- Typed translation keys with English fallback
+- Left-to-right and right-to-left text direction
+- Language-change delegates with automatically released subscriptions
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 Discovery, pairing, secure transport, handoff features, and desktop/mobile

@@ -68,13 +68,35 @@ been persisted successfully. A temporary per-transfer override does not change
 shared state and therefore does not fire the event. Dropping the returned
 `DirectoryChangedSubscription` unregisters that listener.
 
-For example, the Localization system will use a localization-specific settings
-capability when its persisted preferences are implemented. `CoreModules`
-constructs the main systems and injects that capability without making either
-main system own the other.
+The Localization system uses its own localization-specific settings capability.
+`CoreModules` constructs the main systems and injects that capability without
+making either main system own the other.
 
 Settings capabilities are introduced only when a system has real settings to
 expose. Empty gateways are not created speculatively.
+
+## Localization
+
+`LocalizationManager` is the independent main module for localized text and
+text direction. `SettingsManager` owns the typed `LocalizationSettings`
+capability and injects the same underlying capability into
+`LocalizationManager`. English is the default language, and selecting Persian
+is persisted in the `localization` section of `settings.bin`.
+
+Languages and translation keys are typed values. Translation catalogs are
+defined in Rust code and remain private implementation details. A lookup first
+uses the active language and falls back to the required English text when that
+translation is unavailable. Translation keys are added with the feature that
+owns the actual user-facing text instead of being created speculatively.
+
+Text direction is derived from the active language: English is left-to-right
+and Persian is right-to-left. It is not stored as a separate preference.
+
+The localization system defines its own `LanguageChangedDelegate` and exposes
+the `on_language_changed` event through both `LocalizationSettings` and
+`LocalizationManager`. The event fires only after a changed language has been
+persisted successfully. Selecting the active language again does nothing.
+Dropping the returned `LanguageChangedSubscription` unregisters that listener.
 
 ## Settings persistence
 
@@ -91,8 +113,9 @@ The version-1 envelope uses the `CHSETBIN` magic bytes, a little-endian root
 version and section count, then a sequence of UTF-8 section identifiers,
 little-endian section versions, payload lengths, and opaque payload bytes. The
 version-1 `directories` payload is the UTF-8 representation of an absolute
-default transfer directory. The complete file and every section are bounded
-before allocation or decoding.
+default transfer directory. The version-1 `localization` payload is one stable
+language byte. The complete file and every section are bounded before
+allocation or decoding.
 
 Writes replace the complete small settings document atomically. Runtime state
 updates and system-owned delegates run only after the new file has committed

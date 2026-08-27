@@ -25,11 +25,14 @@ mod utils;
 pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
 pub use directories::{DirectoryChangedDelegate, DirectoryChangedSubscription, DirectoryManager};
-pub use locales::LocalizationManager;
+pub use locales::{
+    Language, LanguageChangedDelegate, LanguageChangedSubscription, LocalizationKey,
+    LocalizationManager, TextDirection,
+};
 pub use managers::DeviceManager;
 pub use models::{
     Capability, Device, DeviceId, DeviceIdError, DeviceState, Platform, ProtocolVersion,
 };
-pub use settings::{DirectorySettings, SettingsManager};
+pub use settings::{DirectorySettings, LocalizationSettings, SettingsManager};
 
 pub type Result<T> = std::result::Result<T, Error>;
