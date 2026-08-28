@@ -43,7 +43,12 @@ after its implementation and validation requirements are satisfied.
   - Typed local identity with display name and runtime platform
   - Persisted display-name changes with delegate-based events
   - Explicit separation from settings, discovery, pairing, and security
-- [ ] 07. Protocol and security design
+- [x] 07. Protocol and security design
+  - Hostile-network threat model and explicit security boundaries
+  - Separate device identity, cryptographic identity, and trust records
+  - TLS 1.3 pairing and mutually authenticated transport contracts
+  - Versioned deterministic CBOR messaging with bounded parsing
+  - Modular ownership for discovery, pairing, security, and transport
 
 ## C. Device connection
 

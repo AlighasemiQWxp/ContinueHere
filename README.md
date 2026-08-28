@@ -26,11 +26,15 @@ The architectural foundation is complete. It currently provides:
 - Language-change delegates with automatically released subscriptions
 - Stable local device identity with independent atomic persistence
 - Persisted device display names with delegate-based change events
+- Defined protocol, pairing, trust, and secure-transport contracts
+- Hostile-network threat model and bounded message-processing rules
 - Automated tests for the public API, module lifecycle, and handle behavior
 
-Discovery, pairing, secure transport, handoff features, and desktop/mobile
-interfaces are planned work. See the [project roadmap](docs/ROADMAP.md) for the
-intended development order.
+The protocol and security design is complete, but discovery, pairing, secure
+transport, handoff features, and desktop/mobile interfaces remain planned work.
+No sensitive information should be transferred yet. See the
+[protocol and security design](docs/PROTOCOL_SECURITY.md) and
+[project roadmap](docs/ROADMAP.md) for the intended development order.
 
 ## Design goals
 

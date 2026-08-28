@@ -2,9 +2,10 @@
 
 ## Development status
 
-ContinueHere is in early development and has not completed its security design
-or production hardening phases. It should not yet be used to transfer sensitive
-information between devices.
+ContinueHere is in early development. Its protocol and security contracts are
+documented in [the protocol and security design](docs/PROTOCOL_SECURITY.md), but
+pairing, authenticated transport, and production hardening are not implemented.
+It should not yet be used to transfer sensitive information between devices.
 
 ## Reporting a vulnerability
 

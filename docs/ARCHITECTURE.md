@@ -160,6 +160,31 @@ availability information to construct shared `Device` snapshots. Pairing and
 security remain responsible for proving that a peer owns a claimed identity;
 Phase 6 does not create credentials or establish trust.
 
+## Protocol and security
+
+The protocol and security contracts are defined in
+[`PROTOCOL_SECURITY.md`](PROTOCOL_SECURITY.md). The network is treated as
+hostile: discovery information is an untrusted hint, a `DeviceId` is not a
+credential, and all application messages must eventually travel through a
+mutually authenticated TLS 1.3 channel.
+
+Cryptographic identity remains separate from the public local-device identity.
+Private-key material belongs in a platform secure-storage backend, trusted-peer
+records belong to the pairing system, and neither belongs in `settings.bin` or
+`device_identity.bin`.
+
+Future `DiscoveryManager`, `PairingManager`, `SecurityManager`, and
+`TransportManager` modules will be independent main systems under
+`CoreModules`. They will exchange narrow typed capabilities and system-specific
+events. Transport will expose validated typed messages rather than raw sockets
+or decoded protocol values.
+
+The application protocol uses protected version negotiation, deterministic
+CBOR control messages, bounded length-prefixed framing, typed request
+identifiers, and separate streaming messages for large content. Discovery,
+pairing, transport, and transfer phases must define and test their concrete
+limits before accepting network input.
+
 ## Module lifecycle
 
 Main systems and dynamic modules implement a shared lifecycle contract:
@@ -225,6 +250,8 @@ of capabilities expected per device.
 - Inject dependencies through constructors.
 - Avoid global mutable state and general-purpose service lookup.
 - Add a dependency only when the standard library or an existing dependency is insufficient.
+- Keep cryptographic choices behind narrow backends and use reviewed protocol
+  implementations instead of custom cryptographic primitives.
 
 ## Validation
 
