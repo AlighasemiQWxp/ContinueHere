@@ -38,6 +38,7 @@ ContinueHere
     ├── DirectoryManager
     ├── LocalizationManager
     ├── DeviceManager
+    ├── DiscoveryManager
     └── ModuleRegistry
 ```
 
@@ -155,10 +156,39 @@ commit to disk before runtime state changes or the system-owned
 `DeviceIdentityChangedDelegate` event is published. Selecting the current name
 does nothing.
 
-Discovery will later combine the local identity with protocol, capability, and
-availability information to construct shared `Device` snapshots. Pairing and
-security remain responsible for proving that a peer owns a claimed identity;
-Phase 6 does not create credentials or establish trust.
+Discovery deliberately does not broadcast the local identity. It supplies only
+temporary candidate endpoints and a protocol-version hint. Pairing and
+security remain responsible for learning and proving a peer's stable identity.
+
+## Discovery
+
+`DiscoveryManager` is the independent main module for finding possible peers.
+It owns reusable `DiscoveryHandle` instances, a private worker, the current
+candidate store, and discovery-specific events. Callers follow the shared
+handle lifecycle:
+
+```text
+Get handle -> Configure mode -> Use -> Release
+```
+
+A handle can browse the local network, add one manually entered endpoint, or
+temporarily advertise a listening endpoint. Starting a local-browse handle
+acquires the shared mDNS browser. Additional local-browse handles reuse it, and
+the final release stops it and removes local candidates. A manual candidate is
+present only for the lifetime of its handle. Advertisements use a fresh random
+instance identifier for each operation.
+
+The private worker is the only owner of mDNS activity. It receives handle
+commands through a channel, translates backend events into immutable bounded
+candidate snapshots, and publishes `DiscoveryChangedDelegate` and
+`DiscoveryStatusChangedDelegate` events. Public methods never expose the mDNS
+backend or mutable candidate state.
+
+Local discovery uses `_continuehere._tcp.local.` and advertises only the current
+protocol version. It does not advertise a stable `DeviceId`, display name,
+capabilities, trust state, or credentials. Manual endpoints and discovered
+endpoints are syntax-checked and bounded, but remain untrusted hints until a
+future authenticated transport verifies the peer.
 
 ## Protocol and security
 
@@ -173,11 +203,11 @@ Private-key material belongs in a platform secure-storage backend, trusted-peer
 records belong to the pairing system, and neither belongs in `settings.bin` or
 `device_identity.bin`.
 
-Future `DiscoveryManager`, `PairingManager`, `SecurityManager`, and
-`TransportManager` modules will be independent main systems under
-`CoreModules`. They will exchange narrow typed capabilities and system-specific
-events. Transport will expose validated typed messages rather than raw sockets
-or decoded protocol values.
+`DiscoveryManager` is an independent main system under `CoreModules`. Future
+`PairingManager`, `SecurityManager`, and `TransportManager` modules will follow
+the same ownership rule. They will exchange narrow typed capabilities and
+system-specific events. Transport will expose validated typed messages rather
+than raw sockets or decoded protocol values.
 
 The application protocol uses protected version negotiation, deterministic
 CBOR control messages, bounded length-prefixed framing, typed request

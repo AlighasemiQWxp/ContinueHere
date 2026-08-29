@@ -4,6 +4,7 @@ use crate::{
     Result,
     core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
     directories::DirectoryManager,
+    discovery::DiscoveryManager,
     locales::LocalizationManager,
     managers::DeviceManager,
     settings::SettingsManager,
@@ -32,6 +33,10 @@ impl ContinueHere {
 
     pub fn devices(&self) -> &DeviceManager {
         self.modules.devices()
+    }
+
+    pub fn discovery(&self) -> &DiscoveryManager {
+        self.modules.discovery()
     }
 
     pub async fn shutdown(mut self) -> Result<()> {

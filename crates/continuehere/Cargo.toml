@@ -14,6 +14,7 @@ publish = false
 [dependencies]
 atomic-write-file.workspace = true
 async-trait.workspace = true
+mdns-sd.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 

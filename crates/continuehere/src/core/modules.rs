@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use crate::{
-    Error, Result, directories::DirectoryManager, locales::LocalizationManager,
-    managers::DeviceManager, settings::SettingsManager,
+    Error, Result, directories::DirectoryManager, discovery::DiscoveryManager,
+    locales::LocalizationManager, managers::DeviceManager, settings::SettingsManager,
 };
 
 use super::{module::Module, registry::ModuleRegistry};
@@ -12,11 +12,13 @@ pub(crate) struct CoreModules {
     directories: DirectoryManager,
     localization: LocalizationManager,
     devices: DeviceManager,
+    discovery: DiscoveryManager,
     optional: ModuleRegistry,
     settings_started: bool,
     directories_started: bool,
     localization_started: bool,
     devices_started: bool,
+    discovery_started: bool,
 }
 
 impl CoreModules {
@@ -29,11 +31,13 @@ impl CoreModules {
             directories,
             localization,
             devices: DeviceManager::new(project_directory),
+            discovery: DiscoveryManager::new(),
             optional,
             settings_started: false,
             directories_started: false,
             localization_started: false,
             devices_started: false,
+            discovery_started: false,
         })
     }
 
@@ -51,6 +55,10 @@ impl CoreModules {
 
     pub(crate) fn devices(&self) -> &DeviceManager {
         &self.devices
+    }
+
+    pub(crate) fn discovery(&self) -> &DiscoveryManager {
+        &self.discovery
     }
 
     pub(crate) async fn start_all(&mut self) -> Result<()> {
@@ -75,6 +83,12 @@ impl CoreModules {
         }
         self.devices_started = true;
 
+        if let Err(error) = start_module(&mut self.discovery).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.discovery_started = true;
+
         if let Err(error) = self.optional.start_all().await {
             self.rollback_main_systems().await;
             return Err(error);
@@ -85,6 +99,12 @@ impl CoreModules {
 
     pub(crate) async fn stop_all(&mut self) -> Result<()> {
         let mut first_error = self.optional.stop_all().await.err();
+
+        if self.discovery_started {
+            let result = stop_module(&mut self.discovery).await;
+            self.discovery_started = false;
+            keep_first_error(&mut first_error, result);
+        }
 
         if self.devices_started {
             let result = stop_module(&mut self.devices).await;
@@ -117,6 +137,11 @@ impl CoreModules {
     }
 
     async fn rollback_main_systems(&mut self) {
+        if self.discovery_started {
+            let _ = self.discovery.stop().await;
+            self.discovery_started = false;
+        }
+
         if self.devices_started {
             let _ = self.devices.stop().await;
             self.devices_started = false;
@@ -206,12 +231,14 @@ mod tests {
         assert!(modules.directories_started);
         assert!(modules.localization_started);
         assert!(modules.devices_started);
+        assert!(modules.discovery_started);
 
         modules.stop_all().await.expect("core should stop");
         assert!(!modules.settings_started);
         assert!(!modules.directories_started);
         assert!(!modules.localization_started);
         assert!(!modules.devices_started);
+        assert!(!modules.discovery_started);
     }
 
     #[tokio::test]
@@ -231,5 +258,6 @@ mod tests {
         assert!(!modules.directories_started);
         assert!(!modules.localization_started);
         assert!(!modules.devices_started);
+        assert!(!modules.discovery_started);
     }
 }

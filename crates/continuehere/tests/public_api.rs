@@ -1,10 +1,14 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex, mpsc},
+    time::Duration,
+};
 
 use continuehere::{
     Capability, ContinueHere, Device, DeviceId, DeviceIdentityChangedDelegate, DeviceManager,
-    DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, Language,
-    LanguageChangedDelegate, LocalizationKey, LocalizationManager, LocalizationSettings, Platform,
-    ProtocolVersion, SettingsManager, TextDirection,
+    DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, DiscoveryChange,
+    DiscoveryChangedDelegate, DiscoveryEndpoint, DiscoveryManager, DiscoveryMode, DiscoverySource,
+    Language, LanguageChangedDelegate, LocalizationKey, LocalizationManager, LocalizationSettings,
+    Platform, ProtocolVersion, SettingsManager, TextDirection,
 };
 use tempfile::tempdir;
 
@@ -41,6 +45,7 @@ async fn builder_exposes_the_core_managers() {
     let _: &DirectoryManager = app.directories();
     let _: &LocalizationManager = app.localization();
     let _: &DeviceManager = app.devices();
+    let _: &DiscoveryManager = app.discovery();
     let identity = app.devices().identity();
 
     assert!(!identity.id().as_str().is_empty());
@@ -51,6 +56,54 @@ async fn builder_exposes_the_core_managers() {
     if let Err(error) = shutdown_result {
         panic!("failed to shut down ContinueHere: {error}");
     }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn manual_discovery_is_public_and_scoped_to_its_handle() {
+    let project = tempdir().expect("temporary project directory should be available");
+    let app = ContinueHere::builder(project.path())
+        .build()
+        .await
+        .expect("ContinueHere should build");
+    let (sender, receiver) = mpsc::channel();
+    let _subscription = app
+        .discovery()
+        .on_changed(DiscoveryChangedDelegate::new(move |change| {
+            sender
+                .send(change)
+                .expect("change receiver should remain available");
+        }));
+    let endpoint = "127.0.0.1:5200"
+        .parse::<DiscoveryEndpoint>()
+        .expect("manual endpoint should be valid");
+    let handle = app
+        .discovery()
+        .get_handle("public-manual-discovery")
+        .expect("discovery handle should be available");
+    handle
+        .configure(DiscoveryMode::ManualEndpoint(endpoint.clone()))
+        .expect("discovery handle should configure");
+    handle.use_handle().expect("manual discovery should start");
+
+    let candidate = match receiver
+        .recv_timeout(Duration::from_secs(1))
+        .expect("manual candidate should be published")
+    {
+        DiscoveryChange::Added(candidate) => candidate,
+        _ => panic!("first discovery change should add the candidate"),
+    };
+    assert_eq!(candidate.source(), DiscoverySource::Manual);
+    assert_eq!(candidate.endpoints(), &[endpoint]);
+    assert_eq!(app.discovery().candidates(), vec![candidate.clone()]);
+
+    handle.release().expect("discovery handle should release");
+    assert_eq!(
+        receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("manual candidate should be removed"),
+        DiscoveryChange::Removed(candidate)
+    );
+    app.shutdown().await.expect("ContinueHere should stop");
 }
 
 #[tokio::test(flavor = "current_thread")]

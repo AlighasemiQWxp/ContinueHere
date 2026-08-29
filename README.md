@@ -28,11 +28,15 @@ The architectural foundation is complete. It currently provides:
 - Persisted device display names with delegate-based change events
 - Defined protocol, pairing, trust, and secure-transport contracts
 - Hostile-network threat model and bounded message-processing rules
+- Handle-owned local discovery, manual endpoints, and temporary advertisements
+- Bounded untrusted discovery candidates with delegate-based change events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
-The protocol and security design is complete, but discovery, pairing, secure
-transport, handoff features, and desktop/mobile interfaces remain planned work.
-No sensitive information should be transferred yet. See the
+The protocol and security design is complete. Discovery is implemented at the
+core-library level, while pairing, secure transport, handoff features, and
+desktop/mobile interfaces remain planned work. Discovery candidates are only
+untrusted connection hints. No sensitive information should be transferred
+yet. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and
 [project roadmap](docs/ROADMAP.md) for the intended development order.
 

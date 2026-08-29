@@ -52,7 +52,11 @@ after its implementation and validation requirements are satisfied.
 
 ## C. Device connection
 
-- [ ] 08. Local and manual discovery
+- [x] 08. Local and manual discovery
+  - Handle-owned local browsing, manual endpoints, and advertisements
+  - Shared private mDNS worker with first-acquire and last-release lifecycle
+  - Bounded immutable candidates and delegate-based change events
+  - Temporary discovery identifiers with no stable identity or trust metadata
 - [ ] 09. Pairing and trusted-device management
 - [ ] 10. Authenticated and encrypted transport
 

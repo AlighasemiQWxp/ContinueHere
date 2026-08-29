@@ -197,9 +197,9 @@ and cannot be accepted from cached discovery or application data.
 
 ## System ownership
 
-Future phases will preserve the existing main-system architecture:
+Current and future phases preserve the existing main-system architecture:
 
-- `DiscoveryManager` will own candidate endpoint discovery and untrusted
+- `DiscoveryManager` owns candidate endpoint discovery and untrusted
   discovery state.
 - `PairingManager` will own pairing sessions, trusted-peer records, approval,
   and revocation.
@@ -238,7 +238,8 @@ state has committed successfully.
 Phase 7 fixes the contracts in this document. It does not create keys, open
 sockets, discover peers, pair devices, or claim that transfers are secure.
 
-- Phase 8 implements local and manual candidate discovery.
+- Phase 8 implements handle-owned local and manual candidate discovery plus
+  temporary endpoint advertisement. Its candidates remain untrusted hints.
 - Phase 9 implements pairing and trusted-device management.
 - Phase 10 implements mutually authenticated TLS transport and protocol
   framing.

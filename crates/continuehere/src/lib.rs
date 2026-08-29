@@ -25,6 +25,12 @@ mod utils;
 pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
 pub use directories::{DirectoryChangedDelegate, DirectoryChangedSubscription, DirectoryManager};
+pub use discovery::{
+    DiscoveryCandidate, DiscoveryCandidateId, DiscoveryChange, DiscoveryChangedDelegate,
+    DiscoveryChangedSubscription, DiscoveryEndpoint, DiscoveryError, DiscoveryHandle,
+    DiscoveryManager, DiscoveryMode, DiscoverySource, DiscoveryStatus,
+    DiscoveryStatusChangedDelegate, DiscoveryStatusChangedSubscription,
+};
 pub use locales::{
     Language, LanguageChangedDelegate, LanguageChangedSubscription, LocalizationKey,
     LocalizationManager, TextDirection,
