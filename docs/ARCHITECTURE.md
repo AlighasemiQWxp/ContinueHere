@@ -182,7 +182,9 @@ The private worker is the only owner of mDNS activity. It receives handle
 commands through a channel, translates backend events into immutable bounded
 candidate snapshots, and publishes `DiscoveryChangedDelegate` and
 `DiscoveryStatusChangedDelegate` events. Public methods never expose the mDNS
-backend or mutable candidate state.
+backend or mutable candidate state. The worker commits operation, candidate,
+and status state before publishing candidate events, so delegates always
+observe a coherent snapshot when they query the manager.
 
 Local discovery uses `_continuehere._tcp.local.` and advertises only the current
 protocol version. It does not advertise a stable `DeviceId`, display name,

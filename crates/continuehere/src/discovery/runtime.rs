@@ -256,6 +256,7 @@ impl Worker {
             return Ok(());
         }
 
+        let mut pending_change = None;
         let operation = match mode {
             DiscoveryMode::LocalBrowse => {
                 let should_start = self.state.local_browse_count == 0;
@@ -287,10 +288,8 @@ impl Worker {
                     ProtocolVersion::CURRENT,
                     DiscoverySource::Manual,
                 )?;
-                let change = lock(&self.candidates).upsert(candidate);
-                match change {
-                    Ok(Some(change)) => self.changed.publish(change),
-                    Ok(None) => {}
+                match lock(&self.candidates).upsert(candidate) {
+                    Ok(change) => pending_change = change,
                     Err(error) => {
                         self.set_status(DiscoveryStatus::Unavailable);
                         return Err(error);
@@ -324,6 +323,9 @@ impl Worker {
         self.state.operations.insert(identifier, operation);
         if restores_network_status || *lock(&self.status) != DiscoveryStatus::Unavailable {
             self.set_status(DiscoveryStatus::Active);
+        }
+        if let Some(change) = pending_change {
+            self.changed.publish(change);
         }
         Ok(())
     }
