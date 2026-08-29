@@ -3,6 +3,17 @@
 ContinueHere is developed one focused module at a time. Changes should preserve
 clear ownership, small public APIs, and strict boundaries between features.
 
+## External contributions
+
+ContinueHere is source-available but is not an open-source project. External
+code contributions are not accepted unless the maintainer invites the
+contribution in writing and the ownership and licensing terms are agreed
+before submission. Unsolicited pull requests may be closed without review.
+
+Bug reports and focused technical suggestions are welcome when they do not
+include third-party proprietary information or code that the reporter is not
+authorized to share.
+
 ## Development principles
 
 - Keep modules focused on one responsibility.

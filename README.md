@@ -113,4 +113,13 @@ Created and maintained by AlighasemiQWxp.
 
 ## License
 
-ContinueHere is available under the [MIT License](LICENSE).
+ContinueHere is source-available under the
+[ContinueHere Source-Available License 1.0](LICENSE). You may study, compile,
+run, and privately modify the project for personal, non-commercial education
+and evaluation. Redistribution and commercial use are not permitted without
+prior written permission from the copyright holder.
+
+ContinueHere is not open-source software as defined by the Open Source
+Initiative. See the [ownership and usage notice](NOTICE.md) for a concise
+summary of the applicable restrictions intended for people and automated
+tools.
