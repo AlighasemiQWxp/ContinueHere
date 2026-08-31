@@ -35,10 +35,10 @@ The architectural foundation is complete. It currently provides:
 - Pairing-session and trusted-device delegate events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
-The protocol and security design and Discovery are complete. The Phase 9
-pairing implementation passes the complete local validation suite and awaits
-continuous-integration confirmation. General authenticated transport, handoff
-features, and desktop/mobile interfaces remain planned work.
+The protocol and security design, Discovery, and Phase 9 Pairing are complete.
+Pairing passes the complete local validation suite and continuous integration.
+General authenticated transport, handoff features, and desktop/mobile
+interfaces remain planned work.
 Discovery candidates are only untrusted connection hints. No sensitive
 information should be transferred yet. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and

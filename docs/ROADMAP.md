@@ -57,13 +57,13 @@ after its implementation and validation requirements are satisfied.
   - Shared private mDNS worker with first-acquire and last-release lifecycle
   - Bounded immutable candidates and delegate-based change events
   - Temporary discovery identifiers with no stable identity or trust metadata
-- [ ] 09. Pairing and trusted-device management
+- [x] 09. Pairing and trusted-device management
   - Handle-owned initiating and receiving sessions
   - Private controller coordinating security, TLS, approval, and persistence
   - QR and 10-digit verification with explicit approval on both devices
   - Versioned atomic trusted-device persistence and explicit revocation
   - Immutable pairing-session and trusted-device delegate events
-  - Complete local validation suite passed; continuous-integration confirmation pending
+  - Complete local validation suite and continuous integration passed
 - [ ] 10. Authenticated and encrypted transport
 
 ## D. First working product
