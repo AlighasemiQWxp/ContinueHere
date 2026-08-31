@@ -17,7 +17,7 @@ categories = ["network-programming"]
 atomic-write-file = "0.3"
 async-trait = "0.1"
 getrandom = "0.3"
-keyring = { version = "3.6", default-features = false, features = ["apple-native", "sync-secret-service", "windows-native"] }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "sync-secret-service", "vendored", "windows-native"] }
 mdns-sd = "0.21"
 rcgen = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
