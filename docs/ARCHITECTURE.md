@@ -38,7 +38,10 @@ ContinueHere
     ├── DirectoryManager
     ├── LocalizationManager
     ├── DeviceManager
+    ├── SecurityManager
+    ├── TransportManager
     ├── DiscoveryManager
+    ├── PairingManager
     └── ModuleRegistry
 ```
 
@@ -205,11 +208,23 @@ Private-key material belongs in a platform secure-storage backend, trusted-peer
 records belong to the pairing system, and neither belongs in `settings.bin` or
 `device_identity.bin`.
 
-`DiscoveryManager` is an independent main system under `CoreModules`. Future
-`PairingManager`, `SecurityManager`, and `TransportManager` modules will follow
-the same ownership rule. They will exchange narrow typed capabilities and
-system-specific events. Transport will expose validated typed messages rather
-than raw sockets or decoded protocol values.
+`DiscoveryManager`, `SecurityManager`, `TransportManager`, and `PairingManager`
+are independent main systems under `CoreModules`. They exchange narrow typed
+capabilities and system-specific events. Transport exposes validated typed
+pairing messages rather than raw sockets or decoded protocol values.
+
+`SecurityManager` privately owns the long-term Ed25519 identity and its
+operating-system credential-store backend. It supplies pairing-only TLS
+identity and exporter capabilities without exposing private-key bytes.
+`TransportManager` owns the pairing listener, TLS 1.3 channels, bounded pairing
+framing, and connection cleanup. Its Phase 9 surface is deliberately limited to
+pairing; general authenticated application transport remains Phase 10.
+
+`PairingManager` owns `PairingHandle` instances, immutable session snapshots,
+trusted-device records, pairing events, approval, and revocation. Its private
+`PairingController` coordinates the multi-step workflow across the injected
+security and transport capabilities. The controller is a same-system child,
+not another main system or a public API.
 
 The application protocol uses protected version negotiation, deterministic
 CBOR control messages, bounded length-prefixed framing, typed request
@@ -246,6 +261,18 @@ only the capabilities required by their feature.
 
 Handles are reference-based ownership tokens. Releasing a handle invalidates
 its operation and allows the provider to remove it safely.
+
+Each temporary pairing attempt uses a `PairingHandle`. Configuration selects
+an outgoing endpoint or one incoming connection. Use starts the state machine;
+release or drop cancels the operation and erases its temporary authentication
+state. Persistent trusted devices are not handles; they remain until an
+explicit, successfully persisted revocation.
+
+Pairing defines two system-owned event streams: immutable pairing-session
+changes and immutable trusted-device changes. Commands such as approve, reject,
+and revoke remain explicit methods. Events publish only after authoritative
+runtime and persistent state is coherent, and callbacks run without internal
+state locks held.
 
 ## Feature modules
 

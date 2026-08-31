@@ -10,6 +10,7 @@
 !.env.example
 /settings.bin
 /device_identity.bin
+/trusted_devices.bin
 
 # Editors
 .idea/

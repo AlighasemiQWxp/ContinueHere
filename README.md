@@ -30,13 +30,17 @@ The architectural foundation is complete. It currently provides:
 - Hostile-network threat model and bounded message-processing rules
 - Handle-owned local discovery, manual endpoints, and temporary advertisements
 - Bounded untrusted discovery candidates with delegate-based change events
+- Handle-owned TLS 1.3 pairing with explicit two-device verification
+- OS-secured Ed25519 identities and atomically persisted trusted-device records
+- Pairing-session and trusted-device delegate events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
-The protocol and security design is complete. Discovery is implemented at the
-core-library level, while pairing, secure transport, handoff features, and
-desktop/mobile interfaces remain planned work. Discovery candidates are only
-untrusted connection hints. No sensitive information should be transferred
-yet. See the
+The protocol and security design and Discovery are complete. The Phase 9
+pairing implementation passes the complete local validation suite and awaits
+continuous-integration confirmation. General authenticated transport, handoff
+features, and desktop/mobile interfaces remain planned work.
+Discovery candidates are only untrusted connection hints. No sensitive
+information should be transferred yet. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and
 [project roadmap](docs/ROADMAP.md) for the intended development order.
 
@@ -77,8 +81,10 @@ local identity at `device_identity.bin` inside that directory:
 let app = ContinueHere::builder(project_directory).build().await?;
 ```
 
-The generated root `settings.bin` and `device_identity.bin` files are ignored by
-Git.
+The generated root `settings.bin`, `device_identity.bin`, and
+`trusted_devices.bin` files are ignored by Git. Private cryptographic identity
+material is stored through the operating system's credential store instead of
+the project directory.
 
 ## Development
 

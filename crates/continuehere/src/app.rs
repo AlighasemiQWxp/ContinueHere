@@ -7,6 +7,7 @@ use crate::{
     discovery::DiscoveryManager,
     locales::LocalizationManager,
     managers::DeviceManager,
+    pairing::PairingManager,
     settings::SettingsManager,
 };
 
@@ -37,6 +38,10 @@ impl ContinueHere {
 
     pub fn discovery(&self) -> &DiscoveryManager {
         self.modules.discovery()
+    }
+
+    pub fn pairing(&self) -> &PairingManager {
+        self.modules.pairing()
     }
 
     pub async fn shutdown(mut self) -> Result<()> {

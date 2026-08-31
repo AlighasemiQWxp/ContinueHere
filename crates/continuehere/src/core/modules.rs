@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use crate::{
     Error, Result, directories::DirectoryManager, discovery::DiscoveryManager,
-    locales::LocalizationManager, managers::DeviceManager, settings::SettingsManager,
+    locales::LocalizationManager, managers::DeviceManager, pairing::PairingManager,
+    security::SecurityManager, settings::SettingsManager, transport::TransportManager,
 };
 
 use super::{module::Module, registry::ModuleRegistry};
@@ -12,13 +13,19 @@ pub(crate) struct CoreModules {
     directories: DirectoryManager,
     localization: LocalizationManager,
     devices: DeviceManager,
+    security: SecurityManager,
+    transport: TransportManager,
     discovery: DiscoveryManager,
+    pairing: PairingManager,
     optional: ModuleRegistry,
     settings_started: bool,
     directories_started: bool,
     localization_started: bool,
     devices_started: bool,
+    security_started: bool,
+    transport_started: bool,
     discovery_started: bool,
+    pairing_started: bool,
 }
 
 impl CoreModules {
@@ -26,18 +33,33 @@ impl CoreModules {
         let settings = SettingsManager::new(project_directory.clone()).map_err(Error::settings)?;
         let directories = DirectoryManager::new(settings.directories().shared());
         let localization = LocalizationManager::new(settings.localization().shared());
+        let devices = DeviceManager::new(project_directory.clone());
+        let security = SecurityManager::new();
+        let transport = TransportManager::new();
+        let pairing = PairingManager::new(
+            project_directory,
+            devices.capability(),
+            security.capability(),
+            transport.pairing_capability(),
+        );
         Ok(Self {
             settings,
             directories,
             localization,
-            devices: DeviceManager::new(project_directory),
+            devices,
+            security,
+            transport,
             discovery: DiscoveryManager::new(),
+            pairing,
             optional,
             settings_started: false,
             directories_started: false,
             localization_started: false,
             devices_started: false,
+            security_started: false,
+            transport_started: false,
             discovery_started: false,
+            pairing_started: false,
         })
     }
 
@@ -59,6 +81,10 @@ impl CoreModules {
 
     pub(crate) fn discovery(&self) -> &DiscoveryManager {
         &self.discovery
+    }
+
+    pub(crate) fn pairing(&self) -> &PairingManager {
+        &self.pairing
     }
 
     pub(crate) async fn start_all(&mut self) -> Result<()> {
@@ -83,11 +109,29 @@ impl CoreModules {
         }
         self.devices_started = true;
 
+        if let Err(error) = start_module(&mut self.security).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.security_started = true;
+
+        if let Err(error) = start_module(&mut self.transport).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.transport_started = true;
+
         if let Err(error) = start_module(&mut self.discovery).await {
             self.rollback_main_systems().await;
             return Err(error);
         }
         self.discovery_started = true;
+
+        if let Err(error) = start_module(&mut self.pairing).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.pairing_started = true;
 
         if let Err(error) = self.optional.start_all().await {
             self.rollback_main_systems().await;
@@ -100,9 +144,27 @@ impl CoreModules {
     pub(crate) async fn stop_all(&mut self) -> Result<()> {
         let mut first_error = self.optional.stop_all().await.err();
 
+        if self.pairing_started {
+            let result = stop_module(&mut self.pairing).await;
+            self.pairing_started = false;
+            keep_first_error(&mut first_error, result);
+        }
+
         if self.discovery_started {
             let result = stop_module(&mut self.discovery).await;
             self.discovery_started = false;
+            keep_first_error(&mut first_error, result);
+        }
+
+        if self.transport_started {
+            let result = stop_module(&mut self.transport).await;
+            self.transport_started = false;
+            keep_first_error(&mut first_error, result);
+        }
+
+        if self.security_started {
+            let result = stop_module(&mut self.security).await;
+            self.security_started = false;
             keep_first_error(&mut first_error, result);
         }
 
@@ -137,9 +199,24 @@ impl CoreModules {
     }
 
     async fn rollback_main_systems(&mut self) {
+        if self.pairing_started {
+            let _ = self.pairing.stop().await;
+            self.pairing_started = false;
+        }
+
         if self.discovery_started {
             let _ = self.discovery.stop().await;
             self.discovery_started = false;
+        }
+
+        if self.transport_started {
+            let _ = self.transport.stop().await;
+            self.transport_started = false;
+        }
+
+        if self.security_started {
+            let _ = self.security.stop().await;
+            self.security_started = false;
         }
 
         if self.devices_started {
@@ -231,14 +308,20 @@ mod tests {
         assert!(modules.directories_started);
         assert!(modules.localization_started);
         assert!(modules.devices_started);
+        assert!(modules.security_started);
+        assert!(modules.transport_started);
         assert!(modules.discovery_started);
+        assert!(modules.pairing_started);
 
         modules.stop_all().await.expect("core should stop");
         assert!(!modules.settings_started);
         assert!(!modules.directories_started);
         assert!(!modules.localization_started);
         assert!(!modules.devices_started);
+        assert!(!modules.security_started);
+        assert!(!modules.transport_started);
         assert!(!modules.discovery_started);
+        assert!(!modules.pairing_started);
     }
 
     #[tokio::test]
@@ -258,6 +341,9 @@ mod tests {
         assert!(!modules.directories_started);
         assert!(!modules.localization_started);
         assert!(!modules.devices_started);
+        assert!(!modules.security_started);
+        assert!(!modules.transport_started);
         assert!(!modules.discovery_started);
+        assert!(!modules.pairing_started);
     }
 }

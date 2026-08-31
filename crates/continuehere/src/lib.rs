@@ -42,6 +42,13 @@ pub use models::{
     Capability, Device, DeviceId, DeviceIdError, DeviceState, LocalDeviceIdentity, Platform,
     ProtocolVersion,
 };
+pub use pairing::{
+    PairingError, PairingFailure, PairingHandle, PairingManager, PairingMode, PairingRole,
+    PairingSession, PairingSessionChange, PairingSessionChangedDelegate,
+    PairingSessionChangedSubscription, PairingSessionId, PairingState, PairingVerification,
+    TrustedDevice, TrustedDeviceChange, TrustedDeviceChangedDelegate,
+    TrustedDeviceChangedSubscription,
+};
 pub use settings::{DirectorySettings, LocalizationSettings, SettingsManager};
 
 pub type Result<T> = std::result::Result<T, Error>;

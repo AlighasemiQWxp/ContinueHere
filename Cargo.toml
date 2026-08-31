@@ -16,10 +16,17 @@ categories = ["network-programming"]
 [workspace.dependencies]
 atomic-write-file = "0.3"
 async-trait = "0.1"
+getrandom = "0.3"
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "sync-secret-service", "windows-native"] }
 mdns-sd = "0.21"
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+sha2 = "0.10"
 thiserror = "2"
 tokio = "1"
 uuid = { version = "1", features = ["v4"] }
+x509-parser = "0.16"
+zeroize = "1.8"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

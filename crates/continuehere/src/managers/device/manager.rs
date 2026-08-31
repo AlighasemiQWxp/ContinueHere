@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use async_trait::async_trait;
@@ -17,9 +17,14 @@ use super::{
 };
 
 pub struct DeviceManager {
-    state: Mutex<DeviceIdentityState>,
+    state: Arc<Mutex<DeviceIdentityState>>,
     platform: Platform,
     identity_changed: DeviceIdentityChangedEvent,
+}
+
+#[derive(Clone)]
+pub(crate) struct DeviceIdentityCapability {
+    state: Arc<Mutex<DeviceIdentityState>>,
 }
 
 struct DeviceIdentityState {
@@ -30,10 +35,10 @@ struct DeviceIdentityState {
 impl DeviceManager {
     pub(crate) fn new(project_directory: PathBuf) -> Self {
         Self {
-            state: Mutex::new(DeviceIdentityState {
+            state: Arc::new(Mutex::new(DeviceIdentityState {
                 store: DeviceIdentityStore::new(project_directory.join("device_identity.bin")),
                 identity: None,
-            }),
+            })),
             platform: Platform::current(),
             identity_changed: DeviceIdentityChangedEvent::default(),
         }
@@ -44,6 +49,12 @@ impl DeviceManager {
             .identity
             .clone()
             .expect("device identity is available while ContinueHere is running")
+    }
+
+    pub(crate) fn capability(&self) -> DeviceIdentityCapability {
+        DeviceIdentityCapability {
+            state: Arc::clone(&self.state),
+        }
     }
 
     pub fn set_display_name(&self, display_name: impl Into<String>) -> crate::Result<()> {
@@ -75,6 +86,12 @@ impl DeviceManager {
         delegate: DeviceIdentityChangedDelegate,
     ) -> DeviceIdentityChangedSubscription {
         self.identity_changed.subscribe(delegate)
+    }
+}
+
+impl DeviceIdentityCapability {
+    pub(crate) fn identity(&self) -> Option<LocalDeviceIdentity> {
+        lock_state(&self.state).identity.clone()
     }
 }
 

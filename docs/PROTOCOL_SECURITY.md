@@ -99,6 +99,17 @@ manual representation uses a 10-digit value, displayed in groups, and permits
 only one confirmation attempt per handshake. Either method detects a
 man-in-the-middle substitution before trust is stored.
 
+Every temporary pairing attempt is owned by a `PairingHandle`. Releasing or
+dropping its final reference cancels the session, closes its pairing channel,
+prevents later approval, and erases temporary authentication material.
+Persistent trusted-device records are not handle-owned and require explicit
+revocation.
+
+Pairing-session and trusted-device delegates carry immutable snapshots. They
+are notifications rather than commands or authoritative storage. Pairing state
+and trust records are committed before their events are published, and event
+callbacks run after internal locks are released.
+
 ## Secure transport
 
 All application traffic must use TLS 1.3. Older TLS versions, anonymous cipher
@@ -201,19 +212,21 @@ Current and future phases preserve the existing main-system architecture:
 
 - `DiscoveryManager` owns candidate endpoint discovery and untrusted
   discovery state.
-- `PairingManager` will own pairing sessions, trusted-peer records, approval,
-  and revocation.
-- `SecurityManager` will own the local cryptographic identity, secure-storage
-  backend, and cryptographic operations.
-- `TransportManager` will own listeners, connections, protocol framing, and
-  validated message delivery.
+- `PairingManager` owns pairing sessions, trusted-peer records, approval,
+  revocation, and pairing-specific events. Its private `PairingController`
+  coordinates each stateful workflow.
+- `SecurityManager` owns the local cryptographic identity, secure-storage
+  backend, TLS identity construction, and exporter derivation.
+- `TransportManager` owns listeners, connections, protocol framing, and
+  validated message delivery. Phase 9 exposes only its pairing capability;
+  Phase 10 adds normal trusted application connections.
 
-Each manager will be an independent main system under `CoreModules`. They will
+Each manager is an independent main system under `CoreModules`. They
 communicate through constructor-injected typed capabilities and specific
 delegate events. Raw sockets, private keys, undecoded CBOR values, and mutable
-trust records will not be exposed through the public application API.
+trust records are not exposed through the public application API.
 
-Feature systems will receive only validated typed messages. Transport will not
+Feature systems receive only validated typed messages. Transport does not
 decide whether a URL should open or where a file should be stored, and feature
 systems will not perform encryption or parse network frames.
 

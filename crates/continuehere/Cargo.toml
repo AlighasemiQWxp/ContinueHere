@@ -14,9 +14,16 @@ publish = false
 [dependencies]
 atomic-write-file.workspace = true
 async-trait.workspace = true
+getrandom.workspace = true
+keyring.workspace = true
 mdns-sd.workspace = true
+rcgen.workspace = true
+rustls.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+x509-parser.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
