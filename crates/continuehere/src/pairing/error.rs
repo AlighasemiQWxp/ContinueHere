@@ -27,6 +27,8 @@ pub enum PairingError {
     IdentityConflict,
     #[error("trusted device was not found")]
     TrustedDeviceNotFound,
+    #[error("trusted-device state synchronization failed")]
+    TrustSynchronizationFailed,
     #[error("pairing command channel is unavailable")]
     CommandChannelUnavailable,
     #[error("pairing worker failed to stop")]

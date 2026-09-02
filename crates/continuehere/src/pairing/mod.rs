@@ -5,6 +5,7 @@ mod handle;
 mod manager;
 mod model;
 mod store;
+mod trust;
 
 pub use error::PairingError;
 pub use event::{
@@ -22,3 +23,4 @@ pub(crate) use controller::PairingController;
 pub(crate) use event::{PairingSessionChangedEvent, TrustedDeviceChangedEvent};
 pub(crate) use handle::PairingOperation;
 pub(crate) use store::TrustedDeviceStore;
+pub(crate) use trust::{TrustMutation, TrustedDeviceRegistry, TrustedPeerLookup};

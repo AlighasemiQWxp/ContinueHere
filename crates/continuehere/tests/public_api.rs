@@ -8,7 +8,7 @@ use continuehere::{
     DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, DiscoveryChange,
     DiscoveryChangedDelegate, DiscoveryEndpoint, DiscoveryManager, DiscoveryMode, DiscoverySource,
     Language, LanguageChangedDelegate, LocalizationKey, LocalizationManager, LocalizationSettings,
-    PairingManager, Platform, ProtocolVersion, SettingsManager, TextDirection,
+    PairingManager, Platform, ProtocolVersion, SettingsManager, TextDirection, TransportManager,
 };
 use tempfile::tempdir;
 
@@ -47,12 +47,20 @@ async fn builder_exposes_the_core_managers() {
     let _: &DeviceManager = app.devices();
     let _: &DiscoveryManager = app.discovery();
     let _: &PairingManager = app.pairing();
+    let _: &TransportManager = app.transport();
     let identity = app.devices().identity();
 
     assert!(!identity.id().as_str().is_empty());
     assert!(!identity.display_name().is_empty());
     assert!(project.path().join("device_identity.bin").is_file());
     assert!(app.pairing().listening_endpoint().is_err());
+    assert_ne!(
+        app.transport()
+            .listening_endpoint()
+            .expect("application listener should be available")
+            .port(),
+        0
+    );
 
     let shutdown_result = app.shutdown().await;
     if let Err(error) = shutdown_result {

@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
 
@@ -19,7 +16,7 @@ use super::{
     PairingController, PairingError, PairingHandle, PairingOperation, PairingSession,
     PairingSessionChangedDelegate, PairingSessionChangedEvent, PairingSessionChangedSubscription,
     TrustedDevice, TrustedDeviceChangedDelegate, TrustedDeviceChangedEvent,
-    TrustedDeviceChangedSubscription, TrustedDeviceStore, handle::map_handle_error,
+    TrustedDeviceChangedSubscription, TrustedDeviceRegistry, handle::map_handle_error,
 };
 
 pub struct PairingManager {
@@ -32,16 +29,15 @@ pub struct PairingManager {
 
 impl PairingManager {
     pub(crate) fn new(
-        project_directory: PathBuf,
+        trusted: TrustedDeviceRegistry,
         device_identity: DeviceIdentityCapability,
         security: SecurityCapability,
         transport: PairingTransportCapability,
     ) -> Self {
         let session_changed = PairingSessionChangedEvent::default();
         let trusted_changed = TrustedDeviceChangedEvent::default();
-        let store = TrustedDeviceStore::new(project_directory.join("trusted_devices.bin"));
         let controller = PairingController::new(
-            store,
+            trusted,
             device_identity,
             security,
             transport.clone(),
@@ -151,7 +147,7 @@ mod tests {
         discovery::DiscoveryEndpoint,
         managers::DeviceManager,
         models::DeviceId,
-        pairing::{PairingMode, PairingState},
+        pairing::{PairingMode, PairingState, TrustedDeviceRegistry},
         security::{CredentialStore, SecurityError, SecurityManager},
         transport::TransportManager,
     };
@@ -192,9 +188,14 @@ mod tests {
             let mut devices = DeviceManager::new(path.to_path_buf());
             let mut security =
                 SecurityManager::with_store(Arc::new(MemoryCredentialStore::default()));
-            let mut transport = TransportManager::new();
+            let trusted = TrustedDeviceRegistry::new(path.to_path_buf());
+            let mut transport = TransportManager::new(
+                devices.capability(),
+                security.capability(),
+                trusted.lookup(),
+            );
             let mut pairing = PairingManager::new(
-                path.to_path_buf(),
+                trusted,
                 devices.capability(),
                 security.capability(),
                 transport.pairing_capability(),
@@ -222,6 +223,7 @@ mod tests {
     #[test]
     fn two_peers_pair_through_handle_owned_tls_sessions() {
         let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
             .build()
             .expect("test runtime should build");
         runtime.block_on(async {

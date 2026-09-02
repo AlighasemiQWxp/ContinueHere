@@ -50,5 +50,9 @@ pub use pairing::{
     TrustedDeviceChangedSubscription,
 };
 pub use settings::{DirectorySettings, LocalizationSettings, SettingsManager};
+pub use transport::{
+    AuthenticatedConnection, ConnectionChange, ConnectionChangedDelegate,
+    ConnectionChangedSubscription, ConnectionDirection, TransportError, TransportManager,
+};
 
 pub type Result<T> = std::result::Result<T, Error>;

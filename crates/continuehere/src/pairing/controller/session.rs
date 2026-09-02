@@ -200,7 +200,7 @@ fn perform_session(
 fn persist_peer(
     controller: &PairingController,
     peer: &VerifiedPeer,
-) -> Result<PersistedTrust, PairingFailure> {
+) -> Result<TrustMutation, PairingFailure> {
     controller.persist_trust(peer).map_err(|error| {
         if matches!(error, PairingError::IdentityConflict) {
             return PairingFailure::InvalidPeer;
@@ -212,12 +212,12 @@ fn persist_peer(
 fn finish_trust(
     controller: &PairingController,
     session_id: &PairingSessionId,
-    persisted: PersistedTrust,
+    persisted: TrustMutation,
 ) {
-    if persisted.newly_added {
+    if persisted.newly_added() {
         controller
             .trusted_changed
-            .publish(TrustedDeviceChange::Added(persisted.device));
+            .publish(TrustedDeviceChange::Added(persisted.into_device()));
     }
     controller.update_state(session_id, PairingState::Trusted);
 }

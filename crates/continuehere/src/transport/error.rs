@@ -7,22 +7,40 @@ pub enum TransportError {
     ManagerUnavailable,
     #[error("pairing listener is unavailable")]
     ListenerUnavailable,
-    #[error("pairing connection failed")]
+    #[error("transport connection failed")]
     ConnectionFailed,
-    #[error("pairing TLS configuration failed")]
+    #[error("TLS configuration failed")]
     TlsConfigurationFailed,
-    #[error("pairing TLS handshake failed")]
+    #[error("TLS handshake failed")]
     TlsHandshakeFailed,
-    #[error("pairing peer did not present one certificate")]
+    #[error("peer did not present one valid certificate")]
     MissingPeerIdentity,
-    #[error("pairing message is malformed")]
+    #[error("transport message is malformed")]
     InvalidMessage,
-    #[error("pairing message exceeds the supported size")]
+    #[error("transport message exceeds the supported size")]
     MessageTooLarge,
-    #[error("pairing connection timed out")]
+    #[error("transport operation timed out")]
     TimedOut,
-    #[error("pairing transport synchronization failed")]
+    #[error("transport synchronization failed")]
     SynchronizationFailed,
-    #[error("pairing listener failed to stop")]
+    #[error("transport worker failed to stop")]
     WorkerStopFailed,
+    #[error("trusted-device state is unavailable")]
+    TrustUnavailable,
+    #[error("peer is not trusted")]
+    UntrustedPeer,
+    #[error("authenticated identity does not match the trusted device")]
+    IdentityMismatch,
+    #[error("peer is already connected")]
+    AlreadyConnected,
+    #[error("peer is not connected")]
+    NotConnected,
+    #[error("peer uses an incompatible protocol version")]
+    IncompatibleProtocol,
+    #[error("peer violated the application protocol")]
+    ProtocolViolation,
+    #[error("transport command channel is unavailable")]
+    CommandUnavailable,
+    #[error("transport connection limit reached")]
+    ConnectionLimit,
 }

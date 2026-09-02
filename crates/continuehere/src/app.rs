@@ -9,6 +9,7 @@ use crate::{
     managers::DeviceManager,
     pairing::PairingManager,
     settings::SettingsManager,
+    transport::TransportManager,
 };
 
 pub struct ContinueHere {
@@ -42,6 +43,10 @@ impl ContinueHere {
 
     pub fn pairing(&self) -> &PairingManager {
         self.modules.pairing()
+    }
+
+    pub fn transport(&self) -> &TransportManager {
+        self.modules.transport()
     }
 
     pub async fn shutdown(mut self) -> Result<()> {

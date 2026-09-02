@@ -7,8 +7,7 @@ use std::{
 
 use rustls::{
     ClientConfig, ClientConnection, ServerConfig, ServerConnection, StreamOwned,
-    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName},
-    version::TLS13,
+    pki_types::ServerName, version::TLS13,
 };
 use sha2::{Digest, Sha256};
 use x509_parser::parse_x509_certificate;
@@ -17,6 +16,7 @@ use crate::{discovery::DiscoveryEndpoint, security::CryptographicIdentity};
 
 use super::{
     PairingMessage, TransportError,
+    tls::{certificate_chain, private_key, provider},
     verifier::{UntrustedClientVerifier, UntrustedServerVerifier},
 };
 
@@ -45,7 +45,7 @@ impl PairingChannel {
         let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
             .map_err(|_| TransportError::ConnectionFailed)?;
         configure_stream(&stream)?;
-        let provider = pairing_provider();
+        let provider = provider();
         let verifier = Arc::new(UntrustedServerVerifier::new(Arc::clone(&provider)));
         let mut config = ClientConfig::builder_with_provider(provider)
             .with_protocol_versions(&[&TLS13])
@@ -72,7 +72,7 @@ impl PairingChannel {
         identity: &CryptographicIdentity,
     ) -> Result<Self, TransportError> {
         configure_stream(&stream)?;
-        let provider = pairing_provider();
+        let provider = provider();
         let verifier = Arc::new(UntrustedClientVerifier::new(Arc::clone(&provider)));
         let mut config = ServerConfig::builder_with_provider(provider)
             .with_protocol_versions(&[&TLS13])
@@ -198,22 +198,6 @@ impl PairingChannel {
         }
         .map_err(map_io_error)
     }
-}
-
-fn certificate_chain(identity: &CryptographicIdentity) -> Vec<CertificateDer<'static>> {
-    vec![CertificateDer::from(identity.certificate().to_vec())]
-}
-
-fn pairing_provider() -> Arc<rustls::crypto::CryptoProvider> {
-    let mut provider = rustls::crypto::ring::default_provider();
-    provider
-        .kx_groups
-        .retain(|group| group.name() == rustls::NamedGroup::X25519);
-    Arc::new(provider)
-}
-
-fn private_key(identity: &CryptographicIdentity) -> PrivateKeyDer<'static> {
-    PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.private_key().to_vec()))
 }
 
 fn configure_stream(stream: &TcpStream) -> Result<(), TransportError> {

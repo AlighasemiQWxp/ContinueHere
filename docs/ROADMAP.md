@@ -64,7 +64,14 @@ after its implementation and validation requirements are satisfied.
   - Versioned atomic trusted-device persistence and explicit revocation
   - Immutable pairing-session and trusted-device delegate events
   - Complete local validation suite and continuous integration passed
-- [ ] 10. Authenticated and encrypted transport
+- [x] 10. Authenticated and encrypted transport
+  - Manager-owned application listener and reusable trusted-peer connections
+  - Private supervisor with isolated asynchronous tasks per authenticated connection
+  - Mutual TLS 1.3 authentication against pairing-owned trust records
+  - Protected hello, version negotiation, capabilities, nonces, and limits
+  - Deterministic bounded CBOR framing and correlated control requests
+  - Immutable connection snapshots and post-commit delegate events
+  - Immediate connection shutdown after trust revocation
 
 ## D. First working product
 

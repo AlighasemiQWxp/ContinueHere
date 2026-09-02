@@ -1,162 +1,145 @@
 use std::{
-    collections::{HashMap, VecDeque},
-    net::{IpAddr, Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
-    sync::{
-        Arc, Mutex, MutexGuard,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
-    thread::{self, JoinHandle},
-    time::{Duration, Instant},
+    collections::BTreeMap,
+    net::{Ipv4Addr, SocketAddrV4},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use async_trait::async_trait;
+use tokio::{
+    net::TcpListener,
+    sync::{mpsc, oneshot},
+};
 
 use crate::{
     core::{error::ModuleError, module::Module},
     discovery::DiscoveryEndpoint,
-    security::CryptographicIdentity,
+    managers::device::DeviceIdentityCapability,
+    models::DeviceId,
+    pairing::TrustedPeerLookup,
+    security::SecurityCapability,
 };
 
-use super::{PairingChannel, TransportError};
-
-const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
-const INCOMING_QUEUE_LIMIT: usize = 8;
-const INCOMING_RATE_WINDOW: Duration = Duration::from_secs(60);
-const MAX_INCOMING_PER_ADDRESS: usize = 5;
-const MAX_RATE_LIMIT_ADDRESSES: usize = 256;
+use super::{
+    AuthenticatedConnection, ConnectionChangedDelegate, ConnectionChangedEvent,
+    ConnectionChangedSubscription, PairingTransportCapability, TransportError,
+    supervisor::{ConnectionStore, SupervisorCommand, SupervisorRuntime},
+};
 
 pub struct TransportManager {
-    capability: PairingTransportCapability,
+    pairing: PairingTransportCapability,
+    access: Arc<TransportAccess>,
+    device_identity: DeviceIdentityCapability,
+    security: SecurityCapability,
+    trusted_peers: TrustedPeerLookup,
+    runtime: Option<SupervisorRuntime>,
 }
 
-#[derive(Clone)]
-pub(crate) struct PairingTransportCapability {
-    state: Arc<Mutex<TransportState>>,
-}
-
-struct TransportState {
-    running: bool,
-    listener_owners: usize,
-    endpoint: Option<DiscoveryEndpoint>,
-    incoming: Option<mpsc::Receiver<TcpStream>>,
-    shutdown: Option<Arc<AtomicBool>>,
-    worker: Option<JoinHandle<()>>,
+struct TransportAccess {
+    commands: Mutex<Option<mpsc::Sender<SupervisorCommand>>>,
+    endpoint: Mutex<Option<DiscoveryEndpoint>>,
+    connections: ConnectionStore,
+    changed: ConnectionChangedEvent,
 }
 
 impl TransportManager {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(
+        device_identity: DeviceIdentityCapability,
+        security: SecurityCapability,
+        trusted_peers: TrustedPeerLookup,
+    ) -> Self {
         Self {
-            capability: PairingTransportCapability {
-                state: Arc::new(Mutex::new(TransportState {
-                    running: false,
-                    listener_owners: 0,
-                    endpoint: None,
-                    incoming: None,
-                    shutdown: None,
-                    worker: None,
-                })),
-            },
+            pairing: PairingTransportCapability::new(),
+            access: Arc::new(TransportAccess {
+                commands: Mutex::new(None),
+                endpoint: Mutex::new(None),
+                connections: Arc::new(Mutex::new(BTreeMap::new())),
+                changed: ConnectionChangedEvent::default(),
+            }),
+            device_identity,
+            security,
+            trusted_peers,
+            runtime: None,
         }
     }
 
     pub(crate) fn pairing_capability(&self) -> PairingTransportCapability {
-        self.capability.clone()
-    }
-}
-
-impl PairingTransportCapability {
-    pub(crate) fn acquire_listener(&self) -> Result<DiscoveryEndpoint, TransportError> {
-        let mut state = lock(&self.state)?;
-        if !state.running {
-            return Err(TransportError::ManagerUnavailable);
-        }
-        if let Some(endpoint) = state.endpoint.clone() {
-            state.listener_owners += 1;
-            return Ok(endpoint);
-        }
-        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0))
-            .map_err(|_| TransportError::ListenerUnavailable)?;
-        listener
-            .set_nonblocking(true)
-            .map_err(|_| TransportError::ListenerUnavailable)?;
-        let port = listener
-            .local_addr()
-            .map_err(|_| TransportError::ListenerUnavailable)?
-            .port();
-        let endpoint = DiscoveryEndpoint::new("0.0.0.0", port)
-            .map_err(|_| TransportError::ListenerUnavailable)?;
-        let (sender, receiver) = mpsc::sync_channel(INCOMING_QUEUE_LIMIT);
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let worker_shutdown = Arc::clone(&shutdown);
-        let worker = thread::Builder::new()
-            .name("continuehere-pairing-listener".to_owned())
-            .spawn(move || run_listener(listener, sender, worker_shutdown))
-            .map_err(|_| TransportError::ListenerUnavailable)?;
-        state.listener_owners = 1;
-        state.endpoint = Some(endpoint.clone());
-        state.incoming = Some(receiver);
-        state.shutdown = Some(shutdown);
-        state.worker = Some(worker);
-        Ok(endpoint)
+        self.pairing.clone()
     }
 
-    pub(crate) fn release_listener(&self) -> Result<(), TransportError> {
-        let worker = {
-            let mut state = lock(&self.state)?;
-            if state.listener_owners == 0 {
-                return Ok(());
-            }
-            state.listener_owners -= 1;
-            if state.listener_owners != 0 {
-                return Ok(());
-            }
-            take_listener(&mut state)
-        };
-        stop_listener(worker)
-    }
-
-    pub(crate) fn endpoint(&self) -> Result<DiscoveryEndpoint, TransportError> {
-        lock(&self.state)?
-            .endpoint
+    pub fn listening_endpoint(&self) -> Result<DiscoveryEndpoint, TransportError> {
+        lock(&self.access.endpoint)?
             .clone()
             .ok_or(TransportError::ManagerUnavailable)
     }
 
-    pub(crate) fn connect(
-        &self,
-        endpoint: &DiscoveryEndpoint,
-        identity: &CryptographicIdentity,
-    ) -> Result<PairingChannel, TransportError> {
-        if !lock(&self.state)?.running {
-            return Err(TransportError::ManagerUnavailable);
-        }
-        PairingChannel::connect(endpoint, identity)
+    pub fn connections(&self) -> Vec<AuthenticatedConnection> {
+        lock_or_recover(&self.access.connections)
+            .values()
+            .cloned()
+            .collect()
     }
 
-    pub(crate) fn accept(
+    pub async fn connect(
         &self,
-        identity: &CryptographicIdentity,
-        timeout: Duration,
-    ) -> Result<Option<PairingChannel>, TransportError> {
-        let stream = {
-            let state = lock(&self.state)?;
-            let receiver = state
-                .incoming
-                .as_ref()
-                .ok_or(TransportError::ManagerUnavailable)?;
-            match receiver.recv_timeout(timeout) {
-                Ok(stream) => Some(stream),
-                Err(mpsc::RecvTimeoutError::Timeout) => None,
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    return Err(TransportError::ListenerUnavailable);
-                }
-            }
-        };
-        match stream {
-            Some(stream) => PairingChannel::accept(stream, identity).map(Some),
-            None => Ok(None),
-        }
+        device_id: &DeviceId,
+        endpoint: &DiscoveryEndpoint,
+    ) -> Result<AuthenticatedConnection, TransportError> {
+        let commands = self.commands()?;
+        let (response, result) = oneshot::channel();
+        commands
+            .send(SupervisorCommand::Connect {
+                device_id: device_id.clone(),
+                endpoint: endpoint.clone(),
+                response,
+            })
+            .await
+            .map_err(|_| TransportError::CommandUnavailable)?;
+        result
+            .await
+            .map_err(|_| TransportError::CommandUnavailable)?
+    }
+
+    pub async fn disconnect(&self, device_id: &DeviceId) -> Result<(), TransportError> {
+        let commands = self.commands()?;
+        let (response, result) = oneshot::channel();
+        commands
+            .send(SupervisorCommand::Disconnect {
+                device_id: device_id.clone(),
+                response,
+            })
+            .await
+            .map_err(|_| TransportError::CommandUnavailable)?;
+        result
+            .await
+            .map_err(|_| TransportError::CommandUnavailable)?
+    }
+
+    pub fn on_connection_changed(
+        &self,
+        delegate: ConnectionChangedDelegate,
+    ) -> ConnectionChangedSubscription {
+        self.access.changed.subscribe(delegate)
+    }
+
+    pub async fn probe(&self, device_id: &DeviceId) -> Result<(), TransportError> {
+        let commands = self.commands()?;
+        let (response, result) = oneshot::channel();
+        commands
+            .send(SupervisorCommand::Probe {
+                device_id: device_id.clone(),
+                response,
+            })
+            .await
+            .map_err(|_| TransportError::CommandUnavailable)?;
+        result
+            .await
+            .map_err(|_| TransportError::CommandUnavailable)?
+    }
+
+    fn commands(&self) -> Result<mpsc::Sender<SupervisorCommand>, TransportError> {
+        lock(&self.access.commands)?
+            .clone()
+            .ok_or(TransportError::ManagerUnavailable)
     }
 }
 
@@ -167,86 +150,60 @@ impl Module for TransportManager {
     }
 
     async fn start(&mut self) -> Result<(), ModuleError> {
-        let mut state = lock(&self.capability.state)?;
-        state.running = true;
+        if self.runtime.is_some() {
+            return Ok(());
+        }
+        self.pairing.start()?;
+        let local_identity = match self.device_identity.identity() {
+            Some(identity) => identity,
+            None => {
+                self.pairing.stop()?;
+                return Err(Box::new(TransportError::ManagerUnavailable));
+            }
+        };
+        let listener = match TcpListener::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).await {
+            Ok(listener) => listener,
+            Err(_) => {
+                self.pairing.stop()?;
+                return Err(Box::new(TransportError::ListenerUnavailable));
+            }
+        };
+        let port = match listener.local_addr() {
+            Ok(address) => address.port(),
+            Err(_) => {
+                self.pairing.stop()?;
+                return Err(Box::new(TransportError::ListenerUnavailable));
+            }
+        };
+        let endpoint = DiscoveryEndpoint::new("0.0.0.0", port)
+            .map_err(|_| Box::new(TransportError::ListenerUnavailable) as ModuleError)?;
+        let runtime = SupervisorRuntime::start(
+            listener,
+            local_identity,
+            self.security.clone(),
+            self.trusted_peers.clone(),
+            Arc::clone(&self.access.connections),
+            self.access.changed.clone(),
+        );
+        *lock_or_recover(&self.access.endpoint) = Some(endpoint);
+        *lock_or_recover(&self.access.commands) = Some(runtime.commands());
+        self.runtime = Some(runtime);
         Ok(())
     }
 
     async fn stop(&mut self) -> Result<(), ModuleError> {
-        let worker = {
-            let mut state = lock(&self.capability.state)?;
-            state.running = false;
-            state.listener_owners = 0;
-            take_listener(&mut state)
+        *lock_or_recover(&self.access.commands) = None;
+        *lock_or_recover(&self.access.endpoint) = None;
+        let runtime_error = match self.runtime.take() {
+            Some(runtime) => runtime.stop().await.err(),
+            None => None,
         };
-        stop_listener(worker)?;
-        Ok(())
-    }
-}
-
-fn take_listener(state: &mut TransportState) -> (Option<Arc<AtomicBool>>, Option<JoinHandle<()>>) {
-    let shutdown = state.shutdown.take();
-    let worker = state.worker.take();
-    state.endpoint = None;
-    state.incoming = None;
-    (shutdown, worker)
-}
-
-fn stop_listener(
-    listener: (Option<Arc<AtomicBool>>, Option<JoinHandle<()>>),
-) -> Result<(), TransportError> {
-    let (shutdown, worker) = listener;
-    if let Some(shutdown) = shutdown {
-        shutdown.store(true, Ordering::Release);
-    }
-    if let Some(worker) = worker {
-        worker
-            .join()
-            .map_err(|_| TransportError::WorkerStopFailed)?;
-    }
-    Ok(())
-}
-
-fn run_listener(
-    listener: TcpListener,
-    incoming: mpsc::SyncSender<TcpStream>,
-    shutdown: Arc<AtomicBool>,
-) {
-    let mut attempts = HashMap::new();
-    while !shutdown.load(Ordering::Acquire) {
-        match listener.accept() {
-            Ok((stream, address)) => {
-                if allow_incoming(&mut attempts, address.ip()) {
-                    match incoming.try_send(stream) {
-                        Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
-                        Err(mpsc::TrySendError::Disconnected(_)) => return,
-                    }
-                }
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::park_timeout(ACCEPT_POLL_INTERVAL);
-            }
-            Err(_) => return,
+        let pairing_error = self.pairing.stop().err();
+        match runtime_error.or(pairing_error) {
+            Some(error) => Err(Box::new(error)),
+            None => Ok(()),
         }
     }
-}
-
-fn allow_incoming(attempts: &mut HashMap<IpAddr, VecDeque<Instant>>, address: IpAddr) -> bool {
-    let now = Instant::now();
-    let oldest_allowed = now - INCOMING_RATE_WINDOW;
-    attempts.retain(|_, values| {
-        values.retain(|attempt| *attempt >= oldest_allowed);
-        !values.is_empty()
-    });
-    if !attempts.contains_key(&address) && attempts.len() >= MAX_RATE_LIMIT_ADDRESSES {
-        return false;
-    }
-    let attempts = attempts.entry(address).or_default();
-    if attempts.len() >= MAX_INCOMING_PER_ADDRESS {
-        return false;
-    }
-    attempts.push_back(now);
-    true
 }
 
 fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, TransportError> {
@@ -255,27 +212,191 @@ fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, TransportError> {
         .map_err(|_| TransportError::SynchronizationFailed)
 }
 
+fn lock_or_recover<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
+    value.lock().unwrap_or_else(|error| error.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::HashMap,
+        path::Path,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    use tempfile::tempdir;
+
     use super::{Module, TransportManager};
+    use crate::{
+        discovery::DiscoveryEndpoint,
+        managers::DeviceManager,
+        pairing::{TrustedDevice, TrustedDeviceRegistry},
+        security::{CredentialStore, SecurityError, SecurityManager},
+    };
 
-    #[tokio::test]
-    async fn transport_exposes_a_temporary_pairing_listener() {
-        let mut manager = TransportManager::new();
-        manager.start().await.expect("transport should start");
+    #[derive(Default)]
+    struct MemoryCredentialStore {
+        secrets: Mutex<HashMap<String, Vec<u8>>>,
+    }
 
-        let capability = manager.pairing_capability();
-        assert!(capability.endpoint().is_err());
-        let endpoint = capability
-            .acquire_listener()
-            .expect("listener endpoint should be available");
+    impl CredentialStore for MemoryCredentialStore {
+        fn load(
+            &self,
+            device_id: &crate::models::DeviceId,
+        ) -> Result<Option<Vec<u8>>, SecurityError> {
+            Ok(self
+                .secrets
+                .lock()
+                .expect("memory credential store should be available")
+                .get(device_id.as_str())
+                .cloned())
+        }
 
-        assert_eq!(endpoint.host(), "0.0.0.0");
-        assert_ne!(endpoint.port(), 0);
-        capability
-            .release_listener()
-            .expect("listener should release");
-        assert!(capability.endpoint().is_err());
-        manager.stop().await.expect("transport should stop");
+        fn save(
+            &self,
+            device_id: &crate::models::DeviceId,
+            secret: &[u8],
+        ) -> Result<(), SecurityError> {
+            self.secrets
+                .lock()
+                .expect("memory credential store should be available")
+                .insert(device_id.as_str().to_owned(), secret.to_vec());
+            Ok(())
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn trusted_peers_connect_probe_and_disconnect_after_revocation() {
+        let first_directory = tempdir().expect("first directory should be available");
+        let second_directory = tempdir().expect("second directory should be available");
+        let mut first_devices = start_devices(first_directory.path()).await;
+        let mut second_devices = start_devices(second_directory.path()).await;
+        let mut first_security = start_security().await;
+        let mut second_security = start_security().await;
+        let first_identity = first_devices.identity();
+        let second_identity = second_devices.identity();
+        let first_fingerprint = first_security
+            .capability()
+            .identity(first_identity.id())
+            .expect("first cryptographic identity should be available")
+            .fingerprint();
+        let second_fingerprint = second_security
+            .capability()
+            .identity(second_identity.id())
+            .expect("second cryptographic identity should be available")
+            .fingerprint();
+
+        let first_trusted = TrustedDeviceRegistry::new(first_directory.path().to_path_buf());
+        first_trusted.load().expect("first trust should load");
+        first_trusted
+            .persist(TrustedDevice::new(
+                second_identity.id().clone(),
+                second_fingerprint,
+                second_identity.display_name().to_owned(),
+                second_identity.platform(),
+            ))
+            .expect("second device should become trusted");
+        let second_trusted = TrustedDeviceRegistry::new(second_directory.path().to_path_buf());
+        second_trusted.load().expect("second trust should load");
+        second_trusted
+            .persist(TrustedDevice::new(
+                first_identity.id().clone(),
+                first_fingerprint,
+                first_identity.display_name().to_owned(),
+                first_identity.platform(),
+            ))
+            .expect("first device should become trusted");
+
+        let mut first_transport = TransportManager::new(
+            first_devices.capability(),
+            first_security.capability(),
+            first_trusted.lookup(),
+        );
+        let mut second_transport = TransportManager::new(
+            second_devices.capability(),
+            second_security.capability(),
+            second_trusted.lookup(),
+        );
+        first_transport
+            .start()
+            .await
+            .expect("first transport should start");
+        second_transport
+            .start()
+            .await
+            .expect("second transport should start");
+
+        let second_listener = second_transport
+            .listening_endpoint()
+            .expect("second listener should be available");
+        let endpoint = DiscoveryEndpoint::new("127.0.0.1", second_listener.port())
+            .expect("loopback endpoint should be valid");
+        let connected = first_transport
+            .connect(second_identity.id(), &endpoint)
+            .await
+            .expect("trusted peers should connect");
+
+        assert_eq!(connected.device_id(), second_identity.id());
+        first_transport
+            .probe(second_identity.id())
+            .await
+            .expect("authenticated probe should succeed");
+        wait_until(|| second_transport.connections().len() == 1).await;
+
+        second_trusted
+            .remove(first_identity.id())
+            .expect("trust revocation should persist");
+        wait_until(|| {
+            first_transport.connections().is_empty() && second_transport.connections().is_empty()
+        })
+        .await;
+
+        second_transport
+            .stop()
+            .await
+            .expect("second transport should stop");
+        first_transport
+            .stop()
+            .await
+            .expect("first transport should stop");
+        second_security
+            .stop()
+            .await
+            .expect("second security should stop");
+        first_security
+            .stop()
+            .await
+            .expect("first security should stop");
+        second_devices
+            .stop()
+            .await
+            .expect("second devices should stop");
+        first_devices
+            .stop()
+            .await
+            .expect("first devices should stop");
+    }
+
+    async fn start_devices(path: &Path) -> DeviceManager {
+        let mut devices = DeviceManager::new(path.to_path_buf());
+        devices.start().await.expect("devices should start");
+        devices
+    }
+
+    async fn start_security() -> SecurityManager {
+        let mut security = SecurityManager::with_store(Arc::new(MemoryCredentialStore::default()));
+        security.start().await.expect("security should start");
+        security
+    }
+
+    async fn wait_until(condition: impl Fn() -> bool) {
+        for _ in 0..100 {
+            if condition() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(condition(), "condition should become true");
     }
 }

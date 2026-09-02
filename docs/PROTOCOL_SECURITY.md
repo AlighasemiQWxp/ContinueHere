@@ -221,6 +221,20 @@ Current and future phases preserve the existing main-system architecture:
   validated message delivery. Phase 9 exposes only its pairing capability;
   Phase 10 adds normal trusted application connections.
 
+Normal application connections are manager-owned infrastructure rather than
+caller-owned handles. A private supervisor serializes registry changes and
+owns isolated asynchronous work per peer connection. Each connection has one
+sequential reader and one writer owner so a cancelled command cannot split a
+partially read frame. Feature operations may be handle-owned, but their release
+does not implicitly close a connection shared with another operation.
+
+Transport receives only a read-only trusted-peer capability from Pairing.
+Removing trust remains a Pairing operation; after the removal commits,
+Transport closes matching connections and rejects later handshakes. The
+temporary pairing channel uses a separate ALPN identifier and
+untrusted-certificate verification policy and cannot be reused as an
+authenticated application channel.
+
 Each manager is an independent main system under `CoreModules`. They
 communicate through constructor-injected typed capabilities and specific
 delegate events. Raw sockets, private keys, undecoded CBOR values, and mutable

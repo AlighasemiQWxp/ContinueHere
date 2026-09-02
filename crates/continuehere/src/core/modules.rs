@@ -1,9 +1,15 @@
 use std::path::PathBuf;
 
 use crate::{
-    Error, Result, directories::DirectoryManager, discovery::DiscoveryManager,
-    locales::LocalizationManager, managers::DeviceManager, pairing::PairingManager,
-    security::SecurityManager, settings::SettingsManager, transport::TransportManager,
+    Error, Result,
+    directories::DirectoryManager,
+    discovery::DiscoveryManager,
+    locales::LocalizationManager,
+    managers::DeviceManager,
+    pairing::{PairingManager, TrustedDeviceRegistry},
+    security::SecurityManager,
+    settings::SettingsManager,
+    transport::TransportManager,
 };
 
 use super::{module::Module, registry::ModuleRegistry};
@@ -35,9 +41,14 @@ impl CoreModules {
         let localization = LocalizationManager::new(settings.localization().shared());
         let devices = DeviceManager::new(project_directory.clone());
         let security = SecurityManager::new();
-        let transport = TransportManager::new();
+        let trusted = TrustedDeviceRegistry::new(project_directory.clone());
+        let transport = TransportManager::new(
+            devices.capability(),
+            security.capability(),
+            trusted.lookup(),
+        );
         let pairing = PairingManager::new(
-            project_directory,
+            trusted,
             devices.capability(),
             security.capability(),
             transport.pairing_capability(),
@@ -85,6 +96,10 @@ impl CoreModules {
 
     pub(crate) fn pairing(&self) -> &PairingManager {
         &self.pairing
+    }
+
+    pub(crate) fn transport(&self) -> &TransportManager {
+        &self.transport
     }
 
     pub(crate) async fn start_all(&mut self) -> Result<()> {

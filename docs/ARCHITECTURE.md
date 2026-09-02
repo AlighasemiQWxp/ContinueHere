@@ -226,6 +226,33 @@ trusted-device records, pairing events, approval, and revocation. Its private
 security and transport capabilities. The controller is a same-system child,
 not another main system or a public API.
 
+Phase 10 keeps normal application connections under `TransportManager` without
+representing physical connections as handles. A connection can be shared by
+multiple future feature operations, receive unsolicited authenticated requests,
+and remain alive across individual request lifetimes. Feature-owned operations
+such as pairing and transfer may use handles, but releasing one feature handle
+must not close a connection still needed by another feature.
+
+`TransportManager` is the lifecycle and capability boundary. Its private
+`ConnectionSupervisor` owns the application listener, connection registry,
+bounded command channel, and connection cleanup. Each peer connection uses a
+private connection task with a dedicated sequential reader. Together they own
+the socket, TLS session, protected hello, framing, and request correlation.
+This infrastructure is not a business-workflow controller and is not exposed
+through the public API.
+
+The pairing system remains the only writer of trusted-device records and gives
+Transport a narrow read-only trusted-peer lookup. Security gives Transport the
+local cryptographic identity without exposing private-key bytes, and the device
+system supplies the local public identity used by the protected hello. Trust
+revocation is published only after persistence succeeds; Transport then closes
+every connection authenticated as that peer.
+
+The temporary Phase 9 pairing channel and the normal Phase 10 application
+channel remain distinct. Pairing temporarily accepts an untrusted Ed25519
+certificate for explicit two-device verification. Application transport accepts
+only an already pinned trusted identity and uses a separate ALPN identifier.
+
 The application protocol uses protected version negotiation, deterministic
 CBOR control messages, bounded length-prefixed framing, typed request
 identifiers, and separate streaming messages for large content. Discovery,
@@ -267,6 +294,12 @@ an outgoing endpoint or one incoming connection. Use starts the state machine;
 release or drop cancels the operation and erases its temporary authentication
 state. Persistent trusted devices are not handles; they remain until an
 explicit, successfully persisted revocation.
+
+Normal Transport connections are not handles. `TransportManager` and its
+private supervisor own their lifecycle, reuse them across feature requests, and
+close them on explicit disconnect, trust revocation, protocol failure, idle
+timeout, or application shutdown. Future cancellable handoff and transfer
+operations may own handles without owning the shared connection beneath them.
 
 Pairing defines two system-owned event streams: immutable pairing-session
 changes and immutable trusted-device changes. Commands such as approve, reject,

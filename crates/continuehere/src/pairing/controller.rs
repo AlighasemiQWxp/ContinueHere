@@ -16,8 +16,8 @@ use crate::{
 
 use super::{
     PairingError, PairingFailure, PairingMode, PairingRole, PairingSession, PairingSessionChange,
-    PairingSessionChangedEvent, PairingSessionId, PairingState, PairingVerification, TrustedDevice,
-    TrustedDeviceChange, TrustedDeviceChangedEvent, TrustedDeviceStore,
+    PairingSessionChangedEvent, PairingSessionId, PairingState, PairingVerification, TrustMutation,
+    TrustedDevice, TrustedDeviceChange, TrustedDeviceChangedEvent, TrustedDeviceRegistry,
 };
 
 mod session;
@@ -32,7 +32,7 @@ const MAX_ACTIVE_SESSIONS: usize = 8;
 
 pub(crate) struct PairingController {
     state: Mutex<ControllerState>,
-    trusted: Mutex<TrustedState>,
+    trusted: TrustedDeviceRegistry,
     device_identity: DeviceIdentityCapability,
     security: SecurityCapability,
     transport: PairingTransportCapability,
@@ -55,11 +55,6 @@ struct ActiveOperation {
     owns_listener: bool,
 }
 
-struct TrustedState {
-    store: TrustedDeviceStore,
-    devices: BTreeMap<DeviceId, TrustedDevice>,
-}
-
 enum SessionCommand {
     Approve,
     Reject,
@@ -71,14 +66,9 @@ struct VerifiedPeer {
     fingerprint: [u8; 32],
 }
 
-struct PersistedTrust {
-    device: TrustedDevice,
-    newly_added: bool,
-}
-
 impl PairingController {
     pub(crate) fn new(
-        store: TrustedDeviceStore,
+        trusted: TrustedDeviceRegistry,
         device_identity: DeviceIdentityCapability,
         security: SecurityCapability,
         transport: PairingTransportCapability,
@@ -92,10 +82,7 @@ impl PairingController {
                 operations: HashMap::new(),
                 orphan_workers: Vec::new(),
             }),
-            trusted: Mutex::new(TrustedState {
-                store,
-                devices: BTreeMap::new(),
-            }),
+            trusted,
             device_identity,
             security,
             transport,
@@ -105,8 +92,7 @@ impl PairingController {
     }
 
     pub(crate) fn start(&self) -> Result<(), PairingError> {
-        let devices = lock(&self.trusted)?.store.load()?;
-        lock(&self.trusted)?.devices = devices;
+        self.trusted.load()?;
         lock(&self.state)?.running = true;
         Ok(())
     }
@@ -296,26 +282,11 @@ impl PairingController {
     }
 
     pub(crate) fn trusted_devices(&self) -> Vec<TrustedDevice> {
-        match lock(&self.trusted) {
-            Ok(state) => state.devices.values().cloned().collect(),
-            Err(_) => Vec::new(),
-        }
+        self.trusted.devices()
     }
 
     pub(crate) fn remove_trusted_device(&self, device_id: &DeviceId) -> Result<(), PairingError> {
-        let removed = {
-            let mut state = lock(&self.trusted)?;
-            let removed = state
-                .devices
-                .get(device_id)
-                .cloned()
-                .ok_or(PairingError::TrustedDeviceNotFound)?;
-            let mut updated = state.devices.clone();
-            updated.remove(device_id);
-            state.store.save(&updated)?;
-            state.devices = updated;
-            removed
-        };
+        let removed = self.trusted.remove(device_id)?;
         self.trusted_changed
             .publish(TrustedDeviceChange::Removed(removed));
         Ok(())
@@ -403,65 +374,17 @@ impl PairingController {
             .publish(PairingSessionChange::Updated(updated));
     }
 
-    fn persist_trust(&self, peer: &VerifiedPeer) -> Result<PersistedTrust, PairingError> {
-        let persisted = {
-            let mut state = lock(&self.trusted)?;
-            if let Some(existing) = state.devices.get(peer.hello.device_id()) {
-                if existing.public_key_fingerprint() != &peer.fingerprint {
-                    return Err(PairingError::IdentityConflict);
-                }
-                return Ok(PersistedTrust {
-                    device: existing.clone(),
-                    newly_added: false,
-                });
-            }
-            if state
-                .devices
-                .values()
-                .any(|device| device.public_key_fingerprint() == &peer.fingerprint)
-            {
-                return Err(PairingError::IdentityConflict);
-            }
-            let device = TrustedDevice::new(
-                peer.hello.device_id().clone(),
-                peer.fingerprint,
-                peer.hello.display_name().to_owned(),
-                peer.hello.platform(),
-            );
-            let mut updated = state.devices.clone();
-            updated.insert(device.device_id().clone(), device.clone());
-            state.store.save(&updated)?;
-            state.devices = updated;
-            PersistedTrust {
-                device,
-                newly_added: true,
-            }
-        };
-        Ok(persisted)
+    fn persist_trust(&self, peer: &VerifiedPeer) -> Result<TrustMutation, PairingError> {
+        self.trusted.persist(TrustedDevice::new(
+            peer.hello.device_id().clone(),
+            peer.fingerprint,
+            peer.hello.display_name().to_owned(),
+            peer.hello.platform(),
+        ))
     }
 
-    fn rollback_unconfirmed_trust(&self, persisted: &PersistedTrust) {
-        if !persisted.newly_added {
-            return;
-        }
-        let mut state = match lock(&self.trusted) {
-            Ok(state) => state,
-            Err(_) => return,
-        };
-        let should_remove = state
-            .devices
-            .get(persisted.device.device_id())
-            .is_some_and(|device| {
-                device.public_key_fingerprint() == persisted.device.public_key_fingerprint()
-            });
-        if !should_remove {
-            return;
-        }
-        let mut updated = state.devices.clone();
-        updated.remove(persisted.device.device_id());
-        if state.store.save(&updated).is_ok() {
-            state.devices = updated;
-        }
+    fn rollback_unconfirmed_trust(&self, persisted: &TrustMutation) {
+        self.trusted.rollback(persisted);
     }
 }
 
