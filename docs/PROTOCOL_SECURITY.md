@@ -220,6 +220,10 @@ Current and future phases preserve the existing main-system architecture:
 - `TransportManager` owns listeners, connections, protocol framing, and
   validated message delivery. Phase 9 exposes only its pairing capability;
   Phase 10 adds normal trusted application connections.
+- `HandoffManager` owns caller-scoped handoff operations, incoming handoff
+  state, URL semantics, duplicate handling, and handoff-specific events. Its
+  private controller coordinates the workflow through a typed Transport
+  capability.
 
 Normal application connections are manager-owned infrastructure rather than
 caller-owned handles. A private supervisor serializes registry changes and
@@ -243,6 +247,21 @@ trust records are not exposed through the public application API.
 Feature systems receive only validated typed messages. Transport does not
 decide whether a URL should open or where a file should be stored, and feature
 systems will not perform encryption or parse network frames.
+
+Phase 11 URL handoffs use authenticated application connections and advertise
+the `UrlHandoff` capability during the protected hello. Transport owns bounded
+encoding, request correlation, timeouts, and typed delivery. Handoff validates
+URL semantics, rejects unsupported schemes, and commits an incoming immutable
+record before acknowledging delivery. A handoff identifier provides bounded
+duplicate protection independently of the connection-local request identifier.
+URL payloads are limited to 4,096 UTF-8 bytes. Runtime state is limited to 32
+active outgoing operations, 64 pending incoming handoffs, and 256 remembered
+handoff identifiers for duplicate detection.
+
+Delivery acknowledgement means that the receiving Handoff system accepted the
+request into runtime state. It does not mean that a browser opened the URL.
+Received URLs are not persisted or logged because they may contain private
+query or fragment data.
 
 ## Persistence boundaries
 

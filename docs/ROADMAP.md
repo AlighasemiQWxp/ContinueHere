@@ -75,7 +75,13 @@ after its implementation and validation requirements are satisfied.
 
 ## D. First working product
 
-- [ ] 11. URL handoff technical MVP
+- [x] 11. URL handoff technical MVP
+  - Handle-owned outgoing operations with immutable status snapshots
+  - Private controller coordinating typed authenticated delivery
+  - Strict HTTP and HTTPS validation with bounded protocol messages
+  - Capability negotiation, acknowledgement, and duplicate protection
+  - Bounded in-memory incoming records and post-commit delegate events
+  - Complete local validation suite passed
 - [ ] 12. YouTube handoff with playback position
 - [ ] 13. Streaming file transfer
 - [ ] 14. Local video handoff

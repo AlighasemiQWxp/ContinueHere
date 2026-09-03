@@ -21,12 +21,14 @@ use crate::{
 
 use super::{
     AuthenticatedConnection, ConnectionChangedDelegate, ConnectionChangedEvent,
-    ConnectionChangedSubscription, PairingTransportCapability, TransportError,
+    ConnectionChangedSubscription, HandoffTransportCapability, PairingTransportCapability,
+    TransportError,
     supervisor::{ConnectionStore, SupervisorCommand, SupervisorRuntime},
 };
 
 pub struct TransportManager {
     pairing: PairingTransportCapability,
+    handoff: HandoffTransportCapability,
     access: Arc<TransportAccess>,
     device_identity: DeviceIdentityCapability,
     security: SecurityCapability,
@@ -49,6 +51,7 @@ impl TransportManager {
     ) -> Self {
         Self {
             pairing: PairingTransportCapability::new(),
+            handoff: HandoffTransportCapability::new(),
             access: Arc::new(TransportAccess {
                 commands: Mutex::new(None),
                 endpoint: Mutex::new(None),
@@ -64,6 +67,10 @@ impl TransportManager {
 
     pub(crate) fn pairing_capability(&self) -> PairingTransportCapability {
         self.pairing.clone()
+    }
+
+    pub(crate) fn handoff_capability(&self) -> HandoffTransportCapability {
+        self.handoff.clone()
     }
 
     pub fn listening_endpoint(&self) -> Result<DiscoveryEndpoint, TransportError> {
@@ -182,11 +189,14 @@ impl Module for TransportManager {
             local_identity,
             self.security.clone(),
             self.trusted_peers.clone(),
+            self.handoff.clone(),
             Arc::clone(&self.access.connections),
             self.access.changed.clone(),
         );
         *lock_or_recover(&self.access.endpoint) = Some(endpoint);
-        *lock_or_recover(&self.access.commands) = Some(runtime.commands());
+        let commands = runtime.commands();
+        self.handoff.set_commands(Some(commands.clone()));
+        *lock_or_recover(&self.access.commands) = Some(commands);
         self.runtime = Some(runtime);
         Ok(())
     }
@@ -194,6 +204,7 @@ impl Module for TransportManager {
     async fn stop(&mut self) -> Result<(), ModuleError> {
         *lock_or_recover(&self.access.commands) = None;
         *lock_or_recover(&self.access.endpoint) = None;
+        self.handoff.set_commands(None);
         let runtime_error = match self.runtime.take() {
             Some(runtime) => runtime.stop().await.err(),
             None => None,

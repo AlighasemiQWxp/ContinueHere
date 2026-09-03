@@ -42,6 +42,7 @@ ContinueHere
     ├── TransportManager
     ├── DiscoveryManager
     ├── PairingManager
+    ├── HandoffManager
     └── ModuleRegistry
 ```
 
@@ -208,17 +209,18 @@ Private-key material belongs in a platform secure-storage backend, trusted-peer
 records belong to the pairing system, and neither belongs in `settings.bin` or
 `device_identity.bin`.
 
-`DiscoveryManager`, `SecurityManager`, `TransportManager`, and `PairingManager`
-are independent main systems under `CoreModules`. They exchange narrow typed
-capabilities and system-specific events. Transport exposes validated typed
-pairing messages rather than raw sockets or decoded protocol values.
+`DiscoveryManager`, `SecurityManager`, `TransportManager`, `PairingManager`, and
+`HandoffManager` are independent main systems under `CoreModules`. They exchange
+narrow typed capabilities and system-specific events. Transport exposes
+validated typed feature messages rather than raw sockets or decoded protocol
+values.
 
 `SecurityManager` privately owns the long-term Ed25519 identity and its
 operating-system credential-store backend. It supplies pairing-only TLS
 identity and exporter capabilities without exposing private-key bytes.
 `TransportManager` owns the pairing listener, TLS 1.3 channels, bounded pairing
-framing, and connection cleanup. Its Phase 9 surface is deliberately limited to
-pairing; general authenticated application transport remains Phase 10.
+framing, and connection cleanup. Its pairing-only channel remains separate from
+the authenticated application transport implemented in Phase 10.
 
 `PairingManager` owns `PairingHandle` instances, immutable session snapshots,
 trusted-device records, pairing events, approval, and revocation. Its private
@@ -230,8 +232,8 @@ Phase 10 keeps normal application connections under `TransportManager` without
 representing physical connections as handles. A connection can be shared by
 multiple future feature operations, receive unsolicited authenticated requests,
 and remain alive across individual request lifetimes. Feature-owned operations
-such as pairing and transfer may use handles, but releasing one feature handle
-must not close a connection still needed by another feature.
+such as pairing, handoff, and transfer may use handles, but releasing one
+feature handle must not close a connection still needed by another feature.
 
 `TransportManager` is the lifecycle and capability boundary. Its private
 `ConnectionSupervisor` owns the application listener, connection registry,
@@ -300,6 +302,21 @@ private supervisor own their lifecycle, reuse them across feature requests, and
 close them on explicit disconnect, trust revocation, protocol failure, idle
 timeout, or application shutdown. Future cancellable handoff and transfer
 operations may own handles without owning the shared connection beneath them.
+
+Phase 11 adds `HandoffManager` as an independent main system. Each outgoing
+handoff is a caller-owned `HandoffHandle`; releasing it cancels or removes only
+that operation and never closes the shared authenticated connection. The
+manager owns immutable operation snapshots, a bounded in-memory incoming inbox,
+and post-commit events. Its private `HandoffController` coordinates URL
+validation, capability checks, delivery acknowledgement, duplicate protection,
+and cleanup through a narrow Transport capability.
+
+Incoming handoffs are manager-owned records rather than handles because they
+arrive independently of a caller. Transport authenticates the peer, enforces
+wire limits, correlates requests, and delivers typed messages. Handoff owns URL
+semantics and acceptance. Browser launching, persistent activity history,
+automatic retry, playback-position behavior, and file transfer remain outside
+Phase 11.
 
 Pairing defines two system-owned event streams: immutable pairing-session
 changes and immutable trusted-device changes. Commands such as approve, reject,

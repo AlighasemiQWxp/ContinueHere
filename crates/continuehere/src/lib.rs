@@ -8,7 +8,7 @@ mod discovery;
 #[allow(
     dead_code,
     unused_imports,
-    reason = "the handle foundation is activated by later feature modules"
+    reason = "feature modules use only the handle lifecycle capabilities they require"
 )]
 mod handles;
 mod handoff;
@@ -30,6 +30,12 @@ pub use discovery::{
     DiscoveryChangedSubscription, DiscoveryEndpoint, DiscoveryError, DiscoveryHandle,
     DiscoveryManager, DiscoveryMode, DiscoverySource, DiscoveryStatus,
     DiscoveryStatusChangedDelegate, DiscoveryStatusChangedSubscription,
+};
+pub use handoff::{
+    Handoff, HandoffChange, HandoffChangedDelegate, HandoffChangedSubscription, HandoffError,
+    HandoffFailure, HandoffHandle, HandoffId, HandoffManager, HandoffPayload, HandoffState,
+    IncomingHandoff, IncomingHandoffChange, IncomingHandoffChangedDelegate,
+    IncomingHandoffChangedSubscription, UrlHandoff,
 };
 pub use locales::{
     Language, LanguageChangedDelegate, LanguageChangedSubscription, LocalizationKey,

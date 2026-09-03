@@ -5,6 +5,7 @@ use crate::{
     core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
     directories::DirectoryManager,
     discovery::DiscoveryManager,
+    handoff::HandoffManager,
     locales::LocalizationManager,
     managers::DeviceManager,
     pairing::PairingManager,
@@ -47,6 +48,10 @@ impl ContinueHere {
 
     pub fn transport(&self) -> &TransportManager {
         self.modules.transport()
+    }
+
+    pub fn handoff(&self) -> &HandoffManager {
+        self.modules.handoff()
     }
 
     pub async fn shutdown(mut self) -> Result<()> {

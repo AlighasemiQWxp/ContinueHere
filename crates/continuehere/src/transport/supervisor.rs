@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     net::IpAddr,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, mpsc as standard_mpsc},
     time::{Duration, Instant},
 };
 
@@ -15,14 +15,14 @@ use uuid::Uuid;
 
 use crate::{
     discovery::DiscoveryEndpoint,
-    models::{DeviceId, LocalDeviceIdentity},
+    models::{Capability, DeviceId, LocalDeviceIdentity},
     pairing::{TrustedDevice, TrustedPeerLookup},
     security::{CryptographicIdentity, SecurityCapability},
 };
 
 use super::{
     AuthenticatedConnection, ConnectionChange, ConnectionChangedEvent, ConnectionDirection,
-    TransportError,
+    HandoffTransportCapability, InboundUrlHandoff, TransportError, UrlHandoffDisposition,
     authenticated::{AuthenticatedChannel, AuthenticatedReader},
     protocol::{ApplicationHello, MAX_CONTROL_FRAME_SIZE, ProtocolEnvelope, ProtocolMessage},
 };
@@ -58,6 +58,12 @@ pub(crate) enum SupervisorCommand {
         device_id: DeviceId,
         response: oneshot::Sender<Result<(), TransportError>>,
     },
+    SendUrlHandoff {
+        device_id: DeviceId,
+        handoff_id: [u8; 16],
+        url: String,
+        response: standard_mpsc::Sender<Result<UrlHandoffDisposition, TransportError>>,
+    },
     Shutdown {
         response: oneshot::Sender<()>,
     },
@@ -72,6 +78,11 @@ struct ActiveConnection {
 
 enum ConnectionCommand {
     Probe(oneshot::Sender<Result<(), TransportError>>),
+    SendUrlHandoff {
+        handoff_id: [u8; 16],
+        url: String,
+        response: standard_mpsc::Sender<Result<UrlHandoffDisposition, TransportError>>,
+    },
     Close,
 }
 
@@ -104,12 +115,23 @@ struct EstablishedChannel {
     maximum_frame_size: usize,
     maximum_in_flight_requests: usize,
     idle_timeout: Duration,
+    handoff: HandoffTransportCapability,
 }
 
 struct PendingRequest {
-    nonce: u64,
     started: Instant,
-    response: oneshot::Sender<Result<(), TransportError>>,
+    operation: PendingOperation,
+}
+
+enum PendingOperation {
+    Probe {
+        nonce: u64,
+        response: oneshot::Sender<Result<(), TransportError>>,
+    },
+    UrlHandoff {
+        handoff_id: [u8; 16],
+        response: standard_mpsc::Sender<Result<UrlHandoffDisposition, TransportError>>,
+    },
 }
 
 #[derive(Clone)]
@@ -117,7 +139,17 @@ struct WorkerContext {
     local_identity: LocalDeviceIdentity,
     security: SecurityCapability,
     trusted_peers: TrustedPeerLookup,
+    handoff: HandoffTransportCapability,
     events: mpsc::Sender<WorkerEvent>,
+}
+
+struct SupervisorContext {
+    local_identity: LocalDeviceIdentity,
+    security: SecurityCapability,
+    trusted_peers: TrustedPeerLookup,
+    handoff: HandoffTransportCapability,
+    connections: ConnectionStore,
+    changed: ConnectionChangedEvent,
 }
 
 impl SupervisorRuntime {
@@ -126,19 +158,20 @@ impl SupervisorRuntime {
         local_identity: LocalDeviceIdentity,
         security: SecurityCapability,
         trusted_peers: TrustedPeerLookup,
+        handoff: HandoffTransportCapability,
         connections: ConnectionStore,
         changed: ConnectionChangedEvent,
     ) -> Self {
         let (commands, command_receiver) = mpsc::channel(COMMAND_QUEUE_LIMIT);
-        let worker = tokio::spawn(run_supervisor(
-            listener,
-            command_receiver,
+        let context = SupervisorContext {
             local_identity,
             security,
             trusted_peers,
+            handoff,
             connections,
             changed,
-        ));
+        };
+        let worker = tokio::spawn(run_supervisor(listener, command_receiver, context));
         Self { commands, worker }
     }
 
@@ -164,12 +197,16 @@ impl SupervisorRuntime {
 async fn run_supervisor(
     listener: TcpListener,
     mut commands: mpsc::Receiver<SupervisorCommand>,
-    local_identity: LocalDeviceIdentity,
-    security: SecurityCapability,
-    trusted_peers: TrustedPeerLookup,
-    connections: ConnectionStore,
-    changed: ConnectionChangedEvent,
+    context: SupervisorContext,
 ) {
+    let SupervisorContext {
+        local_identity,
+        security,
+        trusted_peers,
+        handoff,
+        connections,
+        changed,
+    } = context;
     let (worker_events, mut events) = mpsc::channel(WORKER_EVENT_LIMIT);
     let mut tasks = JoinSet::new();
     let mut active = BTreeMap::<DeviceId, ActiveConnection>::new();
@@ -181,6 +218,7 @@ async fn run_supervisor(
         local_identity: local_identity.clone(),
         security: security.clone(),
         trusted_peers: trusted_peers.clone(),
+        handoff,
         events: worker_events.clone(),
     };
 
@@ -329,6 +367,36 @@ async fn handle_command(
                 return false;
             }
         }
+        SupervisorCommand::SendUrlHandoff {
+            device_id,
+            handoff_id,
+            url,
+            response,
+        } => {
+            let Some(connection) = active.get(&device_id) else {
+                let _ = response.send(Err(TransportError::NotConnected));
+                return false;
+            };
+            if !connection
+                .snapshot
+                .capabilities()
+                .contains(&Capability::UrlHandoff)
+            {
+                let _ = response.send(Err(TransportError::UnsupportedCapability));
+                return false;
+            }
+            if connection
+                .commands
+                .try_send(ConnectionCommand::SendUrlHandoff {
+                    handoff_id,
+                    url,
+                    response,
+                })
+                .is_err()
+            {
+                return false;
+            }
+        }
         SupervisorCommand::Shutdown { response } => {
             let _ = response.send(());
             return true;
@@ -451,6 +519,7 @@ fn spawn_outgoing(
             &context.local_identity,
             &context.security,
             &context.trusted_peers,
+            &context.handoff,
         )
         .await;
         run_established(
@@ -471,6 +540,7 @@ fn spawn_incoming(tasks: &mut JoinSet<()>, stream: TcpStream, context: WorkerCon
             &context.local_identity,
             &context.security,
             &context.trusted_peers,
+            &context.handoff,
         )
         .await;
         run_established(result, None, true, None, context.events).await;
@@ -536,6 +606,7 @@ async fn establish_outgoing(
     local_identity: &LocalDeviceIdentity,
     security: &SecurityCapability,
     trusted_peers: &TrustedPeerLookup,
+    handoff: &HandoffTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
     let cryptographic_identity = load_cryptographic_identity(security, local_identity.id()).await?;
     let channel =
@@ -546,6 +617,7 @@ async fn establish_outgoing(
         Some(trusted_peer.device_id()),
         local_identity,
         trusted_peers,
+        handoff,
     )
     .await
 }
@@ -555,6 +627,7 @@ async fn establish_incoming(
     local_identity: &LocalDeviceIdentity,
     security: &SecurityCapability,
     trusted_peers: &TrustedPeerLookup,
+    handoff: &HandoffTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
     let cryptographic_identity = load_cryptographic_identity(security, local_identity.id()).await?;
     let channel =
@@ -566,6 +639,7 @@ async fn establish_incoming(
         None,
         local_identity,
         trusted_peers,
+        handoff,
     )
     .await
 }
@@ -576,8 +650,14 @@ async fn establish(
     expected_device_id: Option<&DeviceId>,
     local_identity: &LocalDeviceIdentity,
     trusted_peers: &TrustedPeerLookup,
+    handoff: &HandoffTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
-    let local_hello = ApplicationHello::local(local_identity)?;
+    let capabilities = if handoff.is_supported() {
+        vec![Capability::UrlHandoff]
+    } else {
+        Vec::new()
+    };
+    let local_hello = ApplicationHello::local(local_identity, capabilities)?;
     channel
         .send(
             &ProtocolEnvelope::hello(local_hello.clone()),
@@ -618,6 +698,7 @@ async fn establish(
         maximum_frame_size: negotiated.limits().maximum_frame_size(),
         maximum_in_flight_requests: negotiated.limits().maximum_in_flight_requests(),
         idle_timeout: Duration::from_secs(u64::from(negotiated.limits().idle_timeout_seconds())),
+        handoff: handoff.clone(),
     })
 }
 
@@ -628,6 +709,8 @@ async fn run_connection(
     let maximum_frame_size = established.maximum_frame_size;
     let maximum_in_flight_requests = established.maximum_in_flight_requests;
     let idle_timeout = established.idle_timeout;
+    let handoff = established.handoff.clone();
+    let peer_device_id = established.snapshot.device_id().clone();
     let (reader, mut writer) = established.channel.split();
     let (received_messages, mut messages) = mpsc::channel(CONNECTION_COMMAND_LIMIT);
     let reader_task = tokio::spawn(run_reader(reader, maximum_frame_size, received_messages));
@@ -652,9 +735,33 @@ async fn run_connection(
                             let envelope = ProtocolEnvelope::ping(request_identifier, nonce)?;
                             writer.send(&envelope, maximum_frame_size).await?;
                             pending.insert(request_identifier, PendingRequest {
-                                nonce,
                                 started: Instant::now(),
-                                response,
+                                operation: PendingOperation::Probe { nonce, response },
+                            });
+                            request_identifier = next_request_identifier(request_identifier);
+                            last_activity = Instant::now();
+                        }
+                        Some(ConnectionCommand::SendUrlHandoff {
+                            handoff_id,
+                            url,
+                            response,
+                        }) => {
+                            if pending.len() >= maximum_in_flight_requests {
+                                let _ = response.send(Err(TransportError::ConnectionLimit));
+                                continue;
+                            }
+                            let envelope = ProtocolEnvelope::url_handoff(
+                                request_identifier,
+                                handoff_id,
+                                url,
+                            )?;
+                            writer.send(&envelope, maximum_frame_size).await?;
+                            pending.insert(request_identifier, PendingRequest {
+                                started: Instant::now(),
+                                operation: PendingOperation::UrlHandoff {
+                                    handoff_id,
+                                    response,
+                                },
                             });
                             request_identifier = next_request_identifier(request_identifier);
                             last_activity = Instant::now();
@@ -689,10 +796,63 @@ async fn run_connection(
                             let request = pending
                                 .remove(&envelope.request_id())
                                 .ok_or(TransportError::ProtocolViolation)?;
-                            if request.nonce != *nonce {
+                            match request.operation {
+                                PendingOperation::Probe {
+                                    nonce: expected,
+                                    response,
+                                } if expected == *nonce => {
+                                    let _ = response.send(Ok(()));
+                                }
+                                _ => return Err(TransportError::ProtocolViolation),
+                            }
+                        }
+                        ProtocolMessage::UrlHandoff { handoff_id, url } => {
+                            if received.contains(&envelope.request_id()) {
                                 return Err(TransportError::ProtocolViolation);
                             }
-                            let _ = request.response.send(Ok(()));
+                            received.push_back(envelope.request_id());
+                            if received.len() > maximum_in_flight_requests * 2 {
+                                received.pop_front();
+                            }
+                            let disposition = handoff
+                                .receive_url(InboundUrlHandoff::new(
+                                    *handoff_id,
+                                    peer_device_id.clone(),
+                                    url.clone(),
+                                ))
+                                .await;
+                            let response = match disposition {
+                                UrlHandoffDisposition::Accepted => {
+                                    ProtocolEnvelope::url_handoff_accepted(
+                                        envelope.request_id(),
+                                        *handoff_id,
+                                    )?
+                                }
+                                UrlHandoffDisposition::Rejected(reason) => {
+                                    ProtocolEnvelope::url_handoff_rejected(
+                                        envelope.request_id(),
+                                        *handoff_id,
+                                        reason,
+                                    )?
+                                }
+                            };
+                            writer.send(&response, maximum_frame_size).await?;
+                        }
+                        ProtocolMessage::UrlHandoffAccepted(handoff_id) => {
+                            complete_url_handoff(
+                                &mut pending,
+                                envelope.request_id(),
+                                *handoff_id,
+                                UrlHandoffDisposition::Accepted,
+                            )?;
+                        }
+                        ProtocolMessage::UrlHandoffRejected { handoff_id, reason } => {
+                            complete_url_handoff(
+                                &mut pending,
+                                envelope.request_id(),
+                                *handoff_id,
+                                UrlHandoffDisposition::Rejected(*reason),
+                            )?;
                         }
                         ProtocolMessage::Close => return Ok(()),
                         ProtocolMessage::Hello(_) => return Err(TransportError::ProtocolViolation),
@@ -709,7 +869,7 @@ async fn run_connection(
                         .collect::<Vec<_>>();
                     for identifier in timed_out {
                         if let Some(request) = pending.remove(&identifier) {
-                            let _ = request.response.send(Err(TransportError::TimedOut));
+                            fail_pending(request, TransportError::TimedOut);
                         }
                     }
                     if now.duration_since(last_activity) >= idle_timeout {
@@ -723,9 +883,41 @@ async fn run_connection(
     reader_task.abort();
     let _ = reader_task.await;
     for request in pending.into_values() {
-        let _ = request.response.send(Err(TransportError::ConnectionFailed));
+        fail_pending(request, TransportError::ConnectionFailed);
     }
     result
+}
+
+fn complete_url_handoff(
+    pending: &mut BTreeMap<u64, PendingRequest>,
+    request_id: u64,
+    handoff_id: [u8; 16],
+    disposition: UrlHandoffDisposition,
+) -> Result<(), TransportError> {
+    let request = pending
+        .remove(&request_id)
+        .ok_or(TransportError::ProtocolViolation)?;
+    match request.operation {
+        PendingOperation::UrlHandoff {
+            handoff_id: expected,
+            response,
+        } if expected == handoff_id => {
+            let _ = response.send(Ok(disposition));
+            Ok(())
+        }
+        _ => Err(TransportError::ProtocolViolation),
+    }
+}
+
+fn fail_pending(request: PendingRequest, error: TransportError) {
+    match request.operation {
+        PendingOperation::Probe { response, .. } => {
+            let _ = response.send(Err(error));
+        }
+        PendingOperation::UrlHandoff { response, .. } => {
+            let _ = response.send(Err(error));
+        }
+    }
 }
 
 async fn run_reader(

@@ -7,8 +7,9 @@ use continuehere::{
     Capability, ContinueHere, Device, DeviceId, DeviceIdentityChangedDelegate, DeviceManager,
     DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, DiscoveryChange,
     DiscoveryChangedDelegate, DiscoveryEndpoint, DiscoveryManager, DiscoveryMode, DiscoverySource,
-    Language, LanguageChangedDelegate, LocalizationKey, LocalizationManager, LocalizationSettings,
-    PairingManager, Platform, ProtocolVersion, SettingsManager, TextDirection, TransportManager,
+    HandoffManager, Language, LanguageChangedDelegate, LocalizationKey, LocalizationManager,
+    LocalizationSettings, PairingManager, Platform, ProtocolVersion, SettingsManager,
+    TextDirection, TransportManager,
 };
 use tempfile::tempdir;
 
@@ -48,6 +49,7 @@ async fn builder_exposes_the_core_managers() {
     let _: &DiscoveryManager = app.discovery();
     let _: &PairingManager = app.pairing();
     let _: &TransportManager = app.transport();
+    let _: &HandoffManager = app.handoff();
     let identity = app.devices().identity();
 
     assert!(!identity.id().as_str().is_empty());

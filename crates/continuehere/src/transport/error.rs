@@ -35,6 +35,8 @@ pub enum TransportError {
     AlreadyConnected,
     #[error("peer is not connected")]
     NotConnected,
+    #[error("peer does not support the requested capability")]
+    UnsupportedCapability,
     #[error("peer uses an incompatible protocol version")]
     IncompatibleProtocol,
     #[error("peer violated the application protocol")]

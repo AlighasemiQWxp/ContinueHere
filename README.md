@@ -33,14 +33,20 @@ The architectural foundation is complete. It currently provides:
 - Handle-owned TLS 1.3 pairing with explicit two-device verification
 - OS-secured Ed25519 identities and atomically persisted trusted-device records
 - Pairing-session and trusted-device delegate events
+- Manager-owned authenticated TLS 1.3 application connections
+- Deterministic bounded application framing and correlated control requests
+- Connection lifecycle events and immediate trust-revocation cleanup
+- Handle-owned URL handoffs with capability negotiation and acknowledgement
+- Strict URL validation, duplicate protection, and bounded incoming handoff state
+- Handoff-operation and incoming-handoff delegate events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
-The protocol and security design, Discovery, and Phase 9 Pairing are complete.
-Pairing passes the complete local validation suite and continuous integration.
-General authenticated transport, handoff features, and desktop/mobile
-interfaces remain planned work.
-Discovery candidates are only untrusted connection hints. No sensitive
-information should be transferred yet. See the
+The protocol and security design, Discovery, Pairing, and authenticated
+Transport are complete. Phase 11 provides the validated URL handoff technical
+MVP. Playback-position handoff, file transfer, and desktop/mobile interfaces
+remain planned work.
+Discovery candidates are only untrusted connection hints. Application data must
+use an authenticated Transport connection. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and
 [project roadmap](docs/ROADMAP.md) for the intended development order.
 
