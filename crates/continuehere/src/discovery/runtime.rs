@@ -365,10 +365,8 @@ impl Worker {
                 ActiveOperation::LocalBrowse | ActiveOperation::Advertisement { .. }
             )
         });
-        if !has_network_operation {
-            if let Some(mut backend) = self.state.backend.take() {
-                let _shutdown_result = backend.shutdown();
-            }
+        if !has_network_operation && let Some(mut backend) = self.state.backend.take() {
+            let _shutdown_result = backend.shutdown();
         }
         if self.state.operations.is_empty() {
             self.set_status(DiscoveryStatus::Idle);

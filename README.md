@@ -96,7 +96,7 @@ the project directory.
 
 ### Requirements
 
-- The stable Rust toolchain
+- Rust 1.88 or newer on the stable release channel
 - `rustfmt`
 - Clippy
 

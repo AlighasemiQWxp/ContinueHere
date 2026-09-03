@@ -55,10 +55,10 @@ impl SecurityCapability {
         if !state.running {
             return Err(SecurityError::ManagerUnavailable);
         }
-        if let Some((loaded_id, identity)) = state.identity.as_ref() {
-            if loaded_id == device_id {
-                return Ok(Arc::clone(identity));
-            }
+        if let Some((loaded_id, identity)) = state.identity.as_ref()
+            && loaded_id == device_id
+        {
+            return Ok(Arc::clone(identity));
         }
 
         let identity = match self.store.load(device_id)? {

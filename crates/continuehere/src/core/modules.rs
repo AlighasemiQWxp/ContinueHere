@@ -306,10 +306,10 @@ where
 }
 
 fn keep_first_error(first_error: &mut Option<Error>, result: Result<()>) {
-    if first_error.is_none() {
-        if let Err(error) = result {
-            *first_error = Some(error);
-        }
+    if first_error.is_none()
+        && let Err(error) = result
+    {
+        *first_error = Some(error);
     }
 }
 

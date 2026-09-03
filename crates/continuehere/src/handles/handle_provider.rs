@@ -131,10 +131,10 @@ where
             let handle = HandleReference::new(identifier, inner, Arc::downgrade(&self.entries));
 
             let release_result = handle.invalidate();
-            if first_error.is_none() {
-                if let Err(error) = release_result {
-                    first_error = Some(error);
-                }
+            if first_error.is_none()
+                && let Err(error) = release_result
+            {
+                first_error = Some(error);
             }
         }
 

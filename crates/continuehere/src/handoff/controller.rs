@@ -310,10 +310,10 @@ impl InboundUrlHandoffHandler for HandoffController {
             state.incoming.insert(id.clone(), incoming.clone());
             state.seen.insert(id.clone(), sender_device_id);
             state.seen_order.push_back(id);
-            if state.seen_order.len() > MAX_SEEN_HANDOFFS {
-                if let Some(expired) = state.seen_order.pop_front() {
-                    state.seen.remove(&expired);
-                }
+            if state.seen_order.len() > MAX_SEEN_HANDOFFS
+                && let Some(expired) = state.seen_order.pop_front()
+            {
+                state.seen.remove(&expired);
             }
             incoming
         };

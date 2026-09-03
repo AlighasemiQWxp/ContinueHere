@@ -241,17 +241,16 @@ async fn run_supervisor(
                 }
             }
             accepted = listener.accept(), if pending_incoming < MAX_PENDING_HANDSHAKES => {
-                if let Ok((stream, address)) = accepted {
-                    if active.len() + pending_incoming < MAX_CONNECTIONS
-                        && allow_incoming(&mut incoming_attempts, address.ip())
-                    {
-                        pending_incoming += 1;
-                        spawn_incoming(
-                            &mut tasks,
-                            stream,
-                            worker_context.clone(),
-                        );
-                    }
+                if let Ok((stream, address)) = accepted
+                    && active.len() + pending_incoming < MAX_CONNECTIONS
+                    && allow_incoming(&mut incoming_attempts, address.ip())
+                {
+                    pending_incoming += 1;
+                    spawn_incoming(
+                        &mut tasks,
+                        stream,
+                        worker_context.clone(),
+                    );
                 }
             }
             event = events.recv() => {
@@ -481,11 +480,9 @@ fn handle_worker_event(
             let matches = active
                 .get(&device_id)
                 .is_some_and(|connection| connection.runtime_id == runtime_id);
-            if matches {
-                if let Some(connection) = active.remove(&device_id) {
-                    remove_connection_snapshot(connections, &device_id);
-                    changed.publish(ConnectionChange::Removed(connection.snapshot));
-                }
+            if matches && let Some(connection) = active.remove(&device_id) {
+                remove_connection_snapshot(connections, &device_id);
+                changed.publish(ConnectionChange::Removed(connection.snapshot));
             }
         }
     }

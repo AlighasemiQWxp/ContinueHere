@@ -58,10 +58,10 @@ impl ModuleRegistry {
             let result = entry.module.stop().await;
             entry.started = false;
 
-            if first_error.is_none() {
-                if let Err(source) = result {
-                    first_error = Some(Error::ModuleStop { name, source });
-                }
+            if first_error.is_none()
+                && let Err(source) = result
+            {
+                first_error = Some(Error::ModuleStop { name, source });
             }
         }
 
