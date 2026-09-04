@@ -263,6 +263,21 @@ request into runtime state. It does not mean that a browser opened the URL.
 Received URLs are not persisted or logged because they may contain private
 query or fragment data.
 
+Phase 12 keeps the same Handoff lifecycle and acknowledgement messages while
+adding a distinct YouTube payload kind. The protected hello must include
+`PlaybackPositionHandoff` before that payload can be sent. The payload contains
+one 16-byte handoff identifier, one YouTube video identifier of at most 11
+ASCII bytes, and one unsigned 64-bit millisecond playback position. Transport
+enforces wire bounds before allocation; Handoff then requires an exact valid
+11-character video identifier before committing incoming state.
+
+Only HTTPS `youtube.com`, `www.youtube.com`, and `m.youtube.com` watch URLs and
+single-video `youtu.be` URLs are accepted as outgoing YouTube handoffs. Exact
+host matching rejects lookalike domains. The receiving interface can construct
+a canonical YouTube resume URL, but acknowledgement still means only that the
+receiving Handoff system accepted the immutable runtime record. YouTube URLs
+and playback positions are not persisted or logged.
+
 ## Persistence boundaries
 
 Security-sensitive state remains separate from user preferences and the public

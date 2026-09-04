@@ -1,11 +1,10 @@
 use std::fmt;
 
-use url::Url;
 use uuid::Uuid;
 
-use crate::{models::DeviceId, transport::MAX_URL_SIZE};
+use crate::models::DeviceId;
 
-use super::HandoffError;
+use super::{UrlHandoff, YouTubeHandoff};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HandoffId {
@@ -66,26 +65,10 @@ pub enum HandoffFailure {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UrlHandoff {
-    url: String,
-}
-
-impl UrlHandoff {
-    pub fn new(url: &str) -> Result<Self, HandoffError> {
-        Ok(Self {
-            url: validate_url(url)?,
-        })
-    }
-
-    pub fn url(&self) -> &str {
-        &self.url
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum HandoffPayload {
     Url(UrlHandoff),
+    YouTube(YouTubeHandoff),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,11 +81,11 @@ pub struct Handoff {
 }
 
 impl Handoff {
-    pub(crate) fn new(id: HandoffId, config: UrlHandoffConfig) -> Self {
+    pub(crate) fn new(id: HandoffId, config: HandoffConfig) -> Self {
         Self {
             id,
             destination_device_id: config.device_id,
-            payload: HandoffPayload::Url(config.payload),
+            payload: config.payload,
             state: HandoffState::Sending,
             failure: None,
         }
@@ -194,72 +177,27 @@ pub enum IncomingHandoffChange {
 }
 
 #[derive(Clone)]
-pub(crate) struct UrlHandoffConfig {
+pub(crate) struct HandoffConfig {
     device_id: DeviceId,
-    payload: UrlHandoff,
+    payload: HandoffPayload,
 }
 
-impl UrlHandoffConfig {
-    pub(crate) fn new(device_id: DeviceId, url: &str) -> Result<Self, HandoffError> {
-        Ok(Self {
+impl HandoffConfig {
+    pub(crate) fn url(device_id: DeviceId, payload: UrlHandoff) -> Self {
+        Self {
             device_id,
-            payload: UrlHandoff::new(url)?,
-        })
+            payload: HandoffPayload::Url(payload),
+        }
     }
 
-    pub(crate) fn into_parts(self) -> (DeviceId, UrlHandoff) {
+    pub(crate) fn youtube(device_id: DeviceId, payload: YouTubeHandoff) -> Self {
+        Self {
+            device_id,
+            payload: HandoffPayload::YouTube(payload),
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (DeviceId, HandoffPayload) {
         (self.device_id, self.payload)
-    }
-}
-
-pub(crate) fn validate_url(value: &str) -> Result<String, HandoffError> {
-    if value.is_empty() {
-        return Err(HandoffError::EmptyUrl);
-    }
-    if value.trim() != value {
-        return Err(HandoffError::InvalidUrl);
-    }
-    if value.len() > MAX_URL_SIZE {
-        return Err(HandoffError::UrlTooLarge);
-    }
-    let parsed = Url::parse(value).map_err(|_| HandoffError::InvalidUrl)?;
-    if parsed.scheme() != "http" && parsed.scheme() != "https" {
-        return Err(HandoffError::UnsupportedUrlScheme);
-    }
-    if parsed.host().is_none() {
-        return Err(HandoffError::InvalidUrl);
-    }
-    if !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(HandoffError::UrlContainsCredentials);
-    }
-    let normalized = parsed.to_string();
-    if normalized.len() > MAX_URL_SIZE {
-        return Err(HandoffError::UrlTooLarge);
-    }
-    Ok(normalized)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{HandoffError, validate_url};
-
-    #[test]
-    fn accepts_and_normalizes_http_urls() {
-        assert_eq!(
-            validate_url("https://example.com").expect("URL should be valid"),
-            "https://example.com/"
-        );
-    }
-
-    #[test]
-    fn rejects_dangerous_schemes_and_credentials() {
-        assert_eq!(
-            validate_url("javascript:alert(1)"),
-            Err(HandoffError::UnsupportedUrlScheme)
-        );
-        assert_eq!(
-            validate_url("https://user:secret@example.com"),
-            Err(HandoffError::UrlContainsCredentials)
-        );
     }
 }

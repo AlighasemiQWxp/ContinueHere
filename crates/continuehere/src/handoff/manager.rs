@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn handle_sends_url_to_authenticated_peer() {
+    async fn handles_send_typed_payloads_to_authenticated_peer() {
         let first_directory = tempdir().expect("first directory should be available");
         let second_directory = tempdir().expect("second directory should be available");
         let mut first_devices = DeviceManager::new(first_directory.path().to_path_buf());
@@ -242,6 +242,11 @@ mod tests {
             .await
             .expect("trusted peers should connect");
         assert!(connection.capabilities().contains(&Capability::UrlHandoff));
+        assert!(
+            connection
+                .capabilities()
+                .contains(&Capability::PlaybackPositionHandoff)
+        );
 
         let (event_sender, event_receiver) = mpsc::channel();
         let _subscription = second_handoff.on_incoming_changed(
@@ -281,9 +286,45 @@ mod tests {
                             if url.url() == "https://example.com/watch?v=1"
                     )
         ));
-        assert_eq!(second_handoff.incoming().len(), 1);
+        let youtube_handle = first_handoff
+            .get_handle("continue-youtube")
+            .expect("YouTube handoff handle should be available");
+        youtube_handle
+            .configure_youtube(
+                second_identity.id().clone(),
+                "https://youtu.be/dQw4w9WgXcQ",
+                Duration::from_secs(452),
+            )
+            .expect("YouTube handoff should configure");
+        youtube_handle
+            .use_handle()
+            .expect("YouTube handoff should start");
+
+        wait_until(|| {
+            youtube_handle
+                .handoff()
+                .is_some_and(|handoff| handoff.state() == HandoffState::Delivered)
+        })
+        .await;
+        let incoming = event_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("YouTube event should be published");
+        assert!(matches!(
+            incoming,
+            IncomingHandoffChange::Added(handoff)
+                if matches!(
+                    handoff.payload(),
+                    HandoffPayload::YouTube(youtube)
+                        if youtube.video_id() == "dQw4w9WgXcQ"
+                            && youtube.playback_position().duration() == Duration::from_secs(452)
+                )
+        ));
+        assert_eq!(second_handoff.incoming().len(), 2);
 
         handle.release().expect("handle should release");
+        youtube_handle
+            .release()
+            .expect("YouTube handle should release");
         second_handoff.stop().await.expect("handoff should stop");
         first_handoff.stop().await.expect("handoff should stop");
         second_transport

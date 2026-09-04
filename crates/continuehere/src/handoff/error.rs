@@ -23,6 +23,12 @@ pub enum HandoffError {
     UnsupportedUrlScheme,
     #[error("URLs containing credentials are not supported")]
     UrlContainsCredentials,
+    #[error("YouTube URL is not supported")]
+    InvalidYouTubeUrl,
+    #[error("YouTube video identifier is invalid")]
+    InvalidYouTubeVideoId,
+    #[error("playback position exceeds the supported range")]
+    PlaybackPositionTooLarge,
     #[error("handoff operation limit has been reached")]
     OperationLimit,
     #[error("received handoff was not found")]

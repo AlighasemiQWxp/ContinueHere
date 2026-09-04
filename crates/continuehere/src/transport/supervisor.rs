@@ -22,7 +22,8 @@ use crate::{
 
 use super::{
     AuthenticatedConnection, ConnectionChange, ConnectionChangedEvent, ConnectionDirection,
-    HandoffTransportCapability, InboundUrlHandoff, TransportError, UrlHandoffDisposition,
+    HandoffDisposition, HandoffTransportCapability, HandoffTransportPayload, InboundHandoff,
+    TransportError,
     authenticated::{AuthenticatedChannel, AuthenticatedReader},
     protocol::{ApplicationHello, MAX_CONTROL_FRAME_SIZE, ProtocolEnvelope, ProtocolMessage},
 };
@@ -58,11 +59,11 @@ pub(crate) enum SupervisorCommand {
         device_id: DeviceId,
         response: oneshot::Sender<Result<(), TransportError>>,
     },
-    SendUrlHandoff {
+    SendHandoff {
         device_id: DeviceId,
         handoff_id: [u8; 16],
-        url: String,
-        response: standard_mpsc::Sender<Result<UrlHandoffDisposition, TransportError>>,
+        payload: HandoffTransportPayload,
+        response: standard_mpsc::Sender<Result<HandoffDisposition, TransportError>>,
     },
     Shutdown {
         response: oneshot::Sender<()>,
@@ -78,10 +79,10 @@ struct ActiveConnection {
 
 enum ConnectionCommand {
     Probe(oneshot::Sender<Result<(), TransportError>>),
-    SendUrlHandoff {
+    SendHandoff {
         handoff_id: [u8; 16],
-        url: String,
-        response: standard_mpsc::Sender<Result<UrlHandoffDisposition, TransportError>>,
+        payload: HandoffTransportPayload,
+        response: standard_mpsc::Sender<Result<HandoffDisposition, TransportError>>,
     },
     Close,
 }
@@ -128,9 +129,9 @@ enum PendingOperation {
         nonce: u64,
         response: oneshot::Sender<Result<(), TransportError>>,
     },
-    UrlHandoff {
+    Handoff {
         handoff_id: [u8; 16],
-        response: standard_mpsc::Sender<Result<UrlHandoffDisposition, TransportError>>,
+        response: standard_mpsc::Sender<Result<HandoffDisposition, TransportError>>,
     },
 }
 
@@ -366,10 +367,10 @@ async fn handle_command(
                 return false;
             }
         }
-        SupervisorCommand::SendUrlHandoff {
+        SupervisorCommand::SendHandoff {
             device_id,
             handoff_id,
-            url,
+            payload,
             response,
         } => {
             let Some(connection) = active.get(&device_id) else {
@@ -379,16 +380,16 @@ async fn handle_command(
             if !connection
                 .snapshot
                 .capabilities()
-                .contains(&Capability::UrlHandoff)
+                .contains(&payload.capability())
             {
                 let _ = response.send(Err(TransportError::UnsupportedCapability));
                 return false;
             }
             if connection
                 .commands
-                .try_send(ConnectionCommand::SendUrlHandoff {
+                .try_send(ConnectionCommand::SendHandoff {
                     handoff_id,
-                    url,
+                    payload,
                     response,
                 })
                 .is_err()
@@ -650,7 +651,7 @@ async fn establish(
     handoff: &HandoffTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
     let capabilities = if handoff.is_supported() {
-        vec![Capability::UrlHandoff]
+        vec![Capability::UrlHandoff, Capability::PlaybackPositionHandoff]
     } else {
         Vec::new()
     };
@@ -738,24 +739,24 @@ async fn run_connection(
                             request_identifier = next_request_identifier(request_identifier);
                             last_activity = Instant::now();
                         }
-                        Some(ConnectionCommand::SendUrlHandoff {
+                        Some(ConnectionCommand::SendHandoff {
                             handoff_id,
-                            url,
+                            payload,
                             response,
                         }) => {
                             if pending.len() >= maximum_in_flight_requests {
                                 let _ = response.send(Err(TransportError::ConnectionLimit));
                                 continue;
                             }
-                            let envelope = ProtocolEnvelope::url_handoff(
+                            let envelope = ProtocolEnvelope::handoff(
                                 request_identifier,
                                 handoff_id,
-                                url,
+                                payload,
                             )?;
                             writer.send(&envelope, maximum_frame_size).await?;
                             pending.insert(request_identifier, PendingRequest {
                                 started: Instant::now(),
-                                operation: PendingOperation::UrlHandoff {
+                                operation: PendingOperation::Handoff {
                                     handoff_id,
                                     response,
                                 },
@@ -803,7 +804,10 @@ async fn run_connection(
                                 _ => return Err(TransportError::ProtocolViolation),
                             }
                         }
-                        ProtocolMessage::UrlHandoff { handoff_id, url } => {
+                        ProtocolMessage::Handoff {
+                            handoff_id,
+                            payload,
+                        } => {
                             if received.contains(&envelope.request_id()) {
                                 return Err(TransportError::ProtocolViolation);
                             }
@@ -812,21 +816,21 @@ async fn run_connection(
                                 received.pop_front();
                             }
                             let disposition = handoff
-                                .receive_url(InboundUrlHandoff::new(
+                                .receive(InboundHandoff::new(
                                     *handoff_id,
                                     peer_device_id.clone(),
-                                    url.clone(),
+                                    payload.clone(),
                                 ))
                                 .await;
                             let response = match disposition {
-                                UrlHandoffDisposition::Accepted => {
-                                    ProtocolEnvelope::url_handoff_accepted(
+                                HandoffDisposition::Accepted => {
+                                    ProtocolEnvelope::handoff_accepted(
                                         envelope.request_id(),
                                         *handoff_id,
                                     )?
                                 }
-                                UrlHandoffDisposition::Rejected(reason) => {
-                                    ProtocolEnvelope::url_handoff_rejected(
+                                HandoffDisposition::Rejected(reason) => {
+                                    ProtocolEnvelope::handoff_rejected(
                                         envelope.request_id(),
                                         *handoff_id,
                                         reason,
@@ -835,20 +839,20 @@ async fn run_connection(
                             };
                             writer.send(&response, maximum_frame_size).await?;
                         }
-                        ProtocolMessage::UrlHandoffAccepted(handoff_id) => {
-                            complete_url_handoff(
+                        ProtocolMessage::HandoffAccepted(handoff_id) => {
+                            complete_handoff(
                                 &mut pending,
                                 envelope.request_id(),
                                 *handoff_id,
-                                UrlHandoffDisposition::Accepted,
+                                HandoffDisposition::Accepted,
                             )?;
                         }
-                        ProtocolMessage::UrlHandoffRejected { handoff_id, reason } => {
-                            complete_url_handoff(
+                        ProtocolMessage::HandoffRejected { handoff_id, reason } => {
+                            complete_handoff(
                                 &mut pending,
                                 envelope.request_id(),
                                 *handoff_id,
-                                UrlHandoffDisposition::Rejected(*reason),
+                                HandoffDisposition::Rejected(*reason),
                             )?;
                         }
                         ProtocolMessage::Close => return Ok(()),
@@ -885,17 +889,17 @@ async fn run_connection(
     result
 }
 
-fn complete_url_handoff(
+fn complete_handoff(
     pending: &mut BTreeMap<u64, PendingRequest>,
     request_id: u64,
     handoff_id: [u8; 16],
-    disposition: UrlHandoffDisposition,
+    disposition: HandoffDisposition,
 ) -> Result<(), TransportError> {
     let request = pending
         .remove(&request_id)
         .ok_or(TransportError::ProtocolViolation)?;
     match request.operation {
-        PendingOperation::UrlHandoff {
+        PendingOperation::Handoff {
             handoff_id: expected,
             response,
         } if expected == handoff_id => {
@@ -911,7 +915,7 @@ fn fail_pending(request: PendingRequest, error: TransportError) {
         PendingOperation::Probe { response, .. } => {
             let _ = response.send(Err(error));
         }
-        PendingOperation::UrlHandoff { response, .. } => {
+        PendingOperation::Handoff { response, .. } => {
             let _ = response.send(Err(error));
         }
     }

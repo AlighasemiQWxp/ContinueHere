@@ -38,13 +38,16 @@ The architectural foundation is complete. It currently provides:
 - Connection lifecycle events and immediate trust-revocation cleanup
 - Handle-owned URL handoffs with capability negotiation and acknowledgement
 - Strict URL validation, duplicate protection, and bounded incoming handoff state
+- Shared handoff Manager, Controller, Handle, state, limits, and event architecture
+- Typed YouTube handoffs with validated video identifiers and playback positions
+- Negotiated playback-position capability and deterministic bounded messages
 - Handoff-operation and incoming-handoff delegate events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 The protocol and security design, Discovery, Pairing, and authenticated
 Transport are complete. Phase 11 provides the validated URL handoff technical
-MVP. Playback-position handoff, file transfer, and desktop/mobile interfaces
-remain planned work.
+MVP, and Phase 12 adds validated YouTube handoffs with playback position. File
+transfer and desktop/mobile interfaces remain planned work.
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and

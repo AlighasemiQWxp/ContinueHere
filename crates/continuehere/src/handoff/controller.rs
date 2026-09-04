@@ -8,15 +8,15 @@ use std::{
 use crate::{
     models::DeviceId,
     transport::{
-        HandoffTransportCapability, InboundUrlHandoff, InboundUrlHandoffHandler, TransportError,
-        UrlHandoffDisposition, UrlHandoffRejection,
+        HandoffDisposition, HandoffRejection, HandoffTransportCapability, HandoffTransportPayload,
+        InboundHandoff, InboundHandoffHandler, TransportError,
     },
 };
 
 use super::{
-    Handoff, HandoffChange, HandoffChangedEvent, HandoffError, HandoffFailure, HandoffId,
-    HandoffPayload, HandoffState, IncomingHandoff, IncomingHandoffChange,
-    IncomingHandoffChangedEvent, UrlHandoff, UrlHandoffConfig,
+    Handoff, HandoffChange, HandoffChangedEvent, HandoffConfig, HandoffError, HandoffFailure,
+    HandoffId, HandoffPayload, HandoffState, IncomingHandoff, IncomingHandoffChange,
+    IncomingHandoffChangedEvent, PlaybackPosition, UrlHandoff, YouTubeHandoff,
 };
 
 const MAX_ACTIVE_OPERATIONS: usize = 32;
@@ -71,13 +71,13 @@ impl HandoffController {
             handoff_changed,
             incoming_changed,
         });
-        let handler: Arc<dyn InboundUrlHandoffHandler> = controller.clone();
+        let handler: Arc<dyn InboundHandoffHandler> = controller.clone();
         transport.set_handler(Arc::downgrade(&handler));
         controller
     }
 
     pub(crate) fn start(self: &Arc<Self>) -> Result<(), HandoffError> {
-        let handler: Arc<dyn InboundUrlHandoffHandler> = self.clone();
+        let handler: Arc<dyn InboundHandoffHandler> = self.clone();
         self.transport.set_handler(Arc::downgrade(&handler));
         lock(&self.state)?.running = true;
         Ok(())
@@ -131,7 +131,7 @@ impl HandoffController {
     pub(crate) fn begin(
         self: &Arc<Self>,
         handle_identifier: String,
-        config: UrlHandoffConfig,
+        config: HandoffConfig,
     ) -> Result<(), HandoffError> {
         let handoff_id = HandoffId::new();
         let handoff = Handoff::new(handoff_id.clone(), config.clone());
@@ -159,7 +159,7 @@ impl HandoffController {
         let controller = Arc::clone(self);
         let worker_identifier = handle_identifier.clone();
         let spawn_result = thread::Builder::new()
-            .name("continuehere-url-handoff".to_owned())
+            .name("continuehere-handoff".to_owned())
             .spawn(move || {
                 run_outgoing(controller, worker_identifier, handoff_id, config, receiver);
             });
@@ -279,32 +279,48 @@ impl HandoffController {
     }
 }
 
-impl InboundUrlHandoffHandler for HandoffController {
-    fn receive(&self, handoff: InboundUrlHandoff) -> UrlHandoffDisposition {
-        let (handoff_id, sender_device_id, url) = handoff.into_parts();
-        let payload = match UrlHandoff::new(&url) {
-            Ok(url) => HandoffPayload::Url(url),
-            Err(_) => return UrlHandoffDisposition::Rejected(UrlHandoffRejection::Invalid),
+impl InboundHandoffHandler for HandoffController {
+    fn receive(&self, handoff: InboundHandoff) -> HandoffDisposition {
+        let (handoff_id, sender_device_id, transport_payload) = handoff.into_parts();
+        let payload = match transport_payload {
+            HandoffTransportPayload::Url(url) => match UrlHandoff::new(&url) {
+                Ok(url) => HandoffPayload::Url(url),
+                Err(_) => {
+                    return HandoffDisposition::Rejected(HandoffRejection::Invalid);
+                }
+            },
+            HandoffTransportPayload::YouTube {
+                video_id,
+                playback_position_millis,
+            } => match YouTubeHandoff::from_parts(
+                video_id,
+                PlaybackPosition::from_millis(playback_position_millis),
+            ) {
+                Ok(youtube) => HandoffPayload::YouTube(youtube),
+                Err(_) => {
+                    return HandoffDisposition::Rejected(HandoffRejection::Invalid);
+                }
+            },
         };
         let id = HandoffId::from_bytes(handoff_id);
         let incoming = {
             let mut state = match lock(&self.state) {
                 Ok(state) => state,
                 Err(_) => {
-                    return UrlHandoffDisposition::Rejected(UrlHandoffRejection::Unavailable);
+                    return HandoffDisposition::Rejected(HandoffRejection::Unavailable);
                 }
             };
             if !state.running {
-                return UrlHandoffDisposition::Rejected(UrlHandoffRejection::Unavailable);
+                return HandoffDisposition::Rejected(HandoffRejection::Unavailable);
             }
             if let Some(sender) = state.seen.get(&id) {
                 if sender == &sender_device_id {
-                    return UrlHandoffDisposition::Accepted;
+                    return HandoffDisposition::Accepted;
                 }
-                return UrlHandoffDisposition::Rejected(UrlHandoffRejection::Invalid);
+                return HandoffDisposition::Rejected(HandoffRejection::Invalid);
             }
             if state.incoming.len() >= MAX_INCOMING_HANDOFFS {
-                return UrlHandoffDisposition::Rejected(UrlHandoffRejection::Busy);
+                return HandoffDisposition::Rejected(HandoffRejection::Busy);
             }
             let incoming = IncomingHandoff::new(id.clone(), sender_device_id.clone(), payload);
             state.incoming.insert(id.clone(), incoming.clone());
@@ -319,7 +335,7 @@ impl InboundUrlHandoffHandler for HandoffController {
         };
         self.incoming_changed
             .publish(IncomingHandoffChange::Added(incoming));
-        UrlHandoffDisposition::Accepted
+        HandoffDisposition::Accepted
     }
 }
 
@@ -333,28 +349,34 @@ fn run_outgoing(
     controller: Arc<HandoffController>,
     handle_identifier: String,
     handoff_id: HandoffId,
-    config: UrlHandoffConfig,
+    config: HandoffConfig,
     commands: mpsc::Receiver<OperationCommand>,
 ) {
     let (device_id, payload) = config.into_parts();
-    let response =
-        match controller
-            .transport
-            .send_url(device_id, handoff_id.bytes(), payload.url().to_owned())
-        {
-            Ok(response) => response,
-            Err(error) => {
-                controller.finish(&handle_identifier, map_transport_error(error));
-                return;
-            }
-        };
+    let transport_payload = match payload {
+        HandoffPayload::Url(url) => HandoffTransportPayload::Url(url.url().to_owned()),
+        HandoffPayload::YouTube(youtube) => HandoffTransportPayload::YouTube {
+            video_id: youtube.video_id().to_owned(),
+            playback_position_millis: youtube.playback_position().as_millis(),
+        },
+    };
+    let response = match controller
+        .transport
+        .send(device_id, handoff_id.bytes(), transport_payload)
+    {
+        Ok(response) => response,
+        Err(error) => {
+            controller.finish(&handle_identifier, map_transport_error(error));
+            return;
+        }
+    };
     loop {
         match response.try_recv() {
-            Ok(Ok(UrlHandoffDisposition::Accepted)) => {
+            Ok(Ok(HandoffDisposition::Accepted)) => {
                 controller.finish(&handle_identifier, OperationResult::Delivered);
                 return;
             }
-            Ok(Ok(UrlHandoffDisposition::Rejected(reason))) => {
+            Ok(Ok(HandoffDisposition::Rejected(reason))) => {
                 controller.finish(
                     &handle_identifier,
                     OperationResult::Rejected(map_rejection(reason)),
@@ -381,11 +403,11 @@ fn run_outgoing(
     }
 }
 
-fn map_rejection(reason: UrlHandoffRejection) -> HandoffFailure {
+fn map_rejection(reason: HandoffRejection) -> HandoffFailure {
     match reason {
-        UrlHandoffRejection::Invalid => HandoffFailure::Invalid,
-        UrlHandoffRejection::Busy => HandoffFailure::Busy,
-        UrlHandoffRejection::Unavailable => HandoffFailure::Unsupported,
+        HandoffRejection::Invalid => HandoffFailure::Invalid,
+        HandoffRejection::Busy => HandoffFailure::Busy,
+        HandoffRejection::Unavailable => HandoffFailure::Unsupported,
     }
 }
 
@@ -410,14 +432,17 @@ fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, HandoffError> {
 mod tests {
     use std::sync::mpsc;
 
-    use super::{HandoffController, InboundUrlHandoffHandler};
+    use super::{HandoffController, InboundHandoffHandler};
     use crate::{
         handoff::{
             HandoffChangedEvent, IncomingHandoffChange, IncomingHandoffChangedDelegate,
             IncomingHandoffChangedEvent,
         },
         models::DeviceId,
-        transport::{HandoffTransportCapability, InboundUrlHandoff, UrlHandoffDisposition},
+        transport::{
+            HandoffDisposition, HandoffRejection, HandoffTransportCapability,
+            HandoffTransportPayload, InboundHandoff,
+        },
     };
 
     #[test]
@@ -439,12 +464,12 @@ mod tests {
 
         for _ in 0..2 {
             assert_eq!(
-                controller.receive(InboundUrlHandoff::new(
+                controller.receive(InboundHandoff::new(
                     [3_u8; 16],
                     device_id.clone(),
-                    "https://example.com".to_owned(),
+                    HandoffTransportPayload::Url("https://example.com".to_owned()),
                 )),
-                UrlHandoffDisposition::Accepted
+                HandoffDisposition::Accepted
             );
         }
 
@@ -454,6 +479,19 @@ mod tests {
             IncomingHandoffChange::Added(_)
         ));
         assert!(receiver.try_recv().is_err());
+
+        assert_eq!(
+            controller.receive(InboundHandoff::new(
+                [4_u8; 16],
+                device_id,
+                HandoffTransportPayload::YouTube {
+                    video_id: "invalid".to_owned(),
+                    playback_position_millis: 10_000,
+                },
+            )),
+            HandoffDisposition::Rejected(HandoffRejection::Invalid)
+        );
+        assert_eq!(controller.incoming().len(), 1);
         controller.stop().expect("controller should stop");
     }
 }

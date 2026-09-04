@@ -8,8 +8,8 @@ use continuehere::{
     DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, DiscoveryChange,
     DiscoveryChangedDelegate, DiscoveryEndpoint, DiscoveryManager, DiscoveryMode, DiscoverySource,
     HandoffManager, Language, LanguageChangedDelegate, LocalizationKey, LocalizationManager,
-    LocalizationSettings, PairingManager, Platform, ProtocolVersion, SettingsManager,
-    TextDirection, TransportManager,
+    LocalizationSettings, PairingManager, Platform, PlaybackPosition, ProtocolVersion,
+    SettingsManager, TextDirection, TransportManager, YouTubeHandoff,
 };
 use tempfile::tempdir;
 
@@ -29,6 +29,18 @@ fn shared_models_are_available_through_the_public_api() {
     assert_eq!(device.display_name(), "Desktop");
     assert!(device.supports(Capability::UrlHandoff));
     assert_eq!(device.state(), DeviceState::Available);
+
+    let youtube = YouTubeHandoff::new(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        Duration::from_secs(452),
+    )
+    .expect("YouTube handoff should be valid");
+    let position: PlaybackPosition = youtube.playback_position();
+    assert_eq!(position.duration(), Duration::from_secs(452));
+    assert_eq!(
+        youtube.resume_url(),
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=452s"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

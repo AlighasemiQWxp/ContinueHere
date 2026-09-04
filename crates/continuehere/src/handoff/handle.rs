@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     handles::{BaseHandle, Handle, HandleError, HandleReference, UsageHandle},
     models::DeviceId,
 };
 
-use super::{Handoff, HandoffController, HandoffError, UrlHandoffConfig};
+use super::{Handoff, HandoffConfig, HandoffController, HandoffError, UrlHandoff, YouTubeHandoff};
 
 const MANAGER_UNAVAILABLE: &str = "handoff manager is not running";
 const OPERATION_LIMIT: &str = "handoff operation limit reached";
@@ -33,7 +33,22 @@ impl HandoffHandle {
     }
 
     pub fn configure(&self, device_id: DeviceId, url: &str) -> Result<(), HandoffError> {
-        let config = UrlHandoffConfig::new(device_id, url)?;
+        self.configure_url(device_id, url)
+    }
+
+    pub fn configure_url(&self, device_id: DeviceId, url: &str) -> Result<(), HandoffError> {
+        let config = HandoffConfig::url(device_id, UrlHandoff::new(url)?);
+        self.reference.configure(config).map_err(map_handle_error)
+    }
+
+    pub fn configure_youtube(
+        &self,
+        device_id: DeviceId,
+        url: &str,
+        playback_position: Duration,
+    ) -> Result<(), HandoffError> {
+        let config =
+            HandoffConfig::youtube(device_id, YouTubeHandoff::new(url, playback_position)?);
         self.reference.configure(config).map_err(map_handle_error)
     }
 
@@ -58,7 +73,7 @@ impl Drop for HandoffHandle {
 
 pub(crate) struct HandoffOperation {
     base: BaseHandle,
-    config: Option<UrlHandoffConfig>,
+    config: Option<HandoffConfig>,
     controller: Arc<HandoffController>,
 }
 
@@ -102,7 +117,7 @@ impl Handle for HandoffOperation {
 }
 
 impl UsageHandle for HandoffOperation {
-    type Config = UrlHandoffConfig;
+    type Config = HandoffConfig;
 
     fn on_configure(&mut self, config: Self::Config) -> Result<(), HandleError> {
         self.config = Some(config);

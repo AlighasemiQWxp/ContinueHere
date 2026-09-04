@@ -307,16 +307,35 @@ Phase 11 adds `HandoffManager` as an independent main system. Each outgoing
 handoff is a caller-owned `HandoffHandle`; releasing it cancels or removes only
 that operation and never closes the shared authenticated connection. The
 manager owns immutable operation snapshots, a bounded in-memory incoming inbox,
-and post-commit events. Its private `HandoffController` coordinates URL
+and post-commit events. Its private `HandoffController` coordinates payload
 validation, capability checks, delivery acknowledgement, duplicate protection,
 and cleanup through a narrow Transport capability.
 
 Incoming handoffs are manager-owned records rather than handles because they
 arrive independently of a caller. Transport authenticates the peer, enforces
-wire limits, correlates requests, and delivers typed messages. Handoff owns URL
-semantics and acceptance. Browser launching, persistent activity history,
-automatic retry, playback-position behavior, and file transfer remain outside
-Phase 11.
+wire limits, correlates requests, and delivers typed messages. Handoff owns
+payload semantics and acceptance. Browser launching, persistent activity
+history, automatic retry, playback-position behavior, and file transfer remain
+outside Phase 11.
+
+Phase 12 extends that system rather than adding a parallel YouTube system. URL
+and YouTube operations share one `HandoffManager`, `HandoffController`,
+`HandoffHandle`, lifecycle, state model, limits, duplicate protection, and event
+streams. A typed payload enum selects the payload-specific validation and
+Transport capability. The existing URL API remains available while the handle
+adds YouTube configuration with a playback position.
+
+The YouTube payload stores a validated 11-character video identifier and a
+fixed-width millisecond playback position. Input accepts HTTPS watch URLs on
+the supported `youtube.com` hosts and single-video `youtu.be` URLs. It removes
+unrelated query data by exposing a canonical resume URL. The caller supplies
+the current playback position; browser inspection and playback control remain
+application-interface responsibilities.
+
+File streaming remains an independent Transfer system because it owns chunks,
+progress, integrity, destination handling, temporary files, and final commit.
+A future local-video handoff may coordinate through a narrow Transfer
+capability while retaining the shared Handoff lifecycle for the user operation.
 
 Pairing defines two system-owned event streams: immutable pairing-session
 changes and immutable trusted-device changes. Commands such as approve, reject,

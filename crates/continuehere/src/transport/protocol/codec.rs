@@ -3,8 +3,8 @@ use minicbor::{Decoder, Encoder};
 use crate::models::{Capability, DeviceId, Platform};
 
 use super::{
-    ApplicationHello, ProtocolEnvelope, ProtocolLimits, ProtocolMessage, TransportError,
-    UrlHandoffRejection,
+    ApplicationHello, HandoffRejection, HandoffTransportPayload, ProtocolEnvelope, ProtocolLimits,
+    ProtocolMessage, TransportError,
 };
 
 const HELLO_KIND: u16 = 1;
@@ -12,12 +12,14 @@ const PING_KIND: u16 = 2;
 const PONG_KIND: u16 = 3;
 const CLOSE_KIND: u16 = 4;
 const URL_HANDOFF_KIND: u16 = 5;
-const URL_HANDOFF_ACCEPTED_KIND: u16 = 6;
-const URL_HANDOFF_REJECTED_KIND: u16 = 7;
+const HANDOFF_ACCEPTED_KIND: u16 = 6;
+const HANDOFF_REJECTED_KIND: u16 = 7;
+const YOUTUBE_HANDOFF_KIND: u16 = 8;
 const MAX_IDENTIFIER_SIZE: usize = 64;
 const MAX_DISPLAY_NAME_SIZE: usize = 128;
 const MAX_CAPABILITY_COUNT: usize = 16;
 pub(crate) const MAX_URL_SIZE: usize = 4096;
+const MAX_YOUTUBE_VIDEO_ID_SIZE: usize = 11;
 
 pub(crate) fn encode(envelope: &ProtocolEnvelope) -> Result<Vec<u8>, TransportError> {
     let mut encoder = Encoder::new(Vec::new());
@@ -110,24 +112,13 @@ fn encode_payload(
                 .u64(*nonce)
                 .map_err(|_| TransportError::InvalidMessage)?;
         }
-        ProtocolMessage::UrlHandoff { handoff_id, url } => {
-            if url.is_empty() {
-                return Err(TransportError::InvalidMessage);
-            }
-            if url.len() > MAX_URL_SIZE {
-                return Err(TransportError::MessageTooLarge);
-            }
-            encoder
-                .array(2)
-                .map_err(|_| TransportError::InvalidMessage)?;
-            encoder
-                .bytes(handoff_id)
-                .map_err(|_| TransportError::InvalidMessage)?;
-            encoder
-                .str(url)
-                .map_err(|_| TransportError::InvalidMessage)?;
+        ProtocolMessage::Handoff {
+            handoff_id,
+            payload,
+        } => {
+            encode_handoff(encoder, handoff_id, payload)?;
         }
-        ProtocolMessage::UrlHandoffAccepted(handoff_id) => {
+        ProtocolMessage::HandoffAccepted(handoff_id) => {
             encoder
                 .array(1)
                 .map_err(|_| TransportError::InvalidMessage)?;
@@ -135,7 +126,7 @@ fn encode_payload(
                 .bytes(handoff_id)
                 .map_err(|_| TransportError::InvalidMessage)?;
         }
-        ProtocolMessage::UrlHandoffRejected { handoff_id, reason } => {
+        ProtocolMessage::HandoffRejected { handoff_id, reason } => {
             encoder
                 .array(2)
                 .map_err(|_| TransportError::InvalidMessage)?;
@@ -183,22 +174,39 @@ fn decode_payload(decoder: &mut Decoder<'_>, kind: u16) -> Result<ProtocolMessag
             if url.is_empty() || url.len() > MAX_URL_SIZE {
                 return Err(TransportError::InvalidMessage);
             }
-            Ok(ProtocolMessage::UrlHandoff {
+            Ok(ProtocolMessage::Handoff {
                 handoff_id,
-                url: url.to_owned(),
+                payload: HandoffTransportPayload::Url(url.to_owned()),
             })
         }
-        URL_HANDOFF_ACCEPTED_KIND => {
-            require_array(decoder, 1)?;
-            decode_handoff_id(decoder).map(ProtocolMessage::UrlHandoffAccepted)
+        YOUTUBE_HANDOFF_KIND => {
+            require_array(decoder, 3)?;
+            let handoff_id = decode_handoff_id(decoder)?;
+            let video_id = decoder.str().map_err(|_| TransportError::InvalidMessage)?;
+            if video_id.is_empty() || video_id.len() > MAX_YOUTUBE_VIDEO_ID_SIZE {
+                return Err(TransportError::InvalidMessage);
+            }
+            let playback_position_millis =
+                decoder.u64().map_err(|_| TransportError::InvalidMessage)?;
+            Ok(ProtocolMessage::Handoff {
+                handoff_id,
+                payload: HandoffTransportPayload::YouTube {
+                    video_id: video_id.to_owned(),
+                    playback_position_millis,
+                },
+            })
         }
-        URL_HANDOFF_REJECTED_KIND => {
+        HANDOFF_ACCEPTED_KIND => {
+            require_array(decoder, 1)?;
+            decode_handoff_id(decoder).map(ProtocolMessage::HandoffAccepted)
+        }
+        HANDOFF_REJECTED_KIND => {
             require_array(decoder, 2)?;
             let handoff_id = decode_handoff_id(decoder)?;
             let reason = decode_handoff_rejection(
                 decoder.u8().map_err(|_| TransportError::InvalidMessage)?,
             )?;
-            Ok(ProtocolMessage::UrlHandoffRejected { handoff_id, reason })
+            Ok(ProtocolMessage::HandoffRejected { handoff_id, reason })
         }
         _ => Err(TransportError::ProtocolViolation),
     }
@@ -308,11 +316,68 @@ fn message_kind(message: &ProtocolMessage) -> u16 {
         ProtocolMessage::Hello(_) => HELLO_KIND,
         ProtocolMessage::Ping(_) => PING_KIND,
         ProtocolMessage::Pong(_) => PONG_KIND,
-        ProtocolMessage::UrlHandoff { .. } => URL_HANDOFF_KIND,
-        ProtocolMessage::UrlHandoffAccepted(_) => URL_HANDOFF_ACCEPTED_KIND,
-        ProtocolMessage::UrlHandoffRejected { .. } => URL_HANDOFF_REJECTED_KIND,
+        ProtocolMessage::Handoff {
+            payload: HandoffTransportPayload::Url(_),
+            ..
+        } => URL_HANDOFF_KIND,
+        ProtocolMessage::Handoff {
+            payload: HandoffTransportPayload::YouTube { .. },
+            ..
+        } => YOUTUBE_HANDOFF_KIND,
+        ProtocolMessage::HandoffAccepted(_) => HANDOFF_ACCEPTED_KIND,
+        ProtocolMessage::HandoffRejected { .. } => HANDOFF_REJECTED_KIND,
         ProtocolMessage::Close => CLOSE_KIND,
     }
+}
+
+fn encode_handoff(
+    encoder: &mut Encoder<Vec<u8>>,
+    handoff_id: &[u8; 16],
+    payload: &HandoffTransportPayload,
+) -> Result<(), TransportError> {
+    match payload {
+        HandoffTransportPayload::Url(url) => {
+            if url.is_empty() {
+                return Err(TransportError::InvalidMessage);
+            }
+            if url.len() > MAX_URL_SIZE {
+                return Err(TransportError::MessageTooLarge);
+            }
+            encoder
+                .array(2)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(handoff_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .str(url)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+        HandoffTransportPayload::YouTube {
+            video_id,
+            playback_position_millis,
+        } => {
+            if video_id.is_empty() {
+                return Err(TransportError::InvalidMessage);
+            }
+            if video_id.len() > MAX_YOUTUBE_VIDEO_ID_SIZE {
+                return Err(TransportError::MessageTooLarge);
+            }
+            encoder
+                .array(3)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(handoff_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .str(video_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u64(*playback_position_millis)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+    }
+    Ok(())
 }
 
 fn decode_handoff_id(decoder: &mut Decoder<'_>) -> Result<[u8; 16], TransportError> {
@@ -327,19 +392,19 @@ fn decode_handoff_id(decoder: &mut Decoder<'_>) -> Result<[u8; 16], TransportErr
     Ok(identifier)
 }
 
-fn encode_handoff_rejection(reason: UrlHandoffRejection) -> u8 {
+fn encode_handoff_rejection(reason: HandoffRejection) -> u8 {
     match reason {
-        UrlHandoffRejection::Invalid => 1,
-        UrlHandoffRejection::Busy => 2,
-        UrlHandoffRejection::Unavailable => 3,
+        HandoffRejection::Invalid => 1,
+        HandoffRejection::Busy => 2,
+        HandoffRejection::Unavailable => 3,
     }
 }
 
-fn decode_handoff_rejection(value: u8) -> Result<UrlHandoffRejection, TransportError> {
+fn decode_handoff_rejection(value: u8) -> Result<HandoffRejection, TransportError> {
     match value {
-        1 => Ok(UrlHandoffRejection::Invalid),
-        2 => Ok(UrlHandoffRejection::Busy),
-        3 => Ok(UrlHandoffRejection::Unavailable),
+        1 => Ok(HandoffRejection::Invalid),
+        2 => Ok(HandoffRejection::Busy),
+        3 => Ok(HandoffRejection::Unavailable),
         _ => Err(TransportError::InvalidMessage),
     }
 }
@@ -388,7 +453,10 @@ fn decode_capability(value: u8) -> Result<Capability, TransportError> {
 mod tests {
     use crate::models::{DeviceId, LocalDeviceIdentity, Platform};
 
-    use super::{ApplicationHello, ProtocolEnvelope, ProtocolMessage, decode, encode};
+    use super::{
+        ApplicationHello, HandoffTransportPayload, ProtocolEnvelope, ProtocolMessage, decode,
+        encode,
+    };
 
     #[test]
     fn hello_round_trip_is_deterministic() {
@@ -427,10 +495,10 @@ mod tests {
     #[test]
     fn url_handoff_round_trip_is_deterministic() {
         let identifier = [7_u8; 16];
-        let envelope = ProtocolEnvelope::url_handoff(
+        let envelope = ProtocolEnvelope::handoff(
             4,
             identifier,
-            "https://example.com/watch?v=1".to_owned(),
+            HandoffTransportPayload::Url("https://example.com/watch?v=1".to_owned()),
         )
         .expect("URL handoff should be valid");
         let encoded = encode(&envelope).expect("URL handoff should encode");
@@ -438,8 +506,38 @@ mod tests {
 
         assert!(matches!(
             decoded.message(),
-            ProtocolMessage::UrlHandoff { handoff_id, url }
-                if handoff_id == &identifier && url == "https://example.com/watch?v=1"
+            ProtocolMessage::Handoff {
+                handoff_id,
+                payload: HandoffTransportPayload::Url(url),
+            } if handoff_id == &identifier && url == "https://example.com/watch?v=1"
+        ));
+        assert_eq!(encode(&decoded).expect("message should re-encode"), encoded);
+    }
+
+    #[test]
+    fn youtube_handoff_round_trip_is_deterministic() {
+        let identifier = [9_u8; 16];
+        let envelope = ProtocolEnvelope::handoff(
+            5,
+            identifier,
+            HandoffTransportPayload::YouTube {
+                video_id: "dQw4w9WgXcQ".to_owned(),
+                playback_position_millis: 452_000,
+            },
+        )
+        .expect("YouTube handoff should be valid");
+        let encoded = encode(&envelope).expect("YouTube handoff should encode");
+        let decoded = decode(&encoded).expect("YouTube handoff should decode");
+
+        assert!(matches!(
+            decoded.message(),
+            ProtocolMessage::Handoff {
+                handoff_id,
+                payload: HandoffTransportPayload::YouTube {
+                    video_id,
+                    playback_position_millis: 452_000,
+                },
+            } if handoff_id == &identifier && video_id == "dQw4w9WgXcQ"
         ));
         assert_eq!(encode(&decoded).expect("message should re-encode"), encoded);
     }

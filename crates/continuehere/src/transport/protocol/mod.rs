@@ -2,7 +2,7 @@ mod codec;
 
 use crate::models::{Capability, DeviceId, LocalDeviceIdentity, Platform, ProtocolVersion};
 
-use super::{TransportError, UrlHandoffRejection};
+use super::{HandoffRejection, HandoffTransportPayload, TransportError};
 
 pub(crate) const MAX_CONTROL_FRAME_SIZE: usize = 64 * 1024;
 pub(crate) const MAX_IN_FLIGHT_REQUESTS: usize = 64;
@@ -42,14 +42,14 @@ pub(crate) enum ProtocolMessage {
     Hello(ApplicationHello),
     Ping(u64),
     Pong(u64),
-    UrlHandoff {
+    Handoff {
         handoff_id: [u8; 16],
-        url: String,
+        payload: HandoffTransportPayload,
     },
-    UrlHandoffAccepted([u8; 16]),
-    UrlHandoffRejected {
+    HandoffAccepted([u8; 16]),
+    HandoffRejected {
         handoff_id: [u8; 16],
-        reason: UrlHandoffRejection,
+        reason: HandoffRejection,
     },
     Close,
 }
@@ -169,29 +169,35 @@ impl ProtocolEnvelope {
         Self::request(request_id, ProtocolMessage::Pong(nonce))
     }
 
-    pub(crate) fn url_handoff(
+    pub(crate) fn handoff(
         request_id: u64,
         handoff_id: [u8; 16],
-        url: String,
-    ) -> Result<Self, TransportError> {
-        Self::request(request_id, ProtocolMessage::UrlHandoff { handoff_id, url })
-    }
-
-    pub(crate) fn url_handoff_accepted(
-        request_id: u64,
-        handoff_id: [u8; 16],
-    ) -> Result<Self, TransportError> {
-        Self::request(request_id, ProtocolMessage::UrlHandoffAccepted(handoff_id))
-    }
-
-    pub(crate) fn url_handoff_rejected(
-        request_id: u64,
-        handoff_id: [u8; 16],
-        reason: UrlHandoffRejection,
+        payload: HandoffTransportPayload,
     ) -> Result<Self, TransportError> {
         Self::request(
             request_id,
-            ProtocolMessage::UrlHandoffRejected { handoff_id, reason },
+            ProtocolMessage::Handoff {
+                handoff_id,
+                payload,
+            },
+        )
+    }
+
+    pub(crate) fn handoff_accepted(
+        request_id: u64,
+        handoff_id: [u8; 16],
+    ) -> Result<Self, TransportError> {
+        Self::request(request_id, ProtocolMessage::HandoffAccepted(handoff_id))
+    }
+
+    pub(crate) fn handoff_rejected(
+        request_id: u64,
+        handoff_id: [u8; 16],
+        reason: HandoffRejection,
+    ) -> Result<Self, TransportError> {
+        Self::request(
+            request_id,
+            ProtocolMessage::HandoffRejected { handoff_id, reason },
         )
     }
 
