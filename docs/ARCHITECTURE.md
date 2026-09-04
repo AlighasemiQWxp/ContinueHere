@@ -220,7 +220,9 @@ operating-system credential-store backend. It supplies pairing-only TLS
 identity and exporter capabilities without exposing private-key bytes.
 `TransportManager` owns the pairing listener, TLS 1.3 channels, bounded pairing
 framing, and connection cleanup. Its pairing-only channel remains separate from
-the authenticated application transport implemented in Phase 10.
+the authenticated application transport implemented in Phase 10. The listener's
+incoming connection queue is synchronized independently from listener lifecycle
+state, so waiting for a peer cannot block endpoint lookup, release, or shutdown.
 
 `PairingManager` owns `PairingHandle` instances, immutable session snapshots,
 trusted-device records, pairing events, approval, and revocation. Its private

@@ -29,7 +29,7 @@ struct PairingTransportState {
     running: bool,
     listener_owners: usize,
     endpoint: Option<DiscoveryEndpoint>,
-    incoming: Option<mpsc::Receiver<TcpStream>>,
+    incoming: Option<Arc<Mutex<mpsc::Receiver<TcpStream>>>>,
     shutdown: Option<Arc<AtomicBool>>,
     worker: Option<JoinHandle<()>>,
 }
@@ -92,7 +92,7 @@ impl PairingTransportCapability {
             .map_err(|_| TransportError::ListenerUnavailable)?;
         state.listener_owners = 1;
         state.endpoint = Some(endpoint.clone());
-        state.incoming = Some(receiver);
+        state.incoming = Some(Arc::new(Mutex::new(receiver)));
         state.shutdown = Some(shutdown);
         state.worker = Some(worker);
         Ok(endpoint)
@@ -136,12 +136,16 @@ impl PairingTransportCapability {
         identity: &CryptographicIdentity,
         timeout: Duration,
     ) -> Result<Option<PairingChannel>, TransportError> {
-        let stream = {
+        let incoming = {
             let state = lock(&self.state)?;
-            let receiver = state
+            state
                 .incoming
                 .as_ref()
-                .ok_or(TransportError::ManagerUnavailable)?;
+                .cloned()
+                .ok_or(TransportError::ManagerUnavailable)?
+        };
+        let stream = {
+            let receiver = lock(&incoming)?;
             match receiver.recv_timeout(timeout) {
                 Ok(stream) => Some(stream),
                 Err(mpsc::RecvTimeoutError::Timeout) => None,
@@ -232,6 +236,8 @@ fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, TransportError> {
 
 #[cfg(test)]
 mod tests {
+    use std::{net::TcpStream, sync::mpsc, thread, time::Duration};
+
     use super::PairingTransportCapability;
 
     #[test]
@@ -250,6 +256,58 @@ mod tests {
             .release_listener()
             .expect("listener should release");
         assert!(capability.endpoint().is_err());
+        capability.stop().expect("transport should stop");
+    }
+
+    #[test]
+    fn waiting_for_connection_does_not_lock_transport_state() {
+        let capability = PairingTransportCapability::new();
+        capability.start().expect("transport should start");
+        let endpoint = capability
+            .acquire_listener()
+            .expect("listener endpoint should be available");
+        let incoming = capability
+            .state
+            .lock()
+            .expect("transport state should lock")
+            .incoming
+            .clone()
+            .expect("incoming queue should be available");
+        let (waiting_sender, waiting_receiver) = mpsc::channel();
+        let waiting_worker = thread::spawn(move || {
+            let receiver = incoming.lock().expect("incoming queue should lock");
+            waiting_sender
+                .send(())
+                .expect("queue wait should be observable");
+            receiver.recv_timeout(Duration::from_secs(5))
+        });
+        waiting_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("incoming queue should begin waiting");
+
+        let endpoint_capability = capability.clone();
+        let (endpoint_sender, endpoint_receiver) = mpsc::channel();
+        let endpoint_worker = thread::spawn(move || {
+            endpoint_sender
+                .send(endpoint_capability.endpoint())
+                .expect("endpoint result should be observable");
+        });
+        let observed_endpoint = endpoint_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queue wait must not block transport state")
+            .expect("endpoint should remain available");
+        assert_eq!(observed_endpoint, endpoint);
+
+        TcpStream::connect(("127.0.0.1", endpoint.port()))
+            .expect("loopback connection should succeed");
+        waiting_worker
+            .join()
+            .expect("queue wait should stop")
+            .expect("connection should reach incoming queue");
+        endpoint_worker.join().expect("endpoint read should stop");
+        capability
+            .release_listener()
+            .expect("listener should release");
         capability.stop().expect("transport should stop");
     }
 }
