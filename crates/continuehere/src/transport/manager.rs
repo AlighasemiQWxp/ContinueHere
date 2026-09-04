@@ -22,13 +22,14 @@ use crate::{
 use super::{
     AuthenticatedConnection, ConnectionChangedDelegate, ConnectionChangedEvent,
     ConnectionChangedSubscription, HandoffTransportCapability, PairingTransportCapability,
-    TransportError,
-    supervisor::{ConnectionStore, SupervisorCommand, SupervisorRuntime},
+    TransferTransportCapability, TransportError,
+    supervisor::{ConnectionStore, SupervisorCommand, SupervisorContext, SupervisorRuntime},
 };
 
 pub struct TransportManager {
     pairing: PairingTransportCapability,
     handoff: HandoffTransportCapability,
+    transfer: TransferTransportCapability,
     access: Arc<TransportAccess>,
     device_identity: DeviceIdentityCapability,
     security: SecurityCapability,
@@ -52,6 +53,7 @@ impl TransportManager {
         Self {
             pairing: PairingTransportCapability::new(),
             handoff: HandoffTransportCapability::new(),
+            transfer: TransferTransportCapability::new(),
             access: Arc::new(TransportAccess {
                 commands: Mutex::new(None),
                 endpoint: Mutex::new(None),
@@ -71,6 +73,10 @@ impl TransportManager {
 
     pub(crate) fn handoff_capability(&self) -> HandoffTransportCapability {
         self.handoff.clone()
+    }
+
+    pub(crate) fn transfer_capability(&self) -> TransferTransportCapability {
+        self.transfer.clone()
     }
 
     pub fn listening_endpoint(&self) -> Result<DiscoveryEndpoint, TransportError> {
@@ -184,18 +190,20 @@ impl Module for TransportManager {
         };
         let endpoint = DiscoveryEndpoint::new("0.0.0.0", port)
             .map_err(|_| Box::new(TransportError::ListenerUnavailable) as ModuleError)?;
-        let runtime = SupervisorRuntime::start(
-            listener,
+        let context = SupervisorContext::new(
             local_identity,
             self.security.clone(),
             self.trusted_peers.clone(),
             self.handoff.clone(),
+            self.transfer.clone(),
             Arc::clone(&self.access.connections),
             self.access.changed.clone(),
         );
+        let runtime = SupervisorRuntime::start(listener, context);
         *lock_or_recover(&self.access.endpoint) = Some(endpoint);
         let commands = runtime.commands();
         self.handoff.set_commands(Some(commands.clone()));
+        self.transfer.set_commands(Some(commands.clone()));
         *lock_or_recover(&self.access.commands) = Some(commands);
         self.runtime = Some(runtime);
         Ok(())
@@ -205,6 +213,7 @@ impl Module for TransportManager {
         *lock_or_recover(&self.access.commands) = None;
         *lock_or_recover(&self.access.endpoint) = None;
         self.handoff.set_commands(None);
+        self.transfer.set_commands(None);
         let runtime_error = match self.runtime.take() {
             Some(runtime) => runtime.stop().await.err(),
             None => None,

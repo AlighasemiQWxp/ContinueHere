@@ -7,9 +7,9 @@ use continuehere::{
     Capability, ContinueHere, Device, DeviceId, DeviceIdentityChangedDelegate, DeviceManager,
     DeviceState, DirectoryChangedDelegate, DirectoryManager, DirectorySettings, DiscoveryChange,
     DiscoveryChangedDelegate, DiscoveryEndpoint, DiscoveryManager, DiscoveryMode, DiscoverySource,
-    HandoffManager, Language, LanguageChangedDelegate, LocalizationKey, LocalizationManager,
-    LocalizationSettings, PairingManager, Platform, PlaybackPosition, ProtocolVersion,
-    SettingsManager, TextDirection, TransportManager, YouTubeHandoff,
+    FileTransferManager, HandoffManager, Language, LanguageChangedDelegate, LocalizationKey,
+    LocalizationManager, LocalizationSettings, PairingManager, Platform, PlaybackPosition,
+    ProtocolVersion, SettingsManager, TextDirection, TransportManager, YouTubeHandoff,
 };
 use tempfile::tempdir;
 
@@ -62,6 +62,7 @@ async fn builder_exposes_the_core_managers() {
     let _: &PairingManager = app.pairing();
     let _: &TransportManager = app.transport();
     let _: &HandoffManager = app.handoff();
+    let _: &FileTransferManager = app.file_transfers();
     let identity = app.devices().identity();
 
     assert!(!identity.id().as_str().is_empty());

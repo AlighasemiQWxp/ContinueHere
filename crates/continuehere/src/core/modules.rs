@@ -10,6 +10,7 @@ use crate::{
     pairing::{PairingManager, TrustedDeviceRegistry},
     security::SecurityManager,
     settings::SettingsManager,
+    transfer::FileTransferManager,
     transport::TransportManager,
 };
 
@@ -25,6 +26,7 @@ pub(crate) struct CoreModules {
     discovery: DiscoveryManager,
     pairing: PairingManager,
     handoff: HandoffManager,
+    file_transfers: FileTransferManager,
     optional: ModuleRegistry,
     settings_started: bool,
     directories_started: bool,
@@ -35,6 +37,7 @@ pub(crate) struct CoreModules {
     discovery_started: bool,
     pairing_started: bool,
     handoff_started: bool,
+    file_transfers_started: bool,
 }
 
 impl CoreModules {
@@ -57,6 +60,10 @@ impl CoreModules {
             transport.pairing_capability(),
         );
         let handoff = HandoffManager::new(transport.handoff_capability());
+        let file_transfers = FileTransferManager::new(
+            transport.transfer_capability(),
+            settings.directories().shared(),
+        );
         Ok(Self {
             settings,
             directories,
@@ -67,6 +74,7 @@ impl CoreModules {
             discovery: DiscoveryManager::new(),
             pairing,
             handoff,
+            file_transfers,
             optional,
             settings_started: false,
             directories_started: false,
@@ -77,6 +85,7 @@ impl CoreModules {
             discovery_started: false,
             pairing_started: false,
             handoff_started: false,
+            file_transfers_started: false,
         })
     }
 
@@ -110,6 +119,10 @@ impl CoreModules {
 
     pub(crate) fn handoff(&self) -> &HandoffManager {
         &self.handoff
+    }
+
+    pub(crate) fn file_transfers(&self) -> &FileTransferManager {
+        &self.file_transfers
     }
 
     pub(crate) async fn start_all(&mut self) -> Result<()> {
@@ -164,6 +177,12 @@ impl CoreModules {
         }
         self.handoff_started = true;
 
+        if let Err(error) = start_module(&mut self.file_transfers).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.file_transfers_started = true;
+
         if let Err(error) = self.optional.start_all().await {
             self.rollback_main_systems().await;
             return Err(error);
@@ -174,6 +193,12 @@ impl CoreModules {
 
     pub(crate) async fn stop_all(&mut self) -> Result<()> {
         let mut first_error = self.optional.stop_all().await.err();
+
+        if self.file_transfers_started {
+            let result = stop_module(&mut self.file_transfers).await;
+            self.file_transfers_started = false;
+            keep_first_error(&mut first_error, result);
+        }
 
         if self.handoff_started {
             let result = stop_module(&mut self.handoff).await;
@@ -236,6 +261,11 @@ impl CoreModules {
     }
 
     async fn rollback_main_systems(&mut self) {
+        if self.file_transfers_started {
+            let _ = self.file_transfers.stop().await;
+            self.file_transfers_started = false;
+        }
+
         if self.handoff_started {
             let _ = self.handoff.stop().await;
             self.handoff_started = false;
@@ -355,6 +385,7 @@ mod tests {
         assert!(modules.discovery_started);
         assert!(modules.pairing_started);
         assert!(modules.handoff_started);
+        assert!(modules.file_transfers_started);
 
         modules.stop_all().await.expect("core should stop");
         assert!(!modules.settings_started);
@@ -366,6 +397,7 @@ mod tests {
         assert!(!modules.discovery_started);
         assert!(!modules.pairing_started);
         assert!(!modules.handoff_started);
+        assert!(!modules.file_transfers_started);
     }
 
     #[tokio::test]
@@ -390,5 +422,6 @@ mod tests {
         assert!(!modules.discovery_started);
         assert!(!modules.pairing_started);
         assert!(!modules.handoff_started);
+        assert!(!modules.file_transfers_started);
     }
 }

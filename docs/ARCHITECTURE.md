@@ -43,6 +43,7 @@ ContinueHere
     ├── DiscoveryManager
     ├── PairingManager
     ├── HandoffManager
+    ├── FileTransferManager
     └── ModuleRegistry
 ```
 
@@ -338,6 +339,32 @@ File streaming remains an independent Transfer system because it owns chunks,
 progress, integrity, destination handling, temporary files, and final commit.
 A future local-video handoff may coordinate through a narrow Transfer
 capability while retaining the shared Handoff lifecycle for the user operation.
+
+Phase 13 adds `FileTransferManager` as an independent main system. The Manager
+owns validation, caller-facing operations, immutable transfer snapshots,
+bounded state, and one post-commit `FileTransferChangedDelegate` stream. Its
+private `FileTransferController` coordinates offers, acceptance, sequential
+streaming, progress, cancellation, integrity verification, and cleanup through
+a narrow Transport capability. Transport continues to own authenticated
+connections, framing, request correlation, and backpressure.
+
+Outgoing transfers use the shared Handle lifecycle. A `FileTransferHandle` is
+configured with one trusted destination device and one absolute regular-file
+path. Releasing or dropping it cancels and removes only that transfer. Incoming
+offers are Manager-owned because they arrive without a local caller. They enter
+the `Offered` state and must be explicitly accepted or rejected. Acceptance can
+select one temporary destination directory or use the persisted default through
+the existing Directory settings capability.
+
+The sender never supplies a destination path. The receiver validates the
+bounded UTF-8 file name, refuses path separators and existing destination
+files, then writes sequential 32 KiB chunks to a randomly named `.part` file in
+the destination directory. It tracks byte progress and SHA-256 incrementally.
+Only an exact declared byte count and matching final digest can move the
+transfer through `Verifying` to `Completed`. The final name is created with an
+atomic no-overwrite filesystem operation, and cancellation, rejection,
+shutdown, or failure removes incomplete temporary data. Phase 13 deliberately
+does not resume partial transfers; a retry starts from byte zero.
 
 Pairing defines two system-owned event streams: immutable pairing-session
 changes and immutable trusted-device changes. Commands such as approve, reject,

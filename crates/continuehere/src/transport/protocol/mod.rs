@@ -2,7 +2,10 @@ mod codec;
 
 use crate::models::{Capability, DeviceId, LocalDeviceIdentity, Platform, ProtocolVersion};
 
-use super::{HandoffRejection, HandoffTransportPayload, TransportError};
+use super::{
+    HandoffRejection, HandoffTransportPayload, TransferRejection, TransferTransportMessage,
+    TransportError,
+};
 
 pub(crate) const MAX_CONTROL_FRAME_SIZE: usize = 64 * 1024;
 pub(crate) const MAX_IN_FLIGHT_REQUESTS: usize = 64;
@@ -50,6 +53,15 @@ pub(crate) enum ProtocolMessage {
     HandoffRejected {
         handoff_id: [u8; 16],
         reason: HandoffRejection,
+    },
+    Transfer {
+        transfer_id: [u8; 16],
+        message: TransferTransportMessage,
+    },
+    TransferAccepted([u8; 16]),
+    TransferRejected {
+        transfer_id: [u8; 16],
+        reason: TransferRejection,
     },
     Close,
 }
@@ -198,6 +210,41 @@ impl ProtocolEnvelope {
         Self::request(
             request_id,
             ProtocolMessage::HandoffRejected { handoff_id, reason },
+        )
+    }
+
+    pub(crate) fn transfer(
+        request_id: u64,
+        transfer_id: [u8; 16],
+        message: TransferTransportMessage,
+    ) -> Result<Self, TransportError> {
+        Self::request(
+            request_id,
+            ProtocolMessage::Transfer {
+                transfer_id,
+                message,
+            },
+        )
+    }
+
+    pub(crate) fn transfer_accepted(
+        request_id: u64,
+        transfer_id: [u8; 16],
+    ) -> Result<Self, TransportError> {
+        Self::request(request_id, ProtocolMessage::TransferAccepted(transfer_id))
+    }
+
+    pub(crate) fn transfer_rejected(
+        request_id: u64,
+        transfer_id: [u8; 16],
+        reason: TransferRejection,
+    ) -> Result<Self, TransportError> {
+        Self::request(
+            request_id,
+            ProtocolMessage::TransferRejected {
+                transfer_id,
+                reason,
+            },
         )
     }
 

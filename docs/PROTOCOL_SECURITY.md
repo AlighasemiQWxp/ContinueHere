@@ -174,9 +174,9 @@ make duplicate requests detectable. They are not authentication credentials.
 
 Large files and videos are never collected into one control message. A stream
 starts with bounded metadata, carries bounded sequential chunks, and ends with
-an authenticated result or cancellation. The transfer phase will define
-content integrity, resume behavior, destination handling, and final atomic
-commit rules before file transfer is enabled.
+an authenticated result or cancellation. Phase 13 defines file-transfer
+integrity, non-resumable retry behavior, destination handling, and final atomic
+commit rules below.
 
 ## Parsing and resource limits
 
@@ -278,6 +278,40 @@ a canonical YouTube resume URL, but acknowledgement still means only that the
 receiving Handoff system accepted the immutable runtime record. YouTube URLs
 and playback positions are not persisted or logged.
 
+Phase 13 advertises `FileTransfer` only while the receiving FileTransfer system
+is available. Every transfer uses a random 16-byte transfer identifier and this
+authenticated request sequence: offer, accepted or rejected, zero or more
+sequential chunks, finish, and final accepted or rejected. Cancellation is a
+typed request and is valid while an offer or stream is active. A response is
+correlated by the connection-local request identifier and must contain the
+same transfer identifier.
+
+An offer contains one UTF-8 file name of at most 255 bytes and one unsigned
+64-bit file size. The FileTransfer system rejects empty names, path separators,
+`.` and `..`, control characters, non-portable reserved names, non-regular
+sources, and files larger than 100 GiB. The sender cannot provide a destination
+path. At most four non-terminal transfers and 16
+retained incoming offers exist at once. An incoming offer waits at most 60
+seconds for an explicit local decision; Transport allows 65 seconds for the
+correlated offer response.
+
+Each chunk contains an unsigned 64-bit byte offset and at most 32 KiB of data.
+Chunks must be non-empty, sequential, and must not exceed the offered size.
+The sender waits for each authenticated chunk acknowledgement before reading
+and sending the next chunk, which bounds in-flight file data and supplies
+backpressure through the existing connection command and frame limits. Normal
+chunk, finish, and cancellation requests retain the 15-second request timeout.
+
+The receiver writes chunks to a randomly named temporary file in the selected
+destination directory while both peers compute SHA-256 incrementally. Finish
+contains the sender's 32-byte digest. The receiver accepts finish only when the
+received byte count exactly matches the offer and the digest matches. It then
+flushes the temporary file and creates the final name through an atomic
+no-overwrite filesystem operation before acknowledging completion. Existing
+destination files are never replaced. Rejection, cancellation, shutdown,
+integrity failure, or filesystem failure removes incomplete temporary data.
+Phase 13 does not resume partial data; a later retry starts at byte zero.
+
 ## Persistence boundaries
 
 Security-sensitive state remains separate from user preferences and the public
@@ -304,8 +338,9 @@ sockets, discover peers, pair devices, or claim that transfers are secure.
 - Phase 9 implements pairing and trusted-device management.
 - Phase 10 implements mutually authenticated TLS transport and protocol
   framing.
-- Later handoff and transfer phases add their typed messages and limits without
-  weakening these contracts.
+- Phases 11 and 12 implement typed URL and playback-position handoffs.
+- Phase 13 implements explicitly accepted, bounded streaming file transfer.
+- Later phases add typed messages and limits without weakening these contracts.
 
 Any later change that weakens authentication, confidentiality, integrity,
 version checks, parsing limits, secure storage, or explicit user approval

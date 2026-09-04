@@ -10,6 +10,7 @@ use crate::{
     managers::DeviceManager,
     pairing::PairingManager,
     settings::SettingsManager,
+    transfer::FileTransferManager,
     transport::TransportManager,
 };
 
@@ -52,6 +53,10 @@ impl ContinueHere {
 
     pub fn handoff(&self) -> &HandoffManager {
         self.modules.handoff()
+    }
+
+    pub fn file_transfers(&self) -> &FileTransferManager {
+        self.modules.file_transfers()
     }
 
     pub async fn shutdown(mut self) -> Result<()> {

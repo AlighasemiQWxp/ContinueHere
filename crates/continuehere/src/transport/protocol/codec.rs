@@ -4,7 +4,7 @@ use crate::models::{Capability, DeviceId, Platform};
 
 use super::{
     ApplicationHello, HandoffRejection, HandoffTransportPayload, ProtocolEnvelope, ProtocolLimits,
-    ProtocolMessage, TransportError,
+    ProtocolMessage, TransferRejection, TransferTransportMessage, TransportError,
 };
 
 const HELLO_KIND: u16 = 1;
@@ -15,11 +15,19 @@ const URL_HANDOFF_KIND: u16 = 5;
 const HANDOFF_ACCEPTED_KIND: u16 = 6;
 const HANDOFF_REJECTED_KIND: u16 = 7;
 const YOUTUBE_HANDOFF_KIND: u16 = 8;
+const TRANSFER_OFFER_KIND: u16 = 9;
+const TRANSFER_CHUNK_KIND: u16 = 10;
+const TRANSFER_FINISH_KIND: u16 = 11;
+const TRANSFER_CANCEL_KIND: u16 = 12;
+const TRANSFER_ACCEPTED_KIND: u16 = 13;
+const TRANSFER_REJECTED_KIND: u16 = 14;
 const MAX_IDENTIFIER_SIZE: usize = 64;
 const MAX_DISPLAY_NAME_SIZE: usize = 128;
 const MAX_CAPABILITY_COUNT: usize = 16;
 pub(crate) const MAX_URL_SIZE: usize = 4096;
 const MAX_YOUTUBE_VIDEO_ID_SIZE: usize = 11;
+const MAX_FILE_NAME_SIZE: usize = 255;
+const MAX_TRANSFER_CHUNK_SIZE: usize = 32 * 1024;
 
 pub(crate) fn encode(envelope: &ProtocolEnvelope) -> Result<Vec<u8>, TransportError> {
     let mut encoder = Encoder::new(Vec::new());
@@ -137,6 +145,34 @@ fn encode_payload(
                 .u8(encode_handoff_rejection(*reason))
                 .map_err(|_| TransportError::InvalidMessage)?;
         }
+        ProtocolMessage::Transfer {
+            transfer_id,
+            message,
+        } => {
+            encode_transfer(encoder, transfer_id, message)?;
+        }
+        ProtocolMessage::TransferAccepted(transfer_id) => {
+            encoder
+                .array(1)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+        ProtocolMessage::TransferRejected {
+            transfer_id,
+            reason,
+        } => {
+            encoder
+                .array(2)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u8(encode_transfer_rejection(*reason))
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
         ProtocolMessage::Close => {
             encoder
                 .array(0)
@@ -207,6 +243,72 @@ fn decode_payload(decoder: &mut Decoder<'_>, kind: u16) -> Result<ProtocolMessag
                 decoder.u8().map_err(|_| TransportError::InvalidMessage)?,
             )?;
             Ok(ProtocolMessage::HandoffRejected { handoff_id, reason })
+        }
+        TRANSFER_OFFER_KIND => {
+            require_array(decoder, 3)?;
+            let transfer_id = decode_identifier(decoder)?;
+            let file_name = decoder.str().map_err(|_| TransportError::InvalidMessage)?;
+            if file_name.is_empty() || file_name.len() > MAX_FILE_NAME_SIZE {
+                return Err(TransportError::InvalidMessage);
+            }
+            let file_size = decoder.u64().map_err(|_| TransportError::InvalidMessage)?;
+            Ok(ProtocolMessage::Transfer {
+                transfer_id,
+                message: TransferTransportMessage::Offer {
+                    file_name: file_name.to_owned(),
+                    file_size,
+                },
+            })
+        }
+        TRANSFER_CHUNK_KIND => {
+            require_array(decoder, 3)?;
+            let transfer_id = decode_identifier(decoder)?;
+            let offset = decoder.u64().map_err(|_| TransportError::InvalidMessage)?;
+            let bytes = decoder
+                .bytes()
+                .map_err(|_| TransportError::InvalidMessage)?;
+            if bytes.is_empty() || bytes.len() > MAX_TRANSFER_CHUNK_SIZE {
+                return Err(TransportError::InvalidMessage);
+            }
+            Ok(ProtocolMessage::Transfer {
+                transfer_id,
+                message: TransferTransportMessage::Chunk {
+                    offset,
+                    bytes: bytes.to_vec(),
+                },
+            })
+        }
+        TRANSFER_FINISH_KIND => {
+            require_array(decoder, 2)?;
+            let transfer_id = decode_identifier(decoder)?;
+            let digest = decode_digest(decoder)?;
+            Ok(ProtocolMessage::Transfer {
+                transfer_id,
+                message: TransferTransportMessage::Finish { digest },
+            })
+        }
+        TRANSFER_CANCEL_KIND => {
+            require_array(decoder, 1)?;
+            let transfer_id = decode_identifier(decoder)?;
+            Ok(ProtocolMessage::Transfer {
+                transfer_id,
+                message: TransferTransportMessage::Cancel,
+            })
+        }
+        TRANSFER_ACCEPTED_KIND => {
+            require_array(decoder, 1)?;
+            decode_identifier(decoder).map(ProtocolMessage::TransferAccepted)
+        }
+        TRANSFER_REJECTED_KIND => {
+            require_array(decoder, 2)?;
+            let transfer_id = decode_identifier(decoder)?;
+            let reason = decode_transfer_rejection(
+                decoder.u8().map_err(|_| TransportError::InvalidMessage)?,
+            )?;
+            Ok(ProtocolMessage::TransferRejected {
+                transfer_id,
+                reason,
+            })
         }
         _ => Err(TransportError::ProtocolViolation),
     }
@@ -326,6 +428,24 @@ fn message_kind(message: &ProtocolMessage) -> u16 {
         } => YOUTUBE_HANDOFF_KIND,
         ProtocolMessage::HandoffAccepted(_) => HANDOFF_ACCEPTED_KIND,
         ProtocolMessage::HandoffRejected { .. } => HANDOFF_REJECTED_KIND,
+        ProtocolMessage::Transfer {
+            message: TransferTransportMessage::Offer { .. },
+            ..
+        } => TRANSFER_OFFER_KIND,
+        ProtocolMessage::Transfer {
+            message: TransferTransportMessage::Chunk { .. },
+            ..
+        } => TRANSFER_CHUNK_KIND,
+        ProtocolMessage::Transfer {
+            message: TransferTransportMessage::Finish { .. },
+            ..
+        } => TRANSFER_FINISH_KIND,
+        ProtocolMessage::Transfer {
+            message: TransferTransportMessage::Cancel,
+            ..
+        } => TRANSFER_CANCEL_KIND,
+        ProtocolMessage::TransferAccepted(_) => TRANSFER_ACCEPTED_KIND,
+        ProtocolMessage::TransferRejected { .. } => TRANSFER_REJECTED_KIND,
         ProtocolMessage::Close => CLOSE_KIND,
     }
 }
@@ -381,6 +501,10 @@ fn encode_handoff(
 }
 
 fn decode_handoff_id(decoder: &mut Decoder<'_>) -> Result<[u8; 16], TransportError> {
+    decode_identifier(decoder)
+}
+
+fn decode_identifier(decoder: &mut Decoder<'_>) -> Result<[u8; 16], TransportError> {
     let bytes = decoder
         .bytes()
         .map_err(|_| TransportError::InvalidMessage)?;
@@ -390,6 +514,109 @@ fn decode_handoff_id(decoder: &mut Decoder<'_>) -> Result<[u8; 16], TransportErr
     let mut identifier = [0_u8; 16];
     identifier.copy_from_slice(bytes);
     Ok(identifier)
+}
+
+fn encode_transfer(
+    encoder: &mut Encoder<Vec<u8>>,
+    transfer_id: &[u8; 16],
+    message: &TransferTransportMessage,
+) -> Result<(), TransportError> {
+    match message {
+        TransferTransportMessage::Offer {
+            file_name,
+            file_size,
+        } => {
+            if file_name.is_empty() || file_name.len() > MAX_FILE_NAME_SIZE {
+                return Err(TransportError::InvalidMessage);
+            }
+            encoder
+                .array(3)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .str(file_name)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u64(*file_size)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+        TransferTransportMessage::Chunk { offset, bytes } => {
+            if bytes.is_empty() || bytes.len() > MAX_TRANSFER_CHUNK_SIZE {
+                return Err(TransportError::MessageTooLarge);
+            }
+            encoder
+                .array(3)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u64(*offset)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(bytes)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+        TransferTransportMessage::Finish { digest } => {
+            encoder
+                .array(2)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(digest)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+        TransferTransportMessage::Cancel => {
+            encoder
+                .array(1)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+    }
+    Ok(())
+}
+
+fn decode_digest(decoder: &mut Decoder<'_>) -> Result<[u8; 32], TransportError> {
+    let bytes = decoder
+        .bytes()
+        .map_err(|_| TransportError::InvalidMessage)?;
+    if bytes.len() != 32 {
+        return Err(TransportError::InvalidMessage);
+    }
+    let mut digest = [0_u8; 32];
+    digest.copy_from_slice(bytes);
+    Ok(digest)
+}
+
+fn encode_transfer_rejection(reason: TransferRejection) -> u8 {
+    match reason {
+        TransferRejection::Invalid => 1,
+        TransferRejection::Busy => 2,
+        TransferRejection::Unavailable => 3,
+        TransferRejection::Declined => 4,
+        TransferRejection::DestinationConflict => 5,
+        TransferRejection::Integrity => 6,
+        TransferRejection::FileSystem => 7,
+    }
+}
+
+fn decode_transfer_rejection(value: u8) -> Result<TransferRejection, TransportError> {
+    match value {
+        1 => Ok(TransferRejection::Invalid),
+        2 => Ok(TransferRejection::Busy),
+        3 => Ok(TransferRejection::Unavailable),
+        4 => Ok(TransferRejection::Declined),
+        5 => Ok(TransferRejection::DestinationConflict),
+        6 => Ok(TransferRejection::Integrity),
+        7 => Ok(TransferRejection::FileSystem),
+        _ => Err(TransportError::InvalidMessage),
+    }
 }
 
 fn encode_handoff_rejection(reason: HandoffRejection) -> u8 {
@@ -454,8 +681,8 @@ mod tests {
     use crate::models::{DeviceId, LocalDeviceIdentity, Platform};
 
     use super::{
-        ApplicationHello, HandoffTransportPayload, ProtocolEnvelope, ProtocolMessage, decode,
-        encode,
+        ApplicationHello, HandoffTransportPayload, ProtocolEnvelope, ProtocolMessage,
+        TransferTransportMessage, decode, encode,
     };
 
     #[test]
@@ -538,6 +765,31 @@ mod tests {
                     playback_position_millis: 452_000,
                 },
             } if handoff_id == &identifier && video_id == "dQw4w9WgXcQ"
+        ));
+        assert_eq!(encode(&decoded).expect("message should re-encode"), encoded);
+    }
+
+    #[test]
+    fn transfer_chunk_round_trip_is_deterministic() {
+        let identifier = [11_u8; 16];
+        let envelope = ProtocolEnvelope::transfer(
+            6,
+            identifier,
+            TransferTransportMessage::Chunk {
+                offset: 1024,
+                bytes: vec![3_u8; 1024],
+            },
+        )
+        .expect("transfer chunk should be valid");
+        let encoded = encode(&envelope).expect("transfer chunk should encode");
+        let decoded = decode(&encoded).expect("transfer chunk should decode");
+
+        assert!(matches!(
+            decoded.message(),
+            ProtocolMessage::Transfer {
+                transfer_id,
+                message: TransferTransportMessage::Chunk { offset: 1024, bytes },
+            } if transfer_id == &identifier && bytes == &vec![3_u8; 1024]
         ));
         assert_eq!(encode(&decoded).expect("message should re-encode"), encoded);
     }

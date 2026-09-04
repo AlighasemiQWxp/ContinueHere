@@ -89,7 +89,13 @@ after its implementation and validation requirements are satisfied.
   - Fixed-width millisecond playback position and canonical resume URL
   - Negotiated capability with deterministic bounded protocol messages
   - Complete local validation suite passed
-- [ ] 13. Streaming file transfer
+- [x] 13. Streaming file transfer
+  - Independent FileTransfer Manager, private Controller, Handle, and delegate event
+  - Explicit incoming offer acceptance with default or temporary destination selection
+  - Authenticated bounded 32 KiB chunks with sequential offset validation
+  - Incremental SHA-256 integrity verification and destination-local temporary files
+  - Atomic no-overwrite final commit, cancellation cleanup, and immutable progress snapshots
+  - Complete local validation suite passed
 - [ ] 14. Local video handoff
 - [ ] 15. Desktop user interface
 

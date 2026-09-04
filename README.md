@@ -42,12 +42,17 @@ The architectural foundation is complete. It currently provides:
 - Typed YouTube handoffs with validated video identifiers and playback positions
 - Negotiated playback-position capability and deterministic bounded messages
 - Handoff-operation and incoming-handoff delegate events
+- Handle-owned streaming file transfers with explicit receiving-device approval
+- Bounded authenticated chunks with sequential offsets and transport backpressure
+- SHA-256 verification, destination-local temporary files, and atomic no-overwrite commits
+- File-transfer progress, state, cancellation, and cleanup delegate events
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 The protocol and security design, Discovery, Pairing, and authenticated
 Transport are complete. Phase 11 provides the validated URL handoff technical
-MVP, and Phase 12 adds validated YouTube handoffs with playback position. File
-transfer and desktop/mobile interfaces remain planned work.
+MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
+13 provides validated streaming file transfer. Desktop and mobile interfaces
+remain planned work.
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and

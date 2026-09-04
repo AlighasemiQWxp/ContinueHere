@@ -23,6 +23,7 @@ use crate::{
 use super::{
     AuthenticatedConnection, ConnectionChange, ConnectionChangedEvent, ConnectionDirection,
     HandoffDisposition, HandoffTransportCapability, HandoffTransportPayload, InboundHandoff,
+    InboundTransfer, TransferDisposition, TransferTransportCapability, TransferTransportMessage,
     TransportError,
     authenticated::{AuthenticatedChannel, AuthenticatedReader},
     protocol::{ApplicationHello, MAX_CONTROL_FRAME_SIZE, ProtocolEnvelope, ProtocolMessage},
@@ -37,6 +38,7 @@ const INCOMING_RATE_WINDOW: Duration = Duration::from_secs(60);
 const MAX_INCOMING_PER_ADDRESS: usize = 10;
 const MAX_RATE_LIMIT_ADDRESSES: usize = 256;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const TRANSFER_OFFER_TIMEOUT: Duration = Duration::from_secs(65);
 
 pub(crate) type ConnectionStore = Arc<Mutex<BTreeMap<DeviceId, AuthenticatedConnection>>>;
 
@@ -65,6 +67,12 @@ pub(crate) enum SupervisorCommand {
         payload: HandoffTransportPayload,
         response: standard_mpsc::Sender<Result<HandoffDisposition, TransportError>>,
     },
+    SendTransfer {
+        device_id: DeviceId,
+        transfer_id: [u8; 16],
+        message: TransferTransportMessage,
+        response: standard_mpsc::Sender<Result<TransferDisposition, TransportError>>,
+    },
     Shutdown {
         response: oneshot::Sender<()>,
     },
@@ -83,6 +91,11 @@ enum ConnectionCommand {
         handoff_id: [u8; 16],
         payload: HandoffTransportPayload,
         response: standard_mpsc::Sender<Result<HandoffDisposition, TransportError>>,
+    },
+    SendTransfer {
+        transfer_id: [u8; 16],
+        message: TransferTransportMessage,
+        response: standard_mpsc::Sender<Result<TransferDisposition, TransportError>>,
     },
     Close,
 }
@@ -117,10 +130,12 @@ struct EstablishedChannel {
     maximum_in_flight_requests: usize,
     idle_timeout: Duration,
     handoff: HandoffTransportCapability,
+    transfer: TransferTransportCapability,
 }
 
 struct PendingRequest {
     started: Instant,
+    timeout: Duration,
     operation: PendingOperation,
 }
 
@@ -133,6 +148,16 @@ enum PendingOperation {
         handoff_id: [u8; 16],
         response: standard_mpsc::Sender<Result<HandoffDisposition, TransportError>>,
     },
+    Transfer {
+        transfer_id: [u8; 16],
+        response: standard_mpsc::Sender<Result<TransferDisposition, TransportError>>,
+    },
+}
+
+struct InboundTransferResult {
+    request_id: u64,
+    transfer_id: [u8; 16],
+    disposition: TransferDisposition,
 }
 
 #[derive(Clone)]
@@ -141,37 +166,45 @@ struct WorkerContext {
     security: SecurityCapability,
     trusted_peers: TrustedPeerLookup,
     handoff: HandoffTransportCapability,
+    transfer: TransferTransportCapability,
     events: mpsc::Sender<WorkerEvent>,
 }
 
-struct SupervisorContext {
+pub(super) struct SupervisorContext {
     local_identity: LocalDeviceIdentity,
     security: SecurityCapability,
     trusted_peers: TrustedPeerLookup,
     handoff: HandoffTransportCapability,
+    transfer: TransferTransportCapability,
     connections: ConnectionStore,
     changed: ConnectionChangedEvent,
 }
 
-impl SupervisorRuntime {
-    pub(crate) fn start(
-        listener: TcpListener,
+impl SupervisorContext {
+    pub(super) fn new(
         local_identity: LocalDeviceIdentity,
         security: SecurityCapability,
         trusted_peers: TrustedPeerLookup,
         handoff: HandoffTransportCapability,
+        transfer: TransferTransportCapability,
         connections: ConnectionStore,
         changed: ConnectionChangedEvent,
     ) -> Self {
-        let (commands, command_receiver) = mpsc::channel(COMMAND_QUEUE_LIMIT);
-        let context = SupervisorContext {
+        Self {
             local_identity,
             security,
             trusted_peers,
             handoff,
+            transfer,
             connections,
             changed,
-        };
+        }
+    }
+}
+
+impl SupervisorRuntime {
+    pub(crate) fn start(listener: TcpListener, context: SupervisorContext) -> Self {
+        let (commands, command_receiver) = mpsc::channel(COMMAND_QUEUE_LIMIT);
         let worker = tokio::spawn(run_supervisor(listener, command_receiver, context));
         Self { commands, worker }
     }
@@ -205,6 +238,7 @@ async fn run_supervisor(
         security,
         trusted_peers,
         handoff,
+        transfer,
         connections,
         changed,
     } = context;
@@ -220,6 +254,7 @@ async fn run_supervisor(
         security: security.clone(),
         trusted_peers: trusted_peers.clone(),
         handoff,
+        transfer,
         events: worker_events.clone(),
     };
 
@@ -397,6 +432,36 @@ async fn handle_command(
                 return false;
             }
         }
+        SupervisorCommand::SendTransfer {
+            device_id,
+            transfer_id,
+            message,
+            response,
+        } => {
+            let Some(connection) = active.get(&device_id) else {
+                let _ = response.send(Err(TransportError::NotConnected));
+                return false;
+            };
+            if !connection
+                .snapshot
+                .capabilities()
+                .contains(&Capability::FileTransfer)
+            {
+                let _ = response.send(Err(TransportError::UnsupportedCapability));
+                return false;
+            }
+            if connection
+                .commands
+                .try_send(ConnectionCommand::SendTransfer {
+                    transfer_id,
+                    message,
+                    response,
+                })
+                .is_err()
+            {
+                return false;
+            }
+        }
         SupervisorCommand::Shutdown { response } => {
             let _ = response.send(());
             return true;
@@ -518,6 +583,7 @@ fn spawn_outgoing(
             &context.security,
             &context.trusted_peers,
             &context.handoff,
+            &context.transfer,
         )
         .await;
         run_established(
@@ -539,6 +605,7 @@ fn spawn_incoming(tasks: &mut JoinSet<()>, stream: TcpStream, context: WorkerCon
             &context.security,
             &context.trusted_peers,
             &context.handoff,
+            &context.transfer,
         )
         .await;
         run_established(result, None, true, None, context.events).await;
@@ -605,6 +672,7 @@ async fn establish_outgoing(
     security: &SecurityCapability,
     trusted_peers: &TrustedPeerLookup,
     handoff: &HandoffTransportCapability,
+    transfer: &TransferTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
     let cryptographic_identity = load_cryptographic_identity(security, local_identity.id()).await?;
     let channel =
@@ -616,6 +684,7 @@ async fn establish_outgoing(
         local_identity,
         trusted_peers,
         handoff,
+        transfer,
     )
     .await
 }
@@ -626,6 +695,7 @@ async fn establish_incoming(
     security: &SecurityCapability,
     trusted_peers: &TrustedPeerLookup,
     handoff: &HandoffTransportCapability,
+    transfer: &TransferTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
     let cryptographic_identity = load_cryptographic_identity(security, local_identity.id()).await?;
     let channel =
@@ -638,6 +708,7 @@ async fn establish_incoming(
         local_identity,
         trusted_peers,
         handoff,
+        transfer,
     )
     .await
 }
@@ -649,12 +720,16 @@ async fn establish(
     local_identity: &LocalDeviceIdentity,
     trusted_peers: &TrustedPeerLookup,
     handoff: &HandoffTransportCapability,
+    transfer: &TransferTransportCapability,
 ) -> Result<EstablishedChannel, TransportError> {
-    let capabilities = if handoff.is_supported() {
-        vec![Capability::UrlHandoff, Capability::PlaybackPositionHandoff]
-    } else {
-        Vec::new()
-    };
+    let mut capabilities = Vec::new();
+    if handoff.is_supported() {
+        capabilities.push(Capability::UrlHandoff);
+        capabilities.push(Capability::PlaybackPositionHandoff);
+    }
+    if transfer.is_supported() {
+        capabilities.push(Capability::FileTransfer);
+    }
     let local_hello = ApplicationHello::local(local_identity, capabilities)?;
     channel
         .send(
@@ -697,6 +772,7 @@ async fn establish(
         maximum_in_flight_requests: negotiated.limits().maximum_in_flight_requests(),
         idle_timeout: Duration::from_secs(u64::from(negotiated.limits().idle_timeout_seconds())),
         handoff: handoff.clone(),
+        transfer: transfer.clone(),
     })
 }
 
@@ -708,12 +784,16 @@ async fn run_connection(
     let maximum_in_flight_requests = established.maximum_in_flight_requests;
     let idle_timeout = established.idle_timeout;
     let handoff = established.handoff.clone();
+    let transfer = established.transfer.clone();
     let peer_device_id = established.snapshot.device_id().clone();
     let (reader, mut writer) = established.channel.split();
     let (received_messages, mut messages) = mpsc::channel(CONNECTION_COMMAND_LIMIT);
+    let (inbound_transfer_results, mut transfer_results) =
+        mpsc::channel::<InboundTransferResult>(CONNECTION_COMMAND_LIMIT);
     let reader_task = tokio::spawn(run_reader(reader, maximum_frame_size, received_messages));
     let mut request_identifier = 1_u64;
     let mut pending = BTreeMap::<u64, PendingRequest>::new();
+    let mut inbound_transfers = BTreeSet::<u64>::new();
     let mut received = VecDeque::<u64>::new();
     let mut last_activity = Instant::now();
     let mut timer = interval(Duration::from_secs(1));
@@ -734,6 +814,7 @@ async fn run_connection(
                             writer.send(&envelope, maximum_frame_size).await?;
                             pending.insert(request_identifier, PendingRequest {
                                 started: Instant::now(),
+                                timeout: REQUEST_TIMEOUT,
                                 operation: PendingOperation::Probe { nonce, response },
                             });
                             request_identifier = next_request_identifier(request_identifier);
@@ -756,8 +837,43 @@ async fn run_connection(
                             writer.send(&envelope, maximum_frame_size).await?;
                             pending.insert(request_identifier, PendingRequest {
                                 started: Instant::now(),
+                                timeout: REQUEST_TIMEOUT,
                                 operation: PendingOperation::Handoff {
                                     handoff_id,
+                                    response,
+                                },
+                            });
+                            request_identifier = next_request_identifier(request_identifier);
+                            last_activity = Instant::now();
+                        }
+                        Some(ConnectionCommand::SendTransfer {
+                            transfer_id,
+                            message,
+                            response,
+                        }) => {
+                            if pending.len() >= maximum_in_flight_requests {
+                                let _ = response.send(Err(TransportError::ConnectionLimit));
+                                continue;
+                            }
+                            let timeout = if matches!(
+                                &message,
+                                TransferTransportMessage::Offer { .. }
+                            ) {
+                                TRANSFER_OFFER_TIMEOUT
+                            } else {
+                                REQUEST_TIMEOUT
+                            };
+                            let envelope = ProtocolEnvelope::transfer(
+                                request_identifier,
+                                transfer_id,
+                                message,
+                            )?;
+                            writer.send(&envelope, maximum_frame_size).await?;
+                            pending.insert(request_identifier, PendingRequest {
+                                started: Instant::now(),
+                                timeout,
+                                operation: PendingOperation::Transfer {
+                                    transfer_id,
                                     response,
                                 },
                             });
@@ -855,16 +971,90 @@ async fn run_connection(
                                 HandoffDisposition::Rejected(*reason),
                             )?;
                         }
+                        ProtocolMessage::Transfer {
+                            transfer_id,
+                            message,
+                        } => {
+                            if received.contains(&envelope.request_id())
+                                || inbound_transfers.len() >= maximum_in_flight_requests
+                            {
+                                return Err(TransportError::ProtocolViolation);
+                            }
+                            received.push_back(envelope.request_id());
+                            if received.len() > maximum_in_flight_requests * 2 {
+                                received.pop_front();
+                            }
+                            inbound_transfers.insert(envelope.request_id());
+                            let request_id = envelope.request_id();
+                            let transfer_id = *transfer_id;
+                            let incoming = InboundTransfer::new(
+                                transfer_id,
+                                peer_device_id.clone(),
+                                message.clone(),
+                            );
+                            let transfer = transfer.clone();
+                            let results = inbound_transfer_results.clone();
+                            tokio::spawn(async move {
+                                let disposition = transfer.receive(incoming).await;
+                                let _ = results
+                                    .send(InboundTransferResult {
+                                        request_id,
+                                        transfer_id,
+                                        disposition,
+                                    })
+                                    .await;
+                            });
+                        }
+                        ProtocolMessage::TransferAccepted(transfer_id) => {
+                            complete_transfer(
+                                &mut pending,
+                                envelope.request_id(),
+                                *transfer_id,
+                                TransferDisposition::Accepted,
+                            )?;
+                        }
+                        ProtocolMessage::TransferRejected {
+                            transfer_id,
+                            reason,
+                        } => {
+                            complete_transfer(
+                                &mut pending,
+                                envelope.request_id(),
+                                *transfer_id,
+                                TransferDisposition::Rejected(*reason),
+                            )?;
+                        }
                         ProtocolMessage::Close => return Ok(()),
                         ProtocolMessage::Hello(_) => return Err(TransportError::ProtocolViolation),
                     }
+                }
+                inbound_result = transfer_results.recv() => {
+                    let result = inbound_result.ok_or(TransportError::ConnectionFailed)?;
+                    if !inbound_transfers.remove(&result.request_id) {
+                        return Err(TransportError::ProtocolViolation);
+                    }
+                    let envelope = match result.disposition {
+                        TransferDisposition::Accepted => ProtocolEnvelope::transfer_accepted(
+                            result.request_id,
+                            result.transfer_id,
+                        )?,
+                        TransferDisposition::Rejected(reason) => {
+                            ProtocolEnvelope::transfer_rejected(
+                                result.request_id,
+                                result.transfer_id,
+                                reason,
+                            )?
+                        }
+                    };
+                    writer.send(&envelope, maximum_frame_size).await?;
+                    last_activity = Instant::now();
                 }
                 _ = timer.tick() => {
                     let now = Instant::now();
                     let timed_out = pending
                         .iter()
                         .filter_map(|(identifier, request)| {
-                            (now.duration_since(request.started) >= REQUEST_TIMEOUT)
+                            (now.duration_since(request.started) >= request.timeout)
                                 .then_some(*identifier)
                         })
                         .collect::<Vec<_>>();
@@ -910,12 +1100,36 @@ fn complete_handoff(
     }
 }
 
+fn complete_transfer(
+    pending: &mut BTreeMap<u64, PendingRequest>,
+    request_id: u64,
+    transfer_id: [u8; 16],
+    disposition: TransferDisposition,
+) -> Result<(), TransportError> {
+    let request = pending
+        .remove(&request_id)
+        .ok_or(TransportError::ProtocolViolation)?;
+    match request.operation {
+        PendingOperation::Transfer {
+            transfer_id: expected,
+            response,
+        } if expected == transfer_id => {
+            let _ = response.send(Ok(disposition));
+            Ok(())
+        }
+        _ => Err(TransportError::ProtocolViolation),
+    }
+}
+
 fn fail_pending(request: PendingRequest, error: TransportError) {
     match request.operation {
         PendingOperation::Probe { response, .. } => {
             let _ = response.send(Err(error));
         }
         PendingOperation::Handoff { response, .. } => {
+            let _ = response.send(Err(error));
+        }
+        PendingOperation::Transfer { response, .. } => {
             let _ = response.send(Err(error));
         }
     }

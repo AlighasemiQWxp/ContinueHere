@@ -56,6 +56,11 @@ pub use pairing::{
     TrustedDeviceChangedSubscription,
 };
 pub use settings::{DirectorySettings, LocalizationSettings, SettingsManager};
+pub use transfer::{
+    FileTransfer, FileTransferChange, FileTransferChangedDelegate, FileTransferChangedSubscription,
+    FileTransferDirection, FileTransferError, FileTransferFailure, FileTransferHandle,
+    FileTransferId, FileTransferManager, FileTransferState,
+};
 pub use transport::{
     AuthenticatedConnection, ConnectionChange, ConnectionChangedDelegate,
     ConnectionChangedSubscription, ConnectionDirection, TransportError, TransportManager,

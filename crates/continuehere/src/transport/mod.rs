@@ -10,6 +10,7 @@ mod pairing_transport;
 mod protocol;
 mod supervisor;
 mod tls;
+mod transfer_transport;
 mod verifier;
 
 pub use error::TransportError;
@@ -28,3 +29,7 @@ pub(crate) use message::{PairingHello, PairingMessage};
 pub(crate) use pairing_transport::PairingTransportCapability;
 pub(crate) use protocol::MAX_URL_SIZE;
 pub(crate) use supervisor::SupervisorCommand;
+pub(crate) use transfer_transport::{
+    InboundTransfer, InboundTransferHandler, TransferDisposition, TransferRejection,
+    TransferTransportCapability, TransferTransportMessage,
+};
