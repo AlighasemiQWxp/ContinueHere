@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     models::DeviceId,
+    transfer::{FileTransfer, FileTransferCapability, FileTransferId},
     transport::{
         HandoffDisposition, HandoffRejection, HandoffTransportCapability, HandoffTransportPayload,
         InboundHandoff, InboundHandoffHandler, TransportError,
@@ -27,6 +28,7 @@ const RESULT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 pub(crate) struct HandoffController {
     state: Mutex<ControllerState>,
     transport: HandoffTransportCapability,
+    transfers: FileTransferCapability,
     handoff_changed: HandoffChangedEvent,
     incoming_changed: IncomingHandoffChangedEvent,
 }
@@ -36,7 +38,7 @@ struct ControllerState {
     handoffs: BTreeMap<HandoffId, Handoff>,
     operations: HashMap<String, ActiveOperation>,
     incoming: BTreeMap<HandoffId, IncomingHandoff>,
-    seen: BTreeMap<HandoffId, DeviceId>,
+    seen: BTreeMap<HandoffId, (DeviceId, HandoffTransportPayload)>,
     seen_order: VecDeque<HandoffId>,
     orphan_workers: Vec<JoinHandle<()>>,
 }
@@ -47,13 +49,14 @@ struct ActiveOperation {
     worker: Option<JoinHandle<()>>,
 }
 
-enum OperationCommand {
+pub(super) enum OperationCommand {
     Cancel,
 }
 
 impl HandoffController {
     pub(crate) fn new(
         transport: HandoffTransportCapability,
+        transfers: FileTransferCapability,
         handoff_changed: HandoffChangedEvent,
         incoming_changed: IncomingHandoffChangedEvent,
     ) -> Arc<Self> {
@@ -68,6 +71,7 @@ impl HandoffController {
                 orphan_workers: Vec::new(),
             }),
             transport: transport.clone(),
+            transfers,
             handoff_changed,
             incoming_changed,
         });
@@ -251,6 +255,40 @@ impl HandoffController {
         Ok(())
     }
 
+    pub(super) fn transfer_capability(&self) -> &FileTransferCapability {
+        &self.transfers
+    }
+
+    pub(super) fn transport_capability(&self) -> &HandoffTransportCapability {
+        &self.transport
+    }
+
+    pub(super) fn update_transfer(&self, handle_identifier: &str, transfer: FileTransfer) {
+        let changed = {
+            let mut state = match lock(&self.state) {
+                Ok(state) => state,
+                Err(_) => return,
+            };
+            let Some(id) = state
+                .operations
+                .get(handle_identifier)
+                .map(|operation| operation.handoff_id.clone())
+            else {
+                return;
+            };
+            let Some(handoff) = state.handoffs.get_mut(&id) else {
+                return;
+            };
+            if handoff.state() != HandoffState::Sending || handoff.transfer() == Some(&transfer) {
+                return;
+            }
+            handoff.set_transfer(transfer);
+            handoff.clone()
+        };
+        self.handoff_changed
+            .publish(HandoffChange::Updated(changed));
+    }
+
     fn finish(&self, handle_identifier: &str, result: OperationResult) {
         let changed = {
             let mut state = match lock(&self.state) {
@@ -269,6 +307,7 @@ impl HandoffController {
             }
             match result {
                 OperationResult::Delivered => handoff.deliver(),
+                OperationResult::Cancelled => handoff.cancel(),
                 OperationResult::Rejected(failure) => handoff.reject(failure),
                 OperationResult::Failed(failure) => handoff.fail(failure),
             }
@@ -282,7 +321,38 @@ impl HandoffController {
 impl InboundHandoffHandler for HandoffController {
     fn receive(&self, handoff: InboundHandoff) -> HandoffDisposition {
         let (handoff_id, sender_device_id, transport_payload) = handoff.into_parts();
-        let payload = match transport_payload {
+        let id = HandoffId::from_bytes(handoff_id);
+        {
+            let state = match lock(&self.state) {
+                Ok(state) if state.running => state,
+                _ => return HandoffDisposition::Rejected(HandoffRejection::Unavailable),
+            };
+            if let Some((sender, previous)) = state.seen.get(&id) {
+                if sender == &sender_device_id && previous == &transport_payload {
+                    return HandoffDisposition::Accepted;
+                }
+                return HandoffDisposition::Rejected(HandoffRejection::Invalid);
+            }
+        }
+        let payload = match transport_payload.clone() {
+            HandoffTransportPayload::LocalVideo {
+                transfer_id,
+                playback_position_millis,
+            } => {
+                let Some(transfer) = self.transfers.completed_incoming(
+                    &FileTransferId::from_bytes(transfer_id),
+                    &sender_device_id,
+                ) else {
+                    return HandoffDisposition::Rejected(HandoffRejection::Invalid);
+                };
+                match super::LocalVideoHandoff::received(
+                    &transfer,
+                    PlaybackPosition::from_millis(playback_position_millis),
+                ) {
+                    Ok(video) => HandoffPayload::LocalVideo(video),
+                    Err(_) => return HandoffDisposition::Rejected(HandoffRejection::Invalid),
+                }
+            }
             HandoffTransportPayload::Url(url) => match UrlHandoff::new(&url) {
                 Ok(url) => HandoffPayload::Url(url),
                 Err(_) => {
@@ -302,7 +372,6 @@ impl InboundHandoffHandler for HandoffController {
                 }
             },
         };
-        let id = HandoffId::from_bytes(handoff_id);
         let incoming = {
             let mut state = match lock(&self.state) {
                 Ok(state) => state,
@@ -313,8 +382,8 @@ impl InboundHandoffHandler for HandoffController {
             if !state.running {
                 return HandoffDisposition::Rejected(HandoffRejection::Unavailable);
             }
-            if let Some(sender) = state.seen.get(&id) {
-                if sender == &sender_device_id {
+            if let Some((sender, previous)) = state.seen.get(&id) {
+                if sender == &sender_device_id && previous == &transport_payload {
                     return HandoffDisposition::Accepted;
                 }
                 return HandoffDisposition::Rejected(HandoffRejection::Invalid);
@@ -324,7 +393,9 @@ impl InboundHandoffHandler for HandoffController {
             }
             let incoming = IncomingHandoff::new(id.clone(), sender_device_id.clone(), payload);
             state.incoming.insert(id.clone(), incoming.clone());
-            state.seen.insert(id.clone(), sender_device_id);
+            state
+                .seen
+                .insert(id.clone(), (sender_device_id, transport_payload));
             state.seen_order.push_back(id);
             if state.seen_order.len() > MAX_SEEN_HANDOFFS
                 && let Some(expired) = state.seen_order.pop_front()
@@ -339,8 +410,9 @@ impl InboundHandoffHandler for HandoffController {
     }
 }
 
-enum OperationResult {
+pub(super) enum OperationResult {
     Delivered,
+    Cancelled,
     Rejected(HandoffFailure),
     Failed(HandoffFailure),
 }
@@ -353,13 +425,35 @@ fn run_outgoing(
     commands: mpsc::Receiver<OperationCommand>,
 ) {
     let (device_id, payload) = config.into_parts();
-    let transport_payload = match payload {
-        HandoffPayload::Url(url) => HandoffTransportPayload::Url(url.url().to_owned()),
-        HandoffPayload::YouTube(youtube) => HandoffTransportPayload::YouTube {
-            video_id: youtube.video_id().to_owned(),
-            playback_position_millis: youtube.playback_position().as_millis(),
-        },
+    let (transport_payload, _transfer) = match payload {
+        HandoffPayload::LocalVideo(video) => {
+            match super::video_operation::prepare(
+                &controller,
+                &handle_identifier,
+                &handoff_id,
+                device_id.clone(),
+                video,
+                &commands,
+            ) {
+                Ok((transfer, payload)) => (payload, Some(transfer)),
+                Err(result) => {
+                    controller.finish(&handle_identifier, result);
+                    return;
+                }
+            }
+        }
+        HandoffPayload::Url(url) => (HandoffTransportPayload::Url(url.url().to_owned()), None),
+        HandoffPayload::YouTube(youtube) => (
+            HandoffTransportPayload::YouTube {
+                video_id: youtube.video_id().to_owned(),
+                playback_position_millis: youtube.playback_position().as_millis(),
+            },
+            None,
+        ),
     };
+    if !matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)) {
+        return;
+    }
     let response = match controller
         .transport
         .send(device_id, handoff_id.bytes(), transport_payload)
@@ -411,7 +505,7 @@ fn map_rejection(reason: HandoffRejection) -> HandoffFailure {
     }
 }
 
-fn map_transport_error(error: TransportError) -> OperationResult {
+pub(super) fn map_transport_error(error: TransportError) -> OperationResult {
     match error {
         TransportError::NotConnected => OperationResult::Failed(HandoffFailure::NotConnected),
         TransportError::UnsupportedCapability => {
@@ -454,8 +548,16 @@ mod tests {
                 .send(change)
                 .expect("receiver should remain available");
         }));
+        let directory = tempfile::tempdir().expect("directory should be available");
+        let settings = crate::settings::SettingsManager::new(directory.path().to_path_buf())
+            .expect("settings should load");
+        let transfers = crate::transfer::FileTransferManager::new(
+            crate::transport::TransferTransportCapability::new(),
+            settings.directories().shared(),
+        );
         let controller = HandoffController::new(
             HandoffTransportCapability::new(),
+            transfers.capability(),
             HandoffChangedEvent::default(),
             changed,
         );

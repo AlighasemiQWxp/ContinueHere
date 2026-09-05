@@ -9,6 +9,10 @@ use super::{SupervisorCommand, TransportError};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum HandoffTransportPayload {
     Url(String),
+    LocalVideo {
+        transfer_id: [u8; 16],
+        playback_position_millis: u64,
+    },
     YouTube {
         video_id: String,
         playback_position_millis: u64,
@@ -19,6 +23,7 @@ impl HandoffTransportPayload {
     pub(crate) const fn capability(&self) -> Capability {
         match self {
             Self::Url(_) => Capability::UrlHandoff,
+            Self::LocalVideo { .. } => Capability::LocalVideoHandoff,
             Self::YouTube { .. } => Capability::PlaybackPositionHandoff,
         }
     }
@@ -109,6 +114,23 @@ impl HandoffTransportCapability {
         lock(&self.inner.handler)
             .map(|handler| handler.as_ref().and_then(Weak::upgrade).is_some())
             .unwrap_or(false)
+    }
+
+    pub(crate) fn check_local_video_support(
+        &self,
+        device_id: DeviceId,
+    ) -> Result<standard_mpsc::Receiver<Result<(), TransportError>>, TransportError> {
+        let commands = lock(&self.inner.commands)?
+            .clone()
+            .ok_or(TransportError::ManagerUnavailable)?;
+        let (response, result) = standard_mpsc::channel();
+        commands
+            .try_send(SupervisorCommand::CheckLocalVideoSupport {
+                device_id,
+                response,
+            })
+            .map_err(|_| TransportError::CommandUnavailable)?;
+        Ok(result)
     }
 
     pub(crate) fn send(

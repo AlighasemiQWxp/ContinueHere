@@ -29,6 +29,8 @@ pub enum HandoffError {
     InvalidYouTubeVideoId,
     #[error("playback position exceeds the supported range")]
     PlaybackPositionTooLarge,
+    #[error("local video must be a supported regular video file")]
+    InvalidLocalVideo,
     #[error("handoff operation limit has been reached")]
     OperationLimit,
     #[error("received handoff was not found")]

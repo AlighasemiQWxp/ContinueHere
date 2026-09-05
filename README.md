@@ -46,17 +46,49 @@ The architectural foundation is complete. It currently provides:
 - Bounded authenticated chunks with sequential offsets and transport backpressure
 - SHA-256 verification, destination-local temporary files, and atomic no-overwrite commits
 - File-transfer progress, state, cancellation, and cleanup delegate events
+- Local-video handoffs that reuse file transfer and preserve millisecond playback positions
+- Receiver-owned verified video paths with explicit file acceptance and capability checks
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 The protocol and security design, Discovery, Pairing, and authenticated
 Transport are complete. Phase 11 provides the validated URL handoff technical
 MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
-13 provides validated streaming file transfer. Desktop and mobile interfaces
+13 provides validated streaming file transfer. Phase 14 provides validated
+local-video handoff with playback position. Desktop and mobile interfaces
 remain planned work.
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and
 [project roadmap](docs/ROADMAP.md) for the intended development order.
+
+## Local video handoff
+
+Configure a handoff handle with the trusted destination device, an absolute
+video file path, and the current playback position, then use the handle:
+
+```rust
+let handle = app.handoff().get_handle("continue-local-video")?;
+handle.configure_local_video(device_id, video_path, playback_position)?;
+handle.use_handle()?;
+```
+
+Keep the handle alive while the operation runs. The receiver approves the file
+offer through `app.file_transfers().accept_incoming(...)`, using its default
+folder or a temporary destination. `Handoff::transfer()` exposes an immutable
+snapshot of the associated transfer for progress and failure details.
+
+Once the full file is verified and saved, the receiver publishes an incoming
+`HandoffPayload::LocalVideo` containing its own file path, the transfer ID, and
+the playback position. `Delivered` means the receiving app has that ready-to-open
+record; it does not mean a player has started. Player selection, codec support,
+opening, and seeking belong to the application interface.
+
+The initial file-name extensions are MP4, M4V, MKV, WebM, MOV, and AVI,
+case-insensitively. This checks file eligibility, not media decodability.
+Empty files, directories, and symbolic-link sources are rejected. Playback
+starts only through a future application integration after the complete file
+arrives. This phase does not add playback during download, transcoding, partial
+transfer resume, or persistent history.
 
 ## Design goals
 

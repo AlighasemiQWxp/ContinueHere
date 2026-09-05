@@ -21,6 +21,7 @@ const TRANSFER_FINISH_KIND: u16 = 11;
 const TRANSFER_CANCEL_KIND: u16 = 12;
 const TRANSFER_ACCEPTED_KIND: u16 = 13;
 const TRANSFER_REJECTED_KIND: u16 = 14;
+const LOCAL_VIDEO_HANDOFF_KIND: u16 = 15;
 const MAX_IDENTIFIER_SIZE: usize = 64;
 const MAX_DISPLAY_NAME_SIZE: usize = 128;
 const MAX_CAPABILITY_COUNT: usize = 16;
@@ -232,6 +233,20 @@ fn decode_payload(decoder: &mut Decoder<'_>, kind: u16) -> Result<ProtocolMessag
                 },
             })
         }
+        LOCAL_VIDEO_HANDOFF_KIND => {
+            require_array(decoder, 3)?;
+            let handoff_id = decode_handoff_id(decoder)?;
+            let transfer_id = decode_identifier(decoder)?;
+            let playback_position_millis =
+                decoder.u64().map_err(|_| TransportError::InvalidMessage)?;
+            Ok(ProtocolMessage::Handoff {
+                handoff_id,
+                payload: HandoffTransportPayload::LocalVideo {
+                    transfer_id,
+                    playback_position_millis,
+                },
+            })
+        }
         HANDOFF_ACCEPTED_KIND => {
             require_array(decoder, 1)?;
             decode_handoff_id(decoder).map(ProtocolMessage::HandoffAccepted)
@@ -426,6 +441,10 @@ fn message_kind(message: &ProtocolMessage) -> u16 {
             payload: HandoffTransportPayload::YouTube { .. },
             ..
         } => YOUTUBE_HANDOFF_KIND,
+        ProtocolMessage::Handoff {
+            payload: HandoffTransportPayload::LocalVideo { .. },
+            ..
+        } => LOCAL_VIDEO_HANDOFF_KIND,
         ProtocolMessage::HandoffAccepted(_) => HANDOFF_ACCEPTED_KIND,
         ProtocolMessage::HandoffRejected { .. } => HANDOFF_REJECTED_KIND,
         ProtocolMessage::Transfer {
@@ -456,6 +475,23 @@ fn encode_handoff(
     payload: &HandoffTransportPayload,
 ) -> Result<(), TransportError> {
     match payload {
+        HandoffTransportPayload::LocalVideo {
+            transfer_id,
+            playback_position_millis,
+        } => {
+            encoder
+                .array(3)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(handoff_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u64(*playback_position_millis)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
         HandoffTransportPayload::Url(url) => {
             if url.is_empty() {
                 return Err(TransportError::InvalidMessage);
@@ -664,6 +700,7 @@ fn encode_capability(capability: Capability) -> u8 {
         Capability::UrlHandoff => 1,
         Capability::PlaybackPositionHandoff => 2,
         Capability::FileTransfer => 3,
+        Capability::LocalVideoHandoff => 4,
     }
 }
 
@@ -672,6 +709,7 @@ fn decode_capability(value: u8) -> Result<Capability, TransportError> {
         1 => Ok(Capability::UrlHandoff),
         2 => Ok(Capability::PlaybackPositionHandoff),
         3 => Ok(Capability::FileTransfer),
+        4 => Ok(Capability::LocalVideoHandoff),
         _ => Err(TransportError::InvalidMessage),
     }
 }
@@ -767,6 +805,50 @@ mod tests {
             } if handoff_id == &identifier && video_id == "dQw4w9WgXcQ"
         ));
         assert_eq!(encode(&decoded).expect("message should re-encode"), encoded);
+    }
+
+    #[test]
+    fn local_video_handoff_round_trip_preserves_fixed_width_values() {
+        for position in [0, 750_123, u64::MAX] {
+            let envelope = ProtocolEnvelope::handoff(
+                6,
+                [7; 16],
+                HandoffTransportPayload::LocalVideo {
+                    transfer_id: [8; 16],
+                    playback_position_millis: position,
+                },
+            )
+            .expect("handoff should be valid");
+            let bytes = encode(&envelope).expect("handoff should encode");
+            let decoded = decode(&bytes).expect("handoff should decode");
+            assert!(matches!(decoded.message(), ProtocolMessage::Handoff {
+                handoff_id,
+                payload: HandoffTransportPayload::LocalVideo { transfer_id, playback_position_millis },
+            } if handoff_id == &[7; 16] && transfer_id == &[8; 16] && *playback_position_millis == position));
+            assert_eq!(encode(&decoded).expect("handoff should re-encode"), bytes);
+            assert!(decode(&bytes[..bytes.len() - 1]).is_err());
+        }
+    }
+
+    #[test]
+    fn local_video_handoff_rejects_wrong_identifier_length() {
+        let mut encoder = minicbor::Encoder::new(Vec::new());
+        encoder
+            .array(3)
+            .unwrap()
+            .u16(super::LOCAL_VIDEO_HANDOFF_KIND)
+            .unwrap()
+            .u64(1)
+            .unwrap()
+            .array(3)
+            .unwrap()
+            .bytes(&[1; 16])
+            .unwrap()
+            .bytes(&[2; 15])
+            .unwrap()
+            .u64(0)
+            .unwrap();
+        assert!(decode(&encoder.into_writer()).is_err());
     }
 
     #[test]

@@ -61,6 +61,10 @@ pub(crate) enum SupervisorCommand {
         device_id: DeviceId,
         response: oneshot::Sender<Result<(), TransportError>>,
     },
+    CheckLocalVideoSupport {
+        device_id: DeviceId,
+        response: standard_mpsc::Sender<Result<(), TransportError>>,
+    },
     SendHandoff {
         device_id: DeviceId,
         handoff_id: [u8; 16],
@@ -402,6 +406,28 @@ async fn handle_command(
                 return false;
             }
         }
+        SupervisorCommand::CheckLocalVideoSupport {
+            device_id,
+            response,
+        } => {
+            let result = match active.get(&device_id) {
+                Some(connection)
+                    if connection
+                        .snapshot
+                        .capabilities()
+                        .contains(&Capability::LocalVideoHandoff)
+                        && connection
+                            .snapshot
+                            .capabilities()
+                            .contains(&Capability::FileTransfer) =>
+                {
+                    Ok(())
+                }
+                Some(_) => Err(TransportError::UnsupportedCapability),
+                None => Err(TransportError::NotConnected),
+            };
+            let _ = response.send(result);
+        }
         SupervisorCommand::SendHandoff {
             device_id,
             handoff_id,
@@ -729,6 +755,9 @@ async fn establish(
     }
     if transfer.is_supported() {
         capabilities.push(Capability::FileTransfer);
+        if handoff.is_supported() {
+            capabilities.push(Capability::LocalVideoHandoff);
+        }
     }
     let local_hello = ApplicationHello::local(local_identity, capabilities)?;
     channel

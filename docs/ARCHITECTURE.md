@@ -337,8 +337,8 @@ application-interface responsibilities.
 
 File streaming remains an independent Transfer system because it owns chunks,
 progress, integrity, destination handling, temporary files, and final commit.
-A future local-video handoff may coordinate through a narrow Transfer
-capability while retaining the shared Handoff lifecycle for the user operation.
+Local-video handoff coordinates through a narrow Transfer capability while
+retaining the shared Handoff lifecycle for the user operation.
 
 Phase 13 adds `FileTransferManager` as an independent main system. The Manager
 owns validation, caller-facing operations, immutable transfer snapshots,
@@ -365,6 +365,51 @@ transfer through `Verifying` to `Completed`. The final name is created with an
 atomic no-overwrite filesystem operation, and cancellation, rejection,
 shutdown, or failure removes incomplete temporary data. Phase 13 deliberately
 does not resume partial transfers; a retry starts from byte zero.
+
+Phase 14 extends the same Handoff system with `LocalVideoHandoff`; it does not
+introduce another main manager. `CoreModules` injects a private
+`FileTransferCapability` into Handoff and starts FileTransfer before Handoff.
+Shutdown and startup rollback stop Handoff first so it can release its owned
+transfers while the Transfer system is still available.
+
+The capability exposes handle acquisition, change subscription, and lookup of
+a completed incoming transfer from one specific peer. It shares the existing
+Transfer handle provider, controller, and event stream. Transfer remains the
+only owner of file state, byte streaming, directory resolution, integrity
+verification, temporary files, and final filesystem commit.
+
+A local-video operation first checks the connected peer's negotiated
+`LocalVideoHandoff` and `FileTransfer` capabilities. It then acquires one internal
+file-transfer handle using the handoff's unique ID. File-transfer events wake
+the handoff worker through a bounded, coalesced notification channel; the worker
+reads authoritative transfer snapshots and publishes them through the existing
+Handoff change event. No second byte-progress store or transfer engine is added.
+The shared `PlaybackPosition` model is independent of YouTube validation.
+
+After Transfer reports completion, Handoff sends the exact transfer ID and
+millisecond position and waits for the usual handoff acknowledgement.
+The receiver requires an incoming `Completed` transfer from that authenticated
+sender and derives the video path from its locally committed destination.
+Unknown, incomplete, failed, outgoing, and other-peer transfers cannot produce
+a ready incoming video. The incoming Handoff event is published only after the
+ready record is committed. Duplicate requests are acknowledged without another
+event only when their sender and payload match the remembered request.
+
+Releasing the handoff releases only its owned transfer. A transfer rejection,
+failure, or cancellation produces the corresponding handoff state.
+`Handoff::transfer()` retains the last associated snapshot, including detailed
+transfer failures. Completed receiver files remain receiver-owned even if the
+later handoff message fails or the sender releases its handle. Removing a
+transfer record before its video metadata arrives causes that handoff to be
+rejected; applications should retain completed transfer records through delivery.
+Removing an incoming handoff does not delete the received file.
+
+Video input requires an absolute, non-empty regular file with an MP4, M4V,
+MKV, WebM, MOV, or AVI extension. Extensions do not prove codec support.
+The application supplies playback position and later opens and seeks the file.
+The core neither starts a player nor claims successful playback. Playback while
+downloading, media probing/transcoding, partial resume, and persistent activity
+history remain outside Phase 14.
 
 Pairing defines two system-owned event streams: immutable pairing-session
 changes and immutable trusted-device changes. Commands such as approve, reject,

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     handles::{BaseHandle, Handle, HandleError, HandleReference, UsageHandle},
@@ -49,6 +49,19 @@ impl HandoffHandle {
     ) -> Result<(), HandoffError> {
         let config =
             HandoffConfig::youtube(device_id, YouTubeHandoff::new(url, playback_position)?);
+        self.reference.configure(config).map_err(map_handle_error)
+    }
+
+    pub fn configure_local_video(
+        &self,
+        device_id: DeviceId,
+        source: impl Into<PathBuf>,
+        playback_position: Duration,
+    ) -> Result<(), HandoffError> {
+        let config = HandoffConfig::local_video(
+            device_id,
+            super::LocalVideoHandoff::new(source.into(), playback_position)?,
+        );
         self.reference.configure(config).map_err(map_handle_error)
     }
 

@@ -35,7 +35,8 @@ pub use handoff::{
     Handoff, HandoffChange, HandoffChangedDelegate, HandoffChangedSubscription, HandoffError,
     HandoffFailure, HandoffHandle, HandoffId, HandoffManager, HandoffPayload, HandoffState,
     IncomingHandoff, IncomingHandoffChange, IncomingHandoffChangedDelegate,
-    IncomingHandoffChangedSubscription, PlaybackPosition, UrlHandoff, YouTubeHandoff,
+    IncomingHandoffChangedSubscription, LocalVideoHandoff, PlaybackPosition, UrlHandoff,
+    YouTubeHandoff,
 };
 pub use locales::{
     Language, LanguageChangedDelegate, LanguageChangedSubscription, LocalizationKey,

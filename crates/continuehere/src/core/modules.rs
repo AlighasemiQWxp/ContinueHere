@@ -59,11 +59,12 @@ impl CoreModules {
             security.capability(),
             transport.pairing_capability(),
         );
-        let handoff = HandoffManager::new(transport.handoff_capability());
         let file_transfers = FileTransferManager::new(
             transport.transfer_capability(),
             settings.directories().shared(),
         );
+        let handoff =
+            HandoffManager::new(transport.handoff_capability(), file_transfers.capability());
         Ok(Self {
             settings,
             directories,
@@ -171,17 +172,17 @@ impl CoreModules {
         }
         self.pairing_started = true;
 
-        if let Err(error) = start_module(&mut self.handoff).await {
-            self.rollback_main_systems().await;
-            return Err(error);
-        }
-        self.handoff_started = true;
-
         if let Err(error) = start_module(&mut self.file_transfers).await {
             self.rollback_main_systems().await;
             return Err(error);
         }
         self.file_transfers_started = true;
+
+        if let Err(error) = start_module(&mut self.handoff).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.handoff_started = true;
 
         if let Err(error) = self.optional.start_all().await {
             self.rollback_main_systems().await;
@@ -194,15 +195,15 @@ impl CoreModules {
     pub(crate) async fn stop_all(&mut self) -> Result<()> {
         let mut first_error = self.optional.stop_all().await.err();
 
-        if self.file_transfers_started {
-            let result = stop_module(&mut self.file_transfers).await;
-            self.file_transfers_started = false;
-            keep_first_error(&mut first_error, result);
-        }
-
         if self.handoff_started {
             let result = stop_module(&mut self.handoff).await;
             self.handoff_started = false;
+            keep_first_error(&mut first_error, result);
+        }
+
+        if self.file_transfers_started {
+            let result = stop_module(&mut self.file_transfers).await;
+            self.file_transfers_started = false;
             keep_first_error(&mut first_error, result);
         }
 
@@ -261,14 +262,14 @@ impl CoreModules {
     }
 
     async fn rollback_main_systems(&mut self) {
-        if self.file_transfers_started {
-            let _ = self.file_transfers.stop().await;
-            self.file_transfers_started = false;
-        }
-
         if self.handoff_started {
             let _ = self.handoff.stop().await;
             self.handoff_started = false;
+        }
+
+        if self.file_transfers_started {
+            let _ = self.file_transfers.stop().await;
+            self.file_transfers_started = false;
         }
 
         if self.pairing_started {

@@ -19,7 +19,7 @@ use super::{
 };
 
 pub struct FileTransferManager {
-    handles: Mutex<BaseHandleProvider<FileTransferOperation>>,
+    handles: Arc<Mutex<BaseHandleProvider<FileTransferOperation>>>,
     controller: Arc<FileTransferController>,
     changed: FileTransferChangedEvent,
 }
@@ -32,24 +32,22 @@ impl FileTransferManager {
         let changed = FileTransferChangedEvent::default();
         let controller = FileTransferController::new(transport, directories, changed.clone());
         Self {
-            handles: Mutex::new(BaseHandleProvider::new()),
+            handles: Arc::new(Mutex::new(BaseHandleProvider::new())),
             controller,
             changed,
         }
     }
 
     pub fn get_handle(&self, identifier: &str) -> Result<FileTransferHandle, FileTransferError> {
-        if !self.controller.is_running() {
-            return Err(FileTransferError::ManagerUnavailable);
-        }
-        let controller = Arc::clone(&self.controller);
-        let reference = lock(&self.handles)?
-            .get_handle(identifier, {
-                let controller = Arc::clone(&controller);
-                move |identifier| FileTransferOperation::new(identifier, controller)
-            })
-            .map_err(map_handle_error)?;
-        Ok(FileTransferHandle::new(reference, controller))
+        self.capability().get_handle(identifier)
+    }
+
+    pub(crate) fn capability(&self) -> super::FileTransferCapability {
+        super::FileTransferCapability::new(
+            Arc::clone(&self.handles),
+            Arc::clone(&self.controller),
+            self.changed.clone(),
+        )
     }
 
     pub fn transfers(&self) -> Vec<FileTransfer> {

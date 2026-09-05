@@ -96,7 +96,13 @@ after its implementation and validation requirements are satisfied.
   - Incremental SHA-256 integrity verification and destination-local temporary files
   - Atomic no-overwrite final commit, cancellation cleanup, and immutable progress snapshots
   - Complete local validation suite passed
-- [ ] 14. Local video handoff
+- [x] 14. Local video handoff
+  - Complete local validation suite passed
+  - Shared Handoff lifecycle with a typed local-video payload and playback position
+  - Narrow Transfer capability with event-driven progress and owned cancellation
+  - Explicit file approval followed by complete-file verification and handoff acknowledgement
+  - Exact completed-transfer and authenticated-sender binding on the receiver
+  - Player opening and seeking remain application-interface responsibilities
 - [ ] 15. Desktop user interface
 
 ## E. Expansion

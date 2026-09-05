@@ -312,6 +312,43 @@ destination files are never replaced. Rejection, cancellation, shutdown,
 integrity failure, or filesystem failure removes incomplete temporary data.
 Phase 13 does not resume partial data; a later retry starts at byte zero.
 
+## Local video handoff
+
+Phase 14 adds `LocalVideoHandoff` capability code 4 and handoff message kind 15.
+The deterministic CBOR payload is an array of exactly three values: a 16-byte
+handoff ID, a 16-byte transfer ID, and an unsigned 64-bit millisecond playback
+position. It uses the existing handoff accepted/rejected responses.
+The message contains no source path, receiver destination path, shell command,
+or player arguments.
+
+Local-video support is advertised when both Handoff and Transfer handlers are
+available. Before creating a transfer, the sender checks that the connected
+peer advertised both local-video and file-transfer support. An unsupported
+connection cannot receive a silently downgraded ordinary file operation.
+The existing strict hello decoder rejects unknown capability codes; older
+builds that do not recognize code 4 may reject the connection itself.
+Mixed-version interoperability with those builds is not claimed.
+
+The complete video first follows the Phase 13 offer, explicit acceptance,
+bounded streaming, digest verification, and atomic commit contract.
+Only then does the sender send the playback metadata. The receiver binds the
+transfer ID to the authenticated peer and requires a completed incoming transfer
+with a locally resolved regular video file. An unverified or other-peer transfer
+cannot be turned into a ready video by supplying its ID. No file is opened or
+executed automatically.
+
+The existing bounded handoff inbox and duplicate window apply. Remembered
+duplicates must match both sender and exact typed payload; changing a transfer
+ID or playback position under a remembered handoff ID is rejected. An exact
+duplicate remains acknowledged if its transfer record was subsequently removed,
+without recreating an incoming record or opening a file.
+
+Cancellation cleans up an incomplete owned transfer through Transfer. A file
+already committed on the receiver is preserved even if handoff acknowledgement
+fails or cancellation arrives afterwards. File completion and player execution
+are separate facts: acknowledgement certifies only acceptance of the ready
+handoff record. Playback positions and handoff records remain in memory.
+
 ## Persistence boundaries
 
 Security-sensitive state remains separate from user preferences and the public
@@ -340,6 +377,7 @@ sockets, discover peers, pair devices, or claim that transfers are secure.
   framing.
 - Phases 11 and 12 implement typed URL and playback-position handoffs.
 - Phase 13 implements explicitly accepted, bounded streaming file transfer.
+- Phase 14 links verified file delivery to a local-video playback position.
 - Later phases add typed messages and limits without weakening these contracts.
 
 Any later change that weakens authentication, confidentiality, integrity,

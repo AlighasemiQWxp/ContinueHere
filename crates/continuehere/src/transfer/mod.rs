@@ -1,4 +1,7 @@
+mod capability;
 mod controller;
+
+pub(crate) use capability::FileTransferCapability;
 mod error;
 mod event;
 mod handle;

@@ -23,11 +23,18 @@ pub struct HandoffManager {
 }
 
 impl HandoffManager {
-    pub(crate) fn new(transport: HandoffTransportCapability) -> Self {
+    pub(crate) fn new(
+        transport: HandoffTransportCapability,
+        transfers: crate::transfer::FileTransferCapability,
+    ) -> Self {
         let handoff_changed = HandoffChangedEvent::default();
         let incoming_changed = IncomingHandoffChangedEvent::default();
-        let controller =
-            HandoffController::new(transport, handoff_changed.clone(), incoming_changed.clone());
+        let controller = HandoffController::new(
+            transport,
+            transfers,
+            handoff_changed.clone(),
+            incoming_changed.clone(),
+        );
         Self {
             handles: Mutex::new(BaseHandleProvider::new()),
             controller,
@@ -216,8 +223,28 @@ mod tests {
             second_security.capability(),
             second_trusted.lookup(),
         );
-        let mut first_handoff = HandoffManager::new(first_transport.handoff_capability());
-        let mut second_handoff = HandoffManager::new(second_transport.handoff_capability());
+        let first_settings =
+            crate::settings::SettingsManager::new(first_directory.path().to_path_buf())
+                .expect("settings should load");
+        let second_settings =
+            crate::settings::SettingsManager::new(second_directory.path().to_path_buf())
+                .expect("settings should load");
+        let mut first_transfers = crate::transfer::FileTransferManager::new(
+            first_transport.transfer_capability(),
+            first_settings.directories().shared(),
+        );
+        let mut second_transfers = crate::transfer::FileTransferManager::new(
+            second_transport.transfer_capability(),
+            second_settings.directories().shared(),
+        );
+        let mut first_handoff = HandoffManager::new(
+            first_transport.handoff_capability(),
+            first_transfers.capability(),
+        );
+        let mut second_handoff = HandoffManager::new(
+            second_transport.handoff_capability(),
+            second_transfers.capability(),
+        );
         first_transport
             .start()
             .await
@@ -226,6 +253,14 @@ mod tests {
             .start()
             .await
             .expect("transport should start");
+        first_transfers
+            .start()
+            .await
+            .expect("transfers should start");
+        second_transfers
+            .start()
+            .await
+            .expect("transfers should start");
         first_handoff.start().await.expect("handoff should start");
         second_handoff.start().await.expect("handoff should start");
 
@@ -327,6 +362,11 @@ mod tests {
             .expect("YouTube handle should release");
         second_handoff.stop().await.expect("handoff should stop");
         first_handoff.stop().await.expect("handoff should stop");
+        second_transfers
+            .stop()
+            .await
+            .expect("transfers should stop");
+        first_transfers.stop().await.expect("transfers should stop");
         second_transport
             .stop()
             .await

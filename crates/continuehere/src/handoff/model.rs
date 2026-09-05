@@ -2,9 +2,9 @@ use std::fmt;
 
 use uuid::Uuid;
 
-use crate::models::DeviceId;
+use crate::{models::DeviceId, transfer::FileTransfer};
 
-use super::{UrlHandoff, YouTubeHandoff};
+use super::{LocalVideoHandoff, UrlHandoff, YouTubeHandoff};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HandoffId {
@@ -62,6 +62,7 @@ pub enum HandoffFailure {
     Busy,
     TimedOut,
     Transport,
+    FileTransfer,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +70,7 @@ pub enum HandoffFailure {
 pub enum HandoffPayload {
     Url(UrlHandoff),
     YouTube(YouTubeHandoff),
+    LocalVideo(LocalVideoHandoff),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +80,7 @@ pub struct Handoff {
     payload: HandoffPayload,
     state: HandoffState,
     failure: Option<HandoffFailure>,
+    transfer: Option<FileTransfer>,
 }
 
 impl Handoff {
@@ -88,6 +91,7 @@ impl Handoff {
             payload: config.payload,
             state: HandoffState::Sending,
             failure: None,
+            transfer: None,
         }
     }
 
@@ -109,6 +113,14 @@ impl Handoff {
 
     pub const fn failure(&self) -> Option<HandoffFailure> {
         self.failure
+    }
+
+    pub fn transfer(&self) -> Option<&FileTransfer> {
+        self.transfer.as_ref()
+    }
+
+    pub(crate) fn set_transfer(&mut self, transfer: FileTransfer) {
+        self.transfer = Some(transfer);
     }
 
     pub(crate) fn deliver(&mut self) {
@@ -194,6 +206,13 @@ impl HandoffConfig {
         Self {
             device_id,
             payload: HandoffPayload::YouTube(payload),
+        }
+    }
+
+    pub(crate) fn local_video(device_id: DeviceId, payload: LocalVideoHandoff) -> Self {
+        Self {
+            device_id,
+            payload: HandoffPayload::LocalVideo(payload),
         }
     }
 
