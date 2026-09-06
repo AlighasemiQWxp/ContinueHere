@@ -5,6 +5,7 @@ import '../../src/rust/api/events.dart';
 import '../../src/rust/api/handles.dart';
 import '../../src/rust/api/manager.dart';
 import '../../src/rust/api/models.dart';
+import '../ui_notifications.dart';
 
 class TransferUiController {
   TransferUiController(
@@ -12,12 +13,14 @@ class TransferUiController {
     this._platform,
     this._onChanged,
     this._onError,
+    this._onActivity,
   );
 
   final UiBridge _bridge;
   final PlatformManager _platform;
   final void Function() _onChanged;
   final void Function(Object) _onError;
+  final UiActivityDelegate _onActivity;
   final List<UiFileTransferHandle> _handles = [];
   StreamSubscription<TransferUiEvent>? _events;
   List<UiFileTransfer> _transfers = [];
@@ -29,10 +32,15 @@ class TransferUiController {
 
   Future<void> start() async {
     _events = _bridge.watchTransfers().listen(
-      (_) => unawaited(refresh()),
+      (_) => unawaited(_refreshFromEvent()),
       onError: _onError,
     );
     await refresh();
+  }
+
+  Future<void> _refreshFromEvent() async {
+    await refresh();
+    _onActivity();
   }
 
   Future<void> sendFile(String deviceId) async {

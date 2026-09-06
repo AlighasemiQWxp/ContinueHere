@@ -10,7 +10,6 @@ class UiStrings {
   String get send => _text('Send', 'ارسال');
   String get transfers => _text('Transfers', 'انتقال‌ها');
   String get settings => _text('Settings', 'تنظیمات');
-  String get playback => _text('Playback', 'پخش');
   String get localDevice => _text('This device', 'این دستگاه');
   String get nearbyDevices => _text('Nearby devices', 'دستگاه‌های نزدیک');
   String get trustedDevices =>
@@ -64,8 +63,11 @@ class UiStrings {
   String get languageLabel => _text('Language', 'زبان');
   String get english => _text('English', 'انگلیسی');
   String get persian => _text('Persian', 'فارسی');
-  String get noVideo => _text('No video is open.', 'هیچ ویدیویی باز نیست.');
+  String get close => _text('Close', 'بستن');
+  String get mediaLoadFailed =>
+      _text('The image could not be displayed.', 'تصویر قابل نمایش نیست.');
   String get dismiss => _text('Dismiss', 'بستن');
+  String get newActivity => _text('New activity', 'فعالیت جدید');
 
   String _text(String english, String persian) {
     if (language == UiLanguage.persian) {

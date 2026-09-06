@@ -1,4 +1,5 @@
 import 'package:file_selector/file_selector.dart';
+import 'package:open_app_file/open_app_file.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PlatformManager {
@@ -19,6 +20,13 @@ class PlatformManager {
 
   Future<String?> selectDirectory() {
     return getDirectoryPath();
+  }
+
+  Future<void> openExternalFile(String path) async {
+    final result = await OpenAppFile.open(path);
+    if (result.type != ResultType.done) {
+      throw StateError(result.message);
+    }
   }
 
   Future<void> openExternalUrl(String value) async {

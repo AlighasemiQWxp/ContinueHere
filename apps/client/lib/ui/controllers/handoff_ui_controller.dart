@@ -5,6 +5,7 @@ import '../../src/rust/api/events.dart';
 import '../../src/rust/api/handles.dart';
 import '../../src/rust/api/manager.dart';
 import '../../src/rust/api/models.dart';
+import '../ui_notifications.dart';
 
 class HandoffUiController {
   HandoffUiController(
@@ -12,12 +13,14 @@ class HandoffUiController {
     this._platform,
     this._onChanged,
     this._onError,
+    this._onActivity,
   );
 
   final UiBridge _bridge;
   final PlatformManager _platform;
   final void Function() _onChanged;
   final void Function(Object) _onError;
+  final UiActivityDelegate _onActivity;
   final List<UiHandoffHandle> _handles = [];
   StreamSubscription<HandoffUiEvent>? _events;
   UiHandoffSnapshot? _snapshot;
@@ -29,10 +32,15 @@ class HandoffUiController {
 
   Future<void> start() async {
     _events = _bridge.watchHandoffs().listen(
-      (_) => unawaited(refresh()),
+      (_) => unawaited(_refreshFromEvent()),
       onError: _onError,
     );
     await refresh();
+  }
+
+  Future<void> _refreshFromEvent() async {
+    await refresh();
+    _onActivity();
   }
 
   Future<void> sendUrl(String deviceId, String url) {

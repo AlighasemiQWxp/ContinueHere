@@ -4,13 +4,20 @@ import '../../src/rust/api/events.dart';
 import '../../src/rust/api/handles.dart';
 import '../../src/rust/api/manager.dart';
 import '../../src/rust/api/models.dart';
+import '../ui_notifications.dart';
 
 class DevicesUiController {
-  DevicesUiController(this._bridge, this._onChanged, this._onError);
+  DevicesUiController(
+    this._bridge,
+    this._onChanged,
+    this._onError,
+    this._onActivity,
+  );
 
   final UiBridge _bridge;
   final void Function() _onChanged;
   final void Function(Object) _onError;
+  final UiActivityDelegate _onActivity;
   final List<UiDiscoveryHandle> _manualHandles = [];
   StreamSubscription<DevicesUiEvent>? _events;
   UiDiscoveryHandle? _localDiscovery;
@@ -23,11 +30,16 @@ class DevicesUiController {
 
   Future<void> start() async {
     _events = _bridge.watchDevices().listen(
-      (_) => unawaited(refresh()),
+      (_) => unawaited(_refreshFromEvent()),
       onError: _onError,
     );
     await refresh();
     await startLocalDiscovery();
+  }
+
+  Future<void> _refreshFromEvent() async {
+    await refresh();
+    _onActivity();
   }
 
   Future<void> startLocalDiscovery() async {

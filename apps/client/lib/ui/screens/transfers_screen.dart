@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../src/rust/api/models.dart';
 import '../ui_manager.dart';
 import '../ui_strings.dart';
+import '../widgets/ui_content_transition.dart';
 import 'screen_frame.dart';
 
 class TransfersScreen extends StatelessWidget {
@@ -19,20 +20,23 @@ class TransfersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ScreenFrame(
       title: strings.transfers,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (uiManager.transfers.isEmpty) Text(strings.noTransfers),
-          for (final transfer in uiManager.transfers)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _TransferCard(
-                transfer: transfer,
-                uiManager: uiManager,
-                strings: strings,
+      child: UiContentTransition(
+        stateKey: uiManager.transfers.isEmpty,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (uiManager.transfers.isEmpty) Text(strings.noTransfers),
+            for (final transfer in uiManager.transfers)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _TransferCard(
+                  transfer: transfer,
+                  uiManager: uiManager,
+                  strings: strings,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -76,6 +80,19 @@ class _TransferCard extends StatelessWidget {
             LinearProgressIndicator(value: _progress()),
             const SizedBox(height: 8),
             Text(_sizeLabel()),
+            if (uiManager.canOpenTransfer(transfer)) ...[
+              const SizedBox(height: 16),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilledButton.tonalIcon(
+                  onPressed: () {
+                    uiManager.openTransfer(transfer);
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text(strings.open),
+                ),
+              ),
+            ],
             if (_canAccept()) ...[
               const SizedBox(height: 16),
               Wrap(

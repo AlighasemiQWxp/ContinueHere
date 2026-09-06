@@ -5,22 +5,27 @@ import '../platform/platform_manager.dart';
 import '../src/rust/api/manager.dart';
 import '../src/rust/api/models.dart';
 import 'ui_controller.dart';
+import 'ui_file_support.dart';
+import 'ui_notifications.dart';
 import 'ui_transition.dart';
 
 class UiManager extends ChangeNotifier {
   UiManager._(this._bridge, this._platform) {
     _transition = UiTransition(notifyListeners);
+    _notifications = UiNotifications(notifyListeners);
     _controller = UiController(
       _bridge,
       _platform,
       notifyListeners,
       _receiveError,
+      _receiveActivity,
     );
   }
 
   final UiBridge _bridge;
   final PlatformManager _platform;
   late final UiController _controller;
+  late final UiNotifications _notifications;
   late final UiTransition _transition;
   Object? _error;
   bool _started = false;
@@ -56,8 +61,10 @@ class UiManager extends ChangeNotifier {
   UiHandoffSnapshot? get handoffs => _controller.handoff.snapshot;
   List<UiFileTransfer> get transfers => _controller.transfer.transfers;
   UiSettingsSnapshot? get settings => _controller.settings.snapshot;
-  VideoController get playbackVideo => _controller.playback.videoController;
-  String? get playbackFile => _controller.playback.filePath;
+  VideoController get filePreviewVideo =>
+      _controller.filePreview.videoController;
+  UiFilePreview? get filePreview => _controller.filePreview.preview;
+  bool get filePreviewVisible => _transition.filePreviewVisible;
   bool get started => _started;
   bool get busy {
     return _controller.devices.busy ||
@@ -65,7 +72,7 @@ class UiManager extends ChangeNotifier {
         _controller.handoff.busy ||
         _controller.transfer.busy ||
         _controller.settings.busy ||
-        _controller.playback.busy;
+        _controller.filePreview.busy;
   }
 
   String? get errorMessage {
@@ -80,7 +87,12 @@ class UiManager extends ChangeNotifier {
     return settings?.textDirection == UiTextDirection.rightToLeft;
   }
 
+  bool hasNotification(UiDestination destination) {
+    return _notifications.has(destination);
+  }
+
   void show(UiDestination destination) {
+    _notifications.open(destination);
     _transition.show(destination);
   }
 
@@ -195,14 +207,58 @@ class UiManager extends ChangeNotifier {
     return _controller.transfer.remove(transfer);
   }
 
+  bool canOpenTransfer(UiFileTransfer transfer) {
+    final destination = transfer.destination;
+    return transfer.direction == UiFileTransferDirection.incoming &&
+        transfer.state == UiFileTransferState.completed &&
+        destination != null;
+  }
+
+  Future<void> openTransfer(UiFileTransfer transfer) async {
+    final destination = transfer.destination;
+    if (!canOpenTransfer(transfer) || destination == null) {
+      _receiveError(StateError('This transferred file cannot be opened.'));
+      return;
+    }
+    if (UiFileSupport.isUnsafeToOpen(destination)) {
+      _receiveError(
+        StateError('Executable and script files cannot be opened here.'),
+      );
+      return;
+    }
+    final previewKind = UiFileSupport.previewKind(destination);
+    if (previewKind != null) {
+      final opened = await _controller.filePreview.open(destination);
+      if (opened) {
+        _transition.showFilePreview();
+      }
+      return;
+    }
+    try {
+      await _platform.openExternalFile(destination);
+    } catch (error) {
+      _receiveError(error);
+    }
+  }
+
+  Future<void> closeFilePreview() async {
+    _transition.hideFilePreview();
+    await _controller.filePreview.close();
+  }
+
   Future<void> openIncoming(UiIncomingHandoff handoff) async {
     final filePath = handoff.payload.filePath;
     if (filePath != null) {
       final position = Duration(
         milliseconds: handoff.payload.playbackPositionMillis.toInt(),
       );
-      await _controller.playback.open(filePath, position);
-      _transition.show(UiDestination.playback);
+      final opened = await _controller.filePreview.open(
+        filePath,
+        position: position,
+      );
+      if (opened) {
+        _transition.showFilePreview();
+      }
       return;
     }
     await _controller.handoff.openIncoming(handoff);
@@ -268,6 +324,10 @@ class UiManager extends ChangeNotifier {
   void _receiveError(Object error) {
     _error = error;
     notifyListeners();
+  }
+
+  void _receiveActivity(UiDestination destination) {
+    _notifications.receive(destination, _transition.destination);
   }
 
   Future<void> shutdown() async {

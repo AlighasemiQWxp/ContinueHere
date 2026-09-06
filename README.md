@@ -49,6 +49,7 @@ The architectural foundation is complete. It currently provides:
 - File-transfer progress, state, cancellation, and cleanup delegate events
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
+- Native Flutter Windows client with RTL localization and contextual transferred-file previews
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 The protocol and security design, Discovery, Pairing, and authenticated
@@ -56,8 +57,11 @@ Transport are complete. Phase 11 provides the validated URL handoff technical
 MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
 13 provides validated streaming file transfer. Phase 14 provides validated
 local-video handoff with playback position. The Windows interface is now in
-development. Android, Linux, macOS, and iOS will use the same Flutter client in
-later roadmap phases.
+development and includes contextual file opening without embedding a browser or
+WebView.
+Android, Linux, macOS, and iOS will use the same Flutter client in later roadmap
+phases.
+
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and

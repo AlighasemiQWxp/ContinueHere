@@ -4,13 +4,20 @@ import '../../src/rust/api/events.dart';
 import '../../src/rust/api/handles.dart';
 import '../../src/rust/api/manager.dart';
 import '../../src/rust/api/models.dart';
+import '../ui_notifications.dart';
 
 class PairingUiController {
-  PairingUiController(this._bridge, this._onChanged, this._onError);
+  PairingUiController(
+    this._bridge,
+    this._onChanged,
+    this._onError,
+    this._onActivity,
+  );
 
   final UiBridge _bridge;
   final void Function() _onChanged;
   final void Function(Object) _onError;
+  final UiActivityDelegate _onActivity;
   StreamSubscription<PairingUiEvent>? _events;
   UiPairingHandle? _activeHandle;
   UiPairingSnapshot? _snapshot;
@@ -22,10 +29,15 @@ class PairingUiController {
 
   Future<void> start() async {
     _events = _bridge.watchPairing().listen(
-      (_) => unawaited(refresh()),
+      (_) => unawaited(_refreshFromEvent()),
       onError: _onError,
     );
     await refresh();
+  }
+
+  Future<void> _refreshFromEvent() async {
+    await refresh();
+    _onActivity();
   }
 
   Future<void> pair(UiDiscoveryCandidate candidate) async {

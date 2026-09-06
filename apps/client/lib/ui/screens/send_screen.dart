@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../src/rust/api/models.dart';
 import '../ui_manager.dart';
 import '../ui_strings.dart';
+import '../widgets/ui_content_transition.dart';
 import 'screen_frame.dart';
 
 class SendScreen extends StatefulWidget {
@@ -124,36 +125,44 @@ class _SendScreenState extends State<SendScreen> {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 12),
-        if (incoming.isEmpty) Text(widget.strings.noHandoffs),
-        for (final handoff in incoming)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Card(
-              child: ListTile(
-                leading: const Icon(Icons.move_to_inbox_outlined),
-                title: Text(_handoffTitle(handoff)),
-                subtitle: Text(handoff.senderDeviceId),
-                trailing: Wrap(
-                  spacing: 8,
-                  children: [
-                    FilledButton.tonal(
-                      onPressed: () {
-                        widget.uiManager.openIncoming(handoff);
-                      },
-                      child: Text(widget.strings.open),
+        UiContentTransition(
+          stateKey: incoming.isEmpty,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (incoming.isEmpty) Text(widget.strings.noHandoffs),
+              for (final handoff in incoming)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.move_to_inbox_outlined),
+                      title: Text(_handoffTitle(handoff)),
+                      subtitle: Text(handoff.senderDeviceId),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          FilledButton.tonal(
+                            onPressed: () {
+                              widget.uiManager.openIncoming(handoff);
+                            },
+                            child: Text(widget.strings.open),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              widget.uiManager.removeIncoming(handoff);
+                            },
+                            tooltip: widget.strings.remove,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      onPressed: () {
-                        widget.uiManager.removeIncoming(handoff);
-                      },
-                      tooltip: widget.strings.remove,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+            ],
           ),
+        ),
       ],
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../src/rust/api/models.dart';
 import '../ui_manager.dart';
 import '../ui_strings.dart';
+import '../widgets/language_radio_group.dart';
 import 'screen_frame.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -81,21 +82,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          SegmentedButton<UiLanguage>(
-            segments: [
-              ButtonSegment(
-                value: UiLanguage.english,
-                label: Text(widget.strings.english),
-              ),
-              ButtonSegment(
-                value: UiLanguage.persian,
-                label: Text(widget.strings.persian),
-              ),
-            ],
-            selected: {settings?.language ?? UiLanguage.english},
-            onSelectionChanged: (selection) {
-              widget.uiManager.changeLanguage(selection.first);
-            },
+          LanguageRadioGroup(
+            language: settings?.language ?? UiLanguage.english,
+            strings: widget.strings,
+            onSelected: widget.uiManager.changeLanguage,
           ),
         ],
       ),

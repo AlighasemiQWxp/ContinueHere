@@ -27,9 +27,9 @@ to the same Flutter source tree.
 
 `UiManager` is the main user-interface module. The application root constructs
 it with a narrow Rust bridge and platform capabilities. `UiManager` privately
-constructs and owns `UiController` and `UiTransition`; neither child is exposed
-to widgets. Widgets read immutable UI state and express user intentions through
-the small public `UiManager` API.
+constructs and owns `UiController`, `UiTransition`, and `UiNotifications`;
+none of these children is exposed to widgets. Widgets read immutable UI state
+and express user intentions through the small public `UiManager` API.
 
 The UI hierarchy is:
 
@@ -40,12 +40,13 @@ ContinueHere client
 ├── PlatformManager
 └── UiManager
     ├── UiTransition
+    ├── UiNotifications
     └── UiController
         ├── DevicesUiController
         ├── PairingUiController
         ├── HandoffUiController
         ├── TransferUiController
-        ├── PlaybackUiController
+        ├── FilePreviewUiController
         └── SettingsUiController
 ```
 
@@ -55,6 +56,21 @@ interface, preventing the parent from collecting feature-specific logic.
 `UiTransition` owns route, dialog, and animation sequencing only. It never
 decides whether a pairing, handoff, or transfer succeeds.
 
+`UiNotifications` owns unread presentation state for navigation destinations.
+Focused controllers report meaningful post-commit activity after refreshing
+their authoritative snapshots. Activity on the current destination is ignored;
+activity elsewhere sets one unread badge, and opening that destination clears
+it. Repeated events remain coalesced into the same badge, so discovery and
+transfer progress cannot create an unbounded notification count. Startup
+snapshot loading never creates unread state.
+
+Short state-driven animations render route changes, badge appearance, error
+presentation, file-preview opening, connection changes, and empty-to-populated
+content changes. `UiMotion` defines their shared timing and curves and disables
+their duration when the operating system requests reduced motion. Animations do
+not delay commands, loop decoratively, or animate continuous event traffic
+beyond the existing progress indicators.
+
 `UiBridge` is the only Dart-to-Rust boundary. It starts and stops the core,
 converts typed models and errors, forwards system events, and presents opaque
 wrappers around the existing Rust Handles. It contains no presentation or
@@ -63,8 +79,31 @@ workflow policy. The `continuehere` core crate remains unaware of Flutter.
 `PlatformManager` is an application-level sibling of `UiManager`. It owns
 replaceable platform operations such as file and directory selection and
 opening external URLs. Controllers receive only the platform capabilities they
-need. Local playback state and seeking belong to `PlaybackUiController`, while
-the media backend remains replaceable.
+need. Opening ordinary transferred files through an installed application
+belongs to `PlatformManager`. Local image and video preview state, video
+seeking, and cleanup belong to `FilePreviewUiController`, while the media
+backend remains replaceable.
+
+### Transferred-file opening
+
+File opening is contextual and does not add a permanent navigation destination.
+Every completed incoming transfer with a committed destination offers Open on
+its transfer card. `UiManager.openTransfer` validates that state and selects
+the appropriate presentation path.
+
+Images open in a fade-in application overlay using Flutter's file-backed image
+decoder and an interactive viewer for pan and zoom. Videos use the same overlay
+with the existing MediaKit player. `UiTransition` owns overlay visibility and
+transition sequencing; `FilePreviewUiController` owns the active preview and
+player lifecycle. Closing the overlay stops video playback and clears its
+state. Received local-video handoffs use this path and preserve their requested
+playback position.
+
+Other files are passed to the operating system's associated installed
+application through `PlatformManager`. A missing association or platform error
+is reported through the normal UI error path. Executable and script extensions
+are refused rather than launched. The preview itself has no browser, WebView,
+or hosted-media dependency.
 
 Known UI modules are explicit typed fields rather than entries in a general
 registry. No service locator, repository layer, or separate ViewModel layer is

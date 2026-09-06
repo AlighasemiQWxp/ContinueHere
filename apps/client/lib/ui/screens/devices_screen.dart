@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../src/rust/api/models.dart';
 import '../ui_manager.dart';
+import '../ui_motion.dart';
 import '../ui_strings.dart';
+import '../widgets/ui_content_transition.dart';
 import 'screen_frame.dart';
 
 class DevicesScreen extends StatefulWidget {
@@ -50,18 +52,35 @@ class _DevicesScreenState extends State<DevicesScreen> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          if (devices == null || devices.candidates.isEmpty)
-            Text(widget.strings.noNearbyDevices),
-          if (devices != null) ...devices.candidates.map(_candidate),
+          UiContentTransition(
+            stateKey: devices?.candidates.isEmpty ?? true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (devices == null || devices.candidates.isEmpty)
+                  Text(widget.strings.noNearbyDevices),
+                if (devices != null) ...devices.candidates.map(_candidate),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
           Text(
             widget.strings.trustedDevices,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
-          if (devices == null || devices.trustedDevices.isEmpty)
-            Text(widget.strings.noTrustedDevices),
-          if (devices != null) ...devices.trustedDevices.map(_trustedDevice),
+          UiContentTransition(
+            stateKey: devices?.trustedDevices.isEmpty ?? true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (devices == null || devices.trustedDevices.isEmpty)
+                  Text(widget.strings.noTrustedDevices),
+                if (devices != null)
+                  ...devices.trustedDevices.map(_trustedDevice),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -79,6 +98,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   Widget _pairing(UiPairingSnapshot? snapshot) {
     final sessions = snapshot?.sessions ?? [];
+    VoidCallback? receivePairing;
+    if (!widget.uiManager.busy) {
+      receivePairing = widget.uiManager.receivePairing;
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -94,41 +117,47 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   ),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: widget.uiManager.busy
-                      ? null
-                      : widget.uiManager.receivePairing,
+                  onPressed: receivePairing,
                   icon: const Icon(Icons.call_received),
                   label: Text(widget.strings.receivePairing),
                 ),
               ],
             ),
-            for (final session in sessions) ...[
-              const SizedBox(height: 16),
-              Text(session.peerDisplayName ?? session.state.name),
-              if (session.manualCode != null)
-                SelectableText(
-                  session.manualCode!,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
+            UiContentTransition(
+              stateKey: sessions.isEmpty,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FilledButton(
-                    onPressed: widget.uiManager.approvePairing,
-                    child: Text(widget.strings.approve),
-                  ),
-                  OutlinedButton(
-                    onPressed: widget.uiManager.rejectPairing,
-                    child: Text(widget.strings.reject),
-                  ),
-                  TextButton(
-                    onPressed: widget.uiManager.cancelPairing,
-                    child: Text(widget.strings.cancel),
-                  ),
+                  for (final session in sessions) ...[
+                    const SizedBox(height: 16),
+                    Text(session.peerDisplayName ?? session.state.name),
+                    if (session.manualCode != null)
+                      SelectableText(
+                        session.manualCode!,
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: widget.uiManager.approvePairing,
+                          child: Text(widget.strings.approve),
+                        ),
+                        OutlinedButton(
+                          onPressed: widget.uiManager.rejectPairing,
+                          child: Text(widget.strings.reject),
+                        ),
+                        TextButton(
+                          onPressed: widget.uiManager.cancelPairing,
+                          child: Text(widget.strings.cancel),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -204,29 +233,40 @@ class _DevicesScreenState extends State<DevicesScreen> {
   Widget _trustedDevice(UiTrustedDevice device) {
     final connected = widget.uiManager.isConnected(device.id);
     var connectionIcon = Icons.link_off;
+    Widget connectionButton = FilledButton.tonal(
+      key: const ValueKey('connect'),
+      onPressed: () => widget.uiManager.connect(device),
+      child: Text(widget.strings.connect),
+    );
     if (connected) {
       connectionIcon = Icons.link;
+      connectionButton = OutlinedButton(
+        key: const ValueKey('disconnect'),
+        onPressed: () => widget.uiManager.disconnect(device),
+        child: Text(widget.strings.disconnect),
+      );
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Card(
         child: ListTile(
-          leading: Icon(connectionIcon),
+          leading: AnimatedSwitcher(
+            duration: UiMotion.quick(context),
+            switchInCurve: UiMotion.enterCurve,
+            switchOutCurve: UiMotion.exitCurve,
+            child: Icon(connectionIcon, key: ValueKey(connected)),
+          ),
           title: Text(device.displayName),
           subtitle: Text(device.platform.name),
           trailing: Wrap(
             spacing: 8,
             children: [
-              if (connected)
-                OutlinedButton(
-                  onPressed: () => widget.uiManager.disconnect(device),
-                  child: Text(widget.strings.disconnect),
-                ),
-              if (!connected)
-                FilledButton.tonal(
-                  onPressed: () => widget.uiManager.connect(device),
-                  child: Text(widget.strings.connect),
-                ),
+              AnimatedSwitcher(
+                duration: UiMotion.quick(context),
+                switchInCurve: UiMotion.enterCurve,
+                switchOutCurve: UiMotion.exitCurve,
+                child: connectionButton,
+              ),
               IconButton(
                 onPressed: () => widget.uiManager.forget(device),
                 tooltip: widget.strings.forget,
