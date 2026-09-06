@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/continuehere"]
+members = ["crates/continuehere", "crates/continuehere_bridge"]
 resolver = "3"
 
 [workspace.package]
@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license-file = "LICENSE"
-authors = ["Dalton"]
+authors = ["AlighasemiQWxp"]
 description = "A modular cross-platform application for continuing activities on trusted devices"
 repository = "https://github.com/AlighasemiQWxp/ContinueHere"
 keywords = ["handoff", "cross-platform", "continuity", "device"]

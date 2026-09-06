@@ -104,6 +104,12 @@ after its implementation and validation requirements are satisfied.
   - Exact completed-transfer and authenticated-sender binding on the receiver
   - Player opening and seeking remain application-interface responsibilities
 - [ ] 15. Desktop user interface
+  - One Flutter client shared by the planned desktop and mobile platforms
+  - Native Windows runner without a browser or WebView dependency
+  - Application-level `UiManager` with private Controller and Transition children
+  - Typed Rust bridge that preserves existing events and Handle lifecycles
+  - Discovery, pairing, handoff, transfer, playback, settings, and localization flows
+  - Focused Rust bridge, Dart controller, widget, RTL, and lifecycle tests
 
 ## E. Expansion
 

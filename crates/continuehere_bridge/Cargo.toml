@@ -1,0 +1,26 @@
+[package]
+name = "continuehere_bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+authors.workspace = true
+description = "Native Flutter bridge for ContinueHere"
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+continuehere = { path = "../continuehere" }
+flutter_rust_bridge = "=2.13.0"
+tokio.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

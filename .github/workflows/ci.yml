@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   quality:
-    name: Format, lint, and test
+    name: Rust format, lint, and test
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -40,3 +40,44 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace
+
+  windows-client:
+    name: Windows client
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: apps/client
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Use stable Rust
+        run: rustup default stable
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Resolve client dependencies
+        run: flutter pub get
+
+      - name: Check Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze client
+        run: flutter analyze
+
+      - name: Test client
+        run: flutter test
+
+      - name: Build Windows client
+        run: flutter build windows

@@ -11,12 +11,93 @@ code is added incrementally without coupling unrelated systems together.
 ## Workspace boundaries
 
 - `crates/continuehere` contains the reusable core application library.
-- `apps/desktop` is reserved for the desktop application.
-- `apps/mobile` is reserved for future mobile applications.
+- `apps/client` contains the Flutter application shared by desktop and mobile
+  platforms.
 - `docs` records stable architectural decisions and the development roadmap.
 
 Application crates may depend on the core library. The core library must not
 depend on an application or user-interface implementation.
+
+## User interface
+
+The Flutter application is a native client of the Rust core. It does not add a
+web application, browser runtime, or WebView layer. Phase 15 introduces the
+Windows runner first; later roadmap phases add Android, Linux, macOS, and iOS
+to the same Flutter source tree.
+
+`UiManager` is the main user-interface module. The application root constructs
+it with a narrow Rust bridge and platform capabilities. `UiManager` privately
+constructs and owns `UiController` and `UiTransition`; neither child is exposed
+to widgets. Widgets read immutable UI state and express user intentions through
+the small public `UiManager` API.
+
+The UI hierarchy is:
+
+```text
+ContinueHere client
+├── UiBridge
+│   └── ContinueHere Rust core
+├── PlatformManager
+└── UiManager
+    ├── UiTransition
+    └── UiController
+        ├── DevicesUiController
+        ├── PairingUiController
+        ├── HandoffUiController
+        ├── TransferUiController
+        ├── PlaybackUiController
+        └── SettingsUiController
+```
+
+`UiController` coordinates presentation workflows. Its focused child
+controllers own the state and operation lifetimes for one area of the
+interface, preventing the parent from collecting feature-specific logic.
+`UiTransition` owns route, dialog, and animation sequencing only. It never
+decides whether a pairing, handoff, or transfer succeeds.
+
+`UiBridge` is the only Dart-to-Rust boundary. It starts and stops the core,
+converts typed models and errors, forwards system events, and presents opaque
+wrappers around the existing Rust Handles. It contains no presentation or
+workflow policy. The `continuehere` core crate remains unaware of Flutter.
+
+`PlatformManager` is an application-level sibling of `UiManager`. It owns
+replaceable platform operations such as file and directory selection and
+opening external URLs. Controllers receive only the platform capabilities they
+need. Local playback state and seeking belong to `PlaybackUiController`, while
+the media backend remains replaceable.
+
+Known UI modules are explicit typed fields rather than entries in a general
+registry. No service locator, repository layer, or separate ViewModel layer is
+introduced. A new abstraction is added only when more than one real
+implementation or consumer requires it.
+
+### UI commands and events
+
+A UI command expresses an intention, such as starting discovery, approving a
+pairing, or sending a URL. Rust remains authoritative for security, protocol,
+path, size, and Handle-state validation. `UiManager` performs only immediate
+presentation validation, such as requiring a selected device or parsing a
+playback position.
+
+Core delegates are forwarded as typed Dart streams. A controller receives a
+post-commit event, refreshes its immutable UI state from the authoritative
+snapshot when necessary, and notifies `UiManager`. Generic maps and a global
+event bus are not used. Commands request changes; events announce completed
+state changes.
+
+### UI Handle ownership
+
+The interface preserves the shared Handle lifecycle:
+
+```text
+Get -> Configure -> Use -> Observe -> Release
+```
+
+The focused child controller owns each active opaque Handle for the full
+operation lifetime. Completion, cancellation, replacement, and application
+shutdown explicitly release the Handle. Rust `Drop` remains a final safety net,
+not the normal UI cleanup mechanism. Screen disposal does not cancel work that
+the owning controller intentionally keeps alive.
 
 ## Application root
 

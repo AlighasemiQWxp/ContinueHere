@@ -3,8 +3,9 @@
 [![CI](https://github.com/AlighasemiQWxp/ContinueHere/actions/workflows/ci.yml/badge.svg)](https://github.com/AlighasemiQWxp/ContinueHere/actions/workflows/ci.yml)
 
 ContinueHere is an in-development cross-platform application for continuing an
-activity on another trusted device. The project is written in Rust and is being
-built as a collection of small, focused modules with clear ownership boundaries.
+activity on another trusted device. Its reusable core is written in Rust, and
+its native client is being built with Flutter. Both sides use small, focused
+modules with clear ownership boundaries.
 
 ## Project status
 
@@ -54,8 +55,9 @@ The protocol and security design, Discovery, Pairing, and authenticated
 Transport are complete. Phase 11 provides the validated URL handoff technical
 MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
 13 provides validated streaming file transfer. Phase 14 provides validated
-local-video handoff with playback position. Desktop and mobile interfaces
-remain planned work.
+local-video handoff with playback position. The Windows interface is now in
+development. Android, Linux, macOS, and iOS will use the same Flutter client in
+later roadmap phases.
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
 [protocol and security design](docs/PROTOCOL_SECURITY.md) and
@@ -86,9 +88,9 @@ opening, and seeking belong to the application interface.
 The initial file-name extensions are MP4, M4V, MKV, WebM, MOV, and AVI,
 case-insensitively. This checks file eligibility, not media decodability.
 Empty files, directories, and symbolic-link sources are rejected. Playback
-starts only through a future application integration after the complete file
-arrives. This phase does not add playback during download, transcoding, partial
-transfer resume, or persistent history.
+starts through the application interface only after the complete file arrives.
+The client does not add playback during download, transcoding, partial transfer
+resume, or persistent history.
 
 ## Design goals
 
@@ -104,10 +106,10 @@ transfer resume, or persistent history.
 ```text
 ContinueHere/
 ├── apps/
-│   ├── desktop/          Planned desktop application
-│   └── mobile/           Planned mobile application
+│   └── client/           Shared Flutter application
 ├── crates/
-│   └── continuehere/     Core Rust library
+│   ├── continuehere/     Core Rust library
+│   └── continuehere_bridge/  Flutter bridge
 └── docs/                 Architecture and roadmap documentation
 ```
 
@@ -139,6 +141,9 @@ the project directory.
 - Rust 1.88 or newer on the stable release channel
 - `rustfmt`
 - Clippy
+- Flutter 3.47.2 on the stable channel
+- Visual Studio 2022 with the Desktop development with C++ workload on Windows
+- `flutter_rust_bridge_codegen` 2.13.0 when changing the bridge API
 
 The repository includes `rust-toolchain.toml`, so Rustup can install the required
 components automatically.
@@ -152,6 +157,12 @@ cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
+cd apps/client
+flutter pub get
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
+flutter build windows
 ```
 
 ## Contributing
