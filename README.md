@@ -184,6 +184,7 @@ the project directory.
 - `rustfmt`
 - Clippy
 - Slint 1.17.1, resolved by Cargo
+- `pkg-config` and `libfontconfig1-dev` when building on Debian or Ubuntu Linux
 - Flutter 3.47.2 on the stable channel
 - Visual Studio 2022 with the Desktop development with C++ workload on Windows
 - `flutter_rust_bridge_codegen` 2.13.0 when changing the bridge API
