@@ -4,9 +4,9 @@ use async_trait::async_trait;
 
 use crate::{
     core::{error::ModuleError, module::Module},
+    devices::DeviceIdentityCapability,
     discovery::DiscoveryEndpoint,
     handles::BaseHandleProvider,
-    managers::device::DeviceIdentityCapability,
     models::DeviceId,
     security::SecurityCapability,
     transport::PairingTransportCapability,
@@ -144,8 +144,8 @@ mod tests {
     use super::PairingManager;
     use crate::{
         core::module::Module,
+        devices::DeviceManager,
         discovery::DiscoveryEndpoint,
-        managers::DeviceManager,
         models::DeviceId,
         pairing::{PairingMode, PairingState, TrustedDeviceRegistry},
         security::{CredentialStore, SecurityError, SecurityManager},

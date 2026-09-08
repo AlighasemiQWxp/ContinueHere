@@ -128,7 +128,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::DeviceManager;
-    use crate::{core::module::Module, managers::DeviceIdentityChangedDelegate};
+    use crate::{core::module::Module, devices::DeviceIdentityChangedDelegate};
 
     #[tokio::test]
     async fn manager_reloads_the_same_identity_after_restart() {

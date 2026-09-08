@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use crate::{
     Result,
     core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
+    devices::DeviceManager,
     directories::DirectoryManager,
     discovery::DiscoveryManager,
     handoff::HandoffManager,
     locales::LocalizationManager,
-    managers::DeviceManager,
     pairing::PairingManager,
     settings::SettingsManager,
     transfer::FileTransferManager,

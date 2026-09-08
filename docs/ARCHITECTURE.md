@@ -173,6 +173,20 @@ but it must not own another independent main system. In particular,
 `SettingsManager` does not own systems merely because they have configurable
 settings.
 
+Rust feature modules organize related code and control its visibility; they do
+not replace runtime objects. Each independent system has a feature module at the
+crate root, such as `devices`, `discovery`, or `transport`. Its Manager remains a
+`struct` with an `impl`, owns its same-system children through private fields,
+and presents the system's small stable API.
+
+`CoreModules` is the composition root. It constructs each Manager and injects
+only the typed capabilities that Manager requires. The shared `Module` trait is
+limited to lifecycle coordination through `start` and `stop`; it is not a base
+object or a dependency container. A system-specific dependency struct should be
+introduced only when it makes a real constructor easier to read. Generic
+top-level groupings such as `managers`, `controllers`, or `backends` are avoided:
+those implementation roles live inside the feature that owns them.
+
 ## Settings communication
 
 Systems communicate with `SettingsManager` through narrow, typed settings

@@ -126,8 +126,8 @@ mod tests {
     use super::HandoffManager;
     use crate::{
         core::module::Module,
+        devices::DeviceManager,
         discovery::DiscoveryEndpoint,
-        managers::DeviceManager,
         models::{Capability, DeviceId},
         pairing::{TrustedDevice, TrustedDeviceRegistry},
         security::{CredentialStore, SecurityError, SecurityManager},

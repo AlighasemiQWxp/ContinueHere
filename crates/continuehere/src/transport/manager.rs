@@ -12,8 +12,8 @@ use tokio::{
 
 use crate::{
     core::{error::ModuleError, module::Module},
+    devices::DeviceIdentityCapability,
     discovery::DiscoveryEndpoint,
-    managers::device::DeviceIdentityCapability,
     models::DeviceId,
     pairing::TrustedPeerLookup,
     security::SecurityCapability,
@@ -249,8 +249,8 @@ mod tests {
 
     use super::{Module, TransportManager};
     use crate::{
+        devices::DeviceManager,
         discovery::DiscoveryEndpoint,
-        managers::DeviceManager,
         pairing::{TrustedDevice, TrustedDeviceRegistry},
         security::{CredentialStore, SecurityError, SecurityManager},
     };

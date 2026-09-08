@@ -8,7 +8,7 @@ use std::{
 use uuid::Uuid;
 
 use crate::{
-    managers::device::DeviceIdentityCapability,
+    devices::DeviceIdentityCapability,
     models::{DeviceId, LocalDeviceIdentity, ProtocolVersion},
     security::SecurityCapability,
     transport::{PairingHello, PairingMessage, PairingTransportCapability, TransportError},

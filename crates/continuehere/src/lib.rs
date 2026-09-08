@@ -1,8 +1,6 @@
-mod activities;
 mod app;
-mod backends;
-mod controllers;
 mod core;
+mod devices;
 mod directories;
 mod discovery;
 #[allow(
@@ -13,17 +11,18 @@ mod discovery;
 mod handles;
 mod handoff;
 mod locales;
-mod managers;
 mod models;
 mod pairing;
 mod security;
 mod settings;
 mod transfer;
 mod transport;
-mod utils;
 
 pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
+pub use devices::{
+    DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription, DeviceManager,
+};
 pub use directories::{DirectoryChangedDelegate, DirectoryChangedSubscription, DirectoryManager};
 pub use discovery::{
     DiscoveryCandidate, DiscoveryCandidateId, DiscoveryChange, DiscoveryChangedDelegate,
@@ -41,9 +40,6 @@ pub use handoff::{
 pub use locales::{
     Language, LanguageChangedDelegate, LanguageChangedSubscription, LocalizationKey,
     LocalizationManager, TextDirection,
-};
-pub use managers::{
-    DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription, DeviceManager,
 };
 pub use models::{
     Capability, Device, DeviceId, DeviceIdError, DeviceState, LocalDeviceIdentity, Platform,

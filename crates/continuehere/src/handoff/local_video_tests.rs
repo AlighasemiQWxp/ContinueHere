@@ -9,8 +9,8 @@ use tempfile::{TempDir, tempdir};
 
 use crate::{
     core::module::Module,
+    devices::DeviceManager,
     discovery::DiscoveryEndpoint,
-    managers::DeviceManager,
     models::DeviceId,
     pairing::{TrustedDevice, TrustedDeviceRegistry},
     security::{CredentialStore, SecurityError, SecurityManager},

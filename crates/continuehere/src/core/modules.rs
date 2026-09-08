@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use crate::{
     Error, Result,
+    devices::DeviceManager,
     directories::DirectoryManager,
     discovery::DiscoveryManager,
     handoff::HandoffManager,
     locales::LocalizationManager,
-    managers::DeviceManager,
     pairing::{PairingManager, TrustedDeviceRegistry},
     security::SecurityManager,
     settings::SettingsManager,
