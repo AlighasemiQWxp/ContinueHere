@@ -104,12 +104,14 @@ after its implementation and validation requirements are satisfied.
   - Exact completed-transfer and authenticated-sender binding on the receiver
   - Player opening and seeking remain application-interface responsibilities
 - [ ] 15. Desktop user interface
-  - One Flutter client shared by the planned desktop and mobile platforms
-  - Native Windows runner without a browser or WebView dependency
-  - Application-level `UiManager` with private Controller and Transition children
-  - Typed Rust bridge that preserves existing events and Handle lifecycles
-  - Discovery, pairing, handoff, transfer opening and previews, settings, and localization flows
-  - Focused Rust bridge, Dart controller, widget, RTL, and lifecycle tests
+  - Migrate the native client from Flutter to Rust with Slint presentation
+  - Direct Rust core ownership without a Dart bridge in the final client
+  - Initial Slint slice: startup, shutdown, Devices, Settings, core delegates,
+    discovery Handle ownership, and English/Persian layout
+  - Port pairing, handoff, transfer opening and previews, history, and remaining
+    platform capabilities before removing the Flutter reference
+  - Validate RTL input/layout, accessibility, media behavior, and packaging on
+    every supported platform
 
 ## E. Expansion
 

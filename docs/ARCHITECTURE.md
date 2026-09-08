@@ -11,14 +11,54 @@ code is added incrementally without coupling unrelated systems together.
 ## Workspace boundaries
 
 - `crates/continuehere` contains the reusable core application library.
+- `apps/client_slint` contains the native Rust/Slint client that will replace
+  the Flutter client incrementally.
 - `apps/client` contains the Flutter application shared by desktop and mobile
-  platforms.
+  platforms and remains the feature-complete migration reference.
 - `docs` records stable architectural decisions and the development roadmap.
 
 Application crates may depend on the core library. The core library must not
 depend on an application or user-interface implementation.
 
 ## User interface
+
+The target interface is a native Slint client whose application logic is Rust.
+The core remains UI-independent and has no Slint dependency. `UiManager` owns
+focused Rust controllers, and those controllers call the existing typed Manager
+APIs directly. Core delegates schedule refresh requests onto Slint's UI event
+loop, where the owning controller rebuilds an immutable display snapshot. Slint
+models contain presentation data only; they do not become a second source of
+application state.
+
+The initial migration slice owns `ContinueHere` directly and provides Devices
+and Settings. `DevicesUiController` retains discovery Handles and subscriptions
+for their complete lifetimes. `SettingsUiController` uses the existing settings,
+directory, device, and localization paths, and refreshes after their persisted
+post-commit events. The top-level manager drops its controllers before consuming
+the core for orderly shutdown.
+
+The Slint package keeps `unsafe_code` and production-placeholder Clippy lints
+denied for handwritten Rust. It does not inherit the workspace-level
+`forbid(unsafe_code)` setting because Slint's generated component code contains
+narrowly scoped unsafe allowances required by the framework. The generated
+module also receives a narrow `clippy::todo` allowance for Slint's unreachable
+Rust-component embedding stubs. The reusable core continues to forbid unsafe
+code and deny production placeholders.
+
+```text
+Rust/Slint client
+└── UiManager
+    ├── ContinueHere Rust core
+    ├── DevicesUiController
+    └── SettingsUiController
+```
+
+During migration, `apps/client` remains available as the behavior reference for
+screens that have not been ported. The Dart bridge is retained only for that
+client and will be removed with Flutter after feature parity and platform
+acceptance.
+
+### Existing Flutter reference
 
 The Flutter application is a native client of the Rust core. It does not add a
 web application, browser runtime, or WebView layer. Phase 15 introduces the

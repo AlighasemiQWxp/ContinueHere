@@ -17,3 +17,10 @@ without prior written permission from the copyright holder.
 This notice summarizes the project restrictions but does not replace or modify
 the [license](LICENSE). If this notice and the license differ, the license
 controls.
+
+## Third-party framework disclosure
+
+The native Rust client uses the Slint UI framework under Slint's royalty-free
+license option. The application includes the required visible Slint disclosure.
+Slint remains copyright its respective contributors and is distributed under
+its own license terms: <https://slint.dev/legal/royalty-free-license/>.

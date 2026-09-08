@@ -3,9 +3,9 @@
 [![CI](https://github.com/AlighasemiQWxp/ContinueHere/actions/workflows/ci.yml/badge.svg)](https://github.com/AlighasemiQWxp/ContinueHere/actions/workflows/ci.yml)
 
 ContinueHere is an in-development cross-platform application for continuing an
-activity on another trusted device. Its reusable core is written in Rust, and
-its native client is being built with Flutter. Both sides use small, focused
-modules with clear ownership boundaries.
+activity on another trusted device. Its reusable core and new native client are
+written in Rust, with Slint used for declarative presentation. Small, focused
+modules keep ownership boundaries clear.
 
 ## Project status
 
@@ -50,6 +50,8 @@ The architectural foundation is complete. It currently provides:
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
 - Native Flutter Windows client with RTL localization and contextual transferred-file previews
+- Initial Rust/Slint desktop client with direct core ownership, Devices, Settings,
+  event-driven snapshots, and English/Persian presentation
 - Device-grouped activity history and manual retry (desktop acceptance pending)
 - Automated tests for the public API, module lifecycle, and handle behavior
 
@@ -57,11 +59,11 @@ The protocol and security design, Discovery, Pairing, and authenticated
 Transport are complete. Phase 11 provides the validated URL handoff technical
 MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
 13 provides validated streaming file transfer. Phase 14 provides validated
-local-video handoff with playback position. The Windows interface is now in
-development and includes contextual file opening without embedding a browser or
-WebView.
-Android, Linux, macOS, and iOS will use the same Flutter client in later roadmap
-phases.
+local-video handoff with playback position. The existing Flutter Windows
+interface includes contextual file opening without embedding a browser or
+WebView. A Rust/Slint client now runs beside it while the interface is migrated
+feature by feature. Flutter remains the feature-complete reference until the
+Slint client reaches parity and passes platform acceptance.
 
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
@@ -145,7 +147,8 @@ retried from the local cache; missing cached packages still fail explicitly.
 ```text
 ContinueHere/
 ├── apps/
-│   └── client/           Shared Flutter application
+│   ├── client/           Existing Flutter migration reference
+│   └── client_slint/     Native Rust/Slint application
 ├── crates/
 │   ├── continuehere/     Core Rust library
 │   └── continuehere_bridge/  Flutter bridge
@@ -180,12 +183,25 @@ the project directory.
 - Rust 1.88 or newer on the stable release channel
 - `rustfmt`
 - Clippy
+- Slint 1.17.1, resolved by Cargo
 - Flutter 3.47.2 on the stable channel
 - Visual Studio 2022 with the Desktop development with C++ workload on Windows
 - `flutter_rust_bridge_codegen` 2.13.0 when changing the bridge API
 
 The repository includes `rust-toolchain.toml`, so Rustup can install the required
 components automatically.
+
+Run the Rust/Slint desktop client from the repository root with:
+
+```powershell
+cargo run -p continuehere_client_slint
+```
+
+The client stores application data in the platform's application-data directory.
+On Windows it intentionally reuses the existing Flutter client's
+`AlighasemiQWxp/ContinueHere` directory. The first migration slice supports local and
+manual discovery, device snapshots, trusted-device connection state, device-name
+and destination-directory settings, and live English/Persian layout changes.
 
 ### Validation
 

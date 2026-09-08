@@ -1,0 +1,26 @@
+[package]
+name = "continuehere_client_slint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+authors.workspace = true
+description = "Native Slint client for ContinueHere"
+repository.workspace = true
+publish = false
+
+[dependencies]
+continuehere = { path = "../../crates/continuehere" }
+slint.workspace = true
+tokio.workspace = true
+
+[build-dependencies]
+slint-build = "=1.17.1"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
