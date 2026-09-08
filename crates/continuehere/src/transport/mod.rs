@@ -15,6 +15,7 @@ mod verifier;
 
 pub use error::TransportError;
 pub use event::{ConnectionChangedDelegate, ConnectionChangedSubscription};
+pub(crate) use manager::ConnectionCapability;
 pub use manager::TransportManager;
 pub use model::{AuthenticatedConnection, ConnectionChange, ConnectionDirection};
 

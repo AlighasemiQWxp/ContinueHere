@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/activity.dart';
 import 'api/error.dart';
 import 'api/events.dart';
 import 'api/handles.dart';
@@ -166,10 +167,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<UiActivityEvent> dco_decode_StreamSink_ui_activity_event_Sse(
+    dynamic raw,
+  );
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   UiFileTransfer dco_decode_box_autoadd_ui_file_transfer(dynamic raw);
@@ -204,6 +213,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<UiActivity> dco_decode_list_ui_activity(dynamic raw);
+
+  @protected
   List<UiConnection> dco_decode_list_ui_connection(dynamic raw);
 
   @protected
@@ -231,6 +243,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   UiFileTransfer? dco_decode_opt_box_autoadd_ui_file_transfer(dynamic raw);
@@ -269,6 +284,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_u_8(dynamic raw);
+
+  @protected
+  UiActivity dco_decode_ui_activity(dynamic raw);
+
+  @protected
+  UiActivityDirection dco_decode_ui_activity_direction(dynamic raw);
+
+  @protected
+  UiActivityEvent dco_decode_ui_activity_event(dynamic raw);
+
+  @protected
+  UiActivityKind dco_decode_ui_activity_kind(dynamic raw);
+
+  @protected
+  UiActivitySnapshot dco_decode_ui_activity_snapshot(dynamic raw);
+
+  @protected
+  UiActivityStatus dco_decode_ui_activity_status(dynamic raw);
 
   @protected
   UiBridgeError dco_decode_ui_bridge_error(dynamic raw);
@@ -488,10 +521,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<UiActivityEvent> sse_decode_StreamSink_ui_activity_event_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   UiFileTransfer sse_decode_box_autoadd_ui_file_transfer(
@@ -534,6 +575,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<UiActivity> sse_decode_list_ui_activity(SseDeserializer deserializer);
+
+  @protected
   List<UiConnection> sse_decode_list_ui_connection(
     SseDeserializer deserializer,
   );
@@ -571,6 +615,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   UiFileTransfer? sse_decode_opt_box_autoadd_ui_file_transfer(
@@ -619,6 +666,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
+
+  @protected
+  UiActivity sse_decode_ui_activity(SseDeserializer deserializer);
+
+  @protected
+  UiActivityDirection sse_decode_ui_activity_direction(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiActivityEvent sse_decode_ui_activity_event(SseDeserializer deserializer);
+
+  @protected
+  UiActivityKind sse_decode_ui_activity_kind(SseDeserializer deserializer);
+
+  @protected
+  UiActivitySnapshot sse_decode_ui_activity_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiActivityStatus sse_decode_ui_activity_status(SseDeserializer deserializer);
 
   @protected
   UiBridgeError sse_decode_ui_bridge_error(SseDeserializer deserializer);
@@ -887,10 +956,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_activity_event_Sse(
+    RustStreamSink<UiActivityEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_ui_file_transfer(
@@ -950,6 +1028,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_activity(
+    List<UiActivity> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_connection(
     List<UiConnection> self,
     SseSerializer serializer,
@@ -999,6 +1083,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_ui_file_transfer(
@@ -1062,6 +1149,39 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_activity(UiActivity self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_activity_direction(
+    UiActivityDirection self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_activity_event(
+    UiActivityEvent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_activity_kind(
+    UiActivityKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_activity_snapshot(
+    UiActivitySnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_activity_status(
+    UiActivityStatus self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_bridge_error(UiBridgeError self, SseSerializer serializer);

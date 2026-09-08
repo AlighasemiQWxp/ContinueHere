@@ -27,6 +27,64 @@ pub struct UiBridge {
 }
 
 impl UiBridge {
+    pub async fn activity_snapshot(&self) -> Result<super::UiActivitySnapshot, UiBridgeError> {
+        let app = self.app.lock().await;
+        let snapshot = running_app(&app)?
+            .activity()
+            .activities()
+            .map_err(UiBridgeError::operation)?;
+        Ok(super::UiActivitySnapshot {
+            entries: snapshot
+                .entries()
+                .iter()
+                .map(super::activity::activity)
+                .collect(),
+            storage_error: snapshot.storage_error().map(str::to_owned),
+        })
+    }
+
+    pub async fn retry_activity(&self, activity_id: String) -> Result<(), UiBridgeError> {
+        let app = self.app.lock().await;
+        running_app(&app)?
+            .activity()
+            .retry(&activity_id)
+            .map_err(UiBridgeError::operation)
+    }
+
+    pub async fn remove_activity(&self, activity_id: String) -> Result<(), UiBridgeError> {
+        let app = self.app.lock().await;
+        running_app(&app)?
+            .activity()
+            .remove(&activity_id)
+            .map_err(UiBridgeError::operation)
+    }
+
+    pub async fn clear_history(&self) -> Result<(), UiBridgeError> {
+        let app = self.app.lock().await;
+        running_app(&app)?
+            .activity()
+            .clear()
+            .map_err(UiBridgeError::operation)
+    }
+
+    pub async fn watch_activity(
+        &self,
+        sink: StreamSink<super::UiActivityEvent>,
+    ) -> Result<(), UiBridgeError> {
+        let app = self.app.lock().await;
+        let subscription =
+            running_app(&app)?
+                .activity()
+                .on_changed(continuehere::ActivityChangedDelegate::new(move |_| {
+                    let _ = sink.add(super::UiActivityEvent::Changed);
+                }));
+        self.subscriptions
+            .lock()
+            .map_err(|_| UiBridgeError::synchronization())?
+            .activity = Some(subscription);
+        Ok(())
+    }
+
     pub async fn start(project_directory: String) -> Result<Self, UiBridgeError> {
         let app = ContinueHere::builder(PathBuf::from(project_directory))
             .build()

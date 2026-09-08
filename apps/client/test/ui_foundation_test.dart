@@ -138,7 +138,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 180));
     badge = tester.widget<Badge>(find.byType(Badge));
     expect(badge.isLabelVisible, isTrue);
-    expect(badge.smallSize, 7);
+    expect(badge.largeSize, 10);
     expect(
       find.byWidgetPredicate(
         (widget) =>

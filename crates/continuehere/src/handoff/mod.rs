@@ -20,6 +20,7 @@ pub use event::{
 };
 pub use handle::HandoffHandle;
 pub use local_video::LocalVideoHandoff;
+pub(crate) use manager::HandoffCapability;
 pub use manager::HandoffManager;
 pub use model::{
     Handoff, HandoffChange, HandoffFailure, HandoffId, HandoffPayload, HandoffState,

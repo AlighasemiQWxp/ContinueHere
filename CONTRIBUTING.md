@@ -36,6 +36,16 @@ authorized to share.
 
 ## Local validation
 
+On Windows, the complete Rust and Flutter workflow can be run from the project
+root with `.\scripts\validate.ps1`. It resolves Flutter dependencies, regenerates
+the Rust bridge, formats both languages, runs their checks and tests, and builds
+the Windows client. It stops on the first failure. Binding generation requires
+`flutter_rust_bridge_codegen` 2.13.0 and may invoke compilation tools. If Pub's
+online service is unavailable after dependency resolution, the script retries
+from the local package cache. A missing cached dependency still stops validation.
+
+The Rust-only checks remain:
+
 ```powershell
 cargo fmt --all -- --check
 cargo check --workspace --all-targets

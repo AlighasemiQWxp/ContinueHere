@@ -11,6 +11,7 @@
 /settings.bin
 /device_identity.bin
 /trusted_devices.bin
+/history.bin
 
 # Editors
 .idea/

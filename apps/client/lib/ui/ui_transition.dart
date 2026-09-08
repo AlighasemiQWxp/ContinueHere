@@ -1,4 +1,4 @@
-enum UiDestination { devices, send, transfers, settings }
+enum UiDestination { devices, send, transfers, history, settings }
 
 typedef UiTransitionChangedDelegate = void Function();
 
@@ -8,9 +8,19 @@ class UiTransition {
   final UiTransitionChangedDelegate _onChanged;
   UiDestination _destination = UiDestination.devices;
   bool _filePreviewVisible = false;
+  String? _historyDevice;
 
   UiDestination get destination => _destination;
   bool get filePreviewVisible => _filePreviewVisible;
+  String? get historyDevice => _historyDevice;
+
+  void showHistoryDevice(String? deviceId) {
+    if (_historyDevice == deviceId) {
+      return;
+    }
+    _historyDevice = deviceId;
+    _onChanged();
+  }
 
   void show(UiDestination destination) {
     if (_destination == destination) {

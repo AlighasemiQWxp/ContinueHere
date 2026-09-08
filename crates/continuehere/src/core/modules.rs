@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     Error, Result,
+    activity::ActivityManager,
     devices::DeviceManager,
     directories::DirectoryManager,
     discovery::DiscoveryManager,
@@ -27,6 +28,7 @@ pub(crate) struct CoreModules {
     pairing: PairingManager,
     handoff: HandoffManager,
     file_transfers: FileTransferManager,
+    activity: ActivityManager,
     optional: ModuleRegistry,
     settings_started: bool,
     directories_started: bool,
@@ -38,6 +40,7 @@ pub(crate) struct CoreModules {
     pairing_started: bool,
     handoff_started: bool,
     file_transfers_started: bool,
+    activity_started: bool,
 }
 
 impl CoreModules {
@@ -48,6 +51,7 @@ impl CoreModules {
         let devices = DeviceManager::new(project_directory.clone());
         let security = SecurityManager::new();
         let trusted = TrustedDeviceRegistry::new(project_directory.clone());
+        let activity_trust = trusted.lookup();
         let transport = TransportManager::new(
             devices.capability(),
             security.capability(),
@@ -65,6 +69,13 @@ impl CoreModules {
         );
         let handoff =
             HandoffManager::new(transport.handoff_capability(), file_transfers.capability());
+        let activity = ActivityManager::new(
+            project_directory,
+            handoff.capability(),
+            file_transfers.capability(),
+            transport.connection_capability(),
+            activity_trust,
+        );
         Ok(Self {
             settings,
             directories,
@@ -76,6 +87,7 @@ impl CoreModules {
             pairing,
             handoff,
             file_transfers,
+            activity,
             optional,
             settings_started: false,
             directories_started: false,
@@ -87,6 +99,7 @@ impl CoreModules {
             pairing_started: false,
             handoff_started: false,
             file_transfers_started: false,
+            activity_started: false,
         })
     }
 
@@ -126,6 +139,10 @@ impl CoreModules {
         &self.file_transfers
     }
 
+    pub(crate) fn activity(&self) -> &ActivityManager {
+        &self.activity
+    }
+
     pub(crate) async fn start_all(&mut self) -> Result<()> {
         start_module(&mut self.settings).await?;
         self.settings_started = true;
@@ -147,6 +164,12 @@ impl CoreModules {
             return Err(error);
         }
         self.devices_started = true;
+
+        if let Err(error) = start_module(&mut self.activity).await {
+            self.rollback_main_systems().await;
+            return Err(error);
+        }
+        self.activity_started = true;
 
         if let Err(error) = start_module(&mut self.security).await {
             self.rollback_main_systems().await;
@@ -231,6 +254,12 @@ impl CoreModules {
             keep_first_error(&mut first_error, result);
         }
 
+        if self.activity_started {
+            let result = stop_module(&mut self.activity).await;
+            self.activity_started = false;
+            keep_first_error(&mut first_error, result);
+        }
+
         if self.devices_started {
             let result = stop_module(&mut self.devices).await;
             self.devices_started = false;
@@ -290,6 +319,11 @@ impl CoreModules {
         if self.security_started {
             let _ = self.security.stop().await;
             self.security_started = false;
+        }
+
+        if self.activity_started {
+            let _ = self.activity.stop().await;
+            self.activity_started = false;
         }
 
         if self.devices_started {
@@ -387,6 +421,7 @@ mod tests {
         assert!(modules.pairing_started);
         assert!(modules.handoff_started);
         assert!(modules.file_transfers_started);
+        assert!(modules.activity_started);
 
         modules.stop_all().await.expect("core should stop");
         assert!(!modules.settings_started);
@@ -399,6 +434,7 @@ mod tests {
         assert!(!modules.pairing_started);
         assert!(!modules.handoff_started);
         assert!(!modules.file_transfers_started);
+        assert!(!modules.activity_started);
     }
 
     #[tokio::test]
@@ -424,5 +460,6 @@ mod tests {
         assert!(!modules.pairing_started);
         assert!(!modules.handoff_started);
         assert!(!modules.file_transfers_started);
+        assert!(!modules.activity_started);
     }
 }

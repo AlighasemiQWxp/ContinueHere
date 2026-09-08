@@ -50,6 +50,7 @@ The architectural foundation is complete. It currently provides:
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
 - Native Flutter Windows client with RTL localization and contextual transferred-file previews
+- Device-grouped activity history and manual retry (desktop acceptance pending)
 - Automated tests for the public API, module lifecycle, and handle behavior
 
 The protocol and security design, Discovery, Pairing, and authenticated
@@ -93,8 +94,42 @@ The initial file-name extensions are MP4, M4V, MKV, WebM, MOV, and AVI,
 case-insensitively. This checks file eligibility, not media decodability.
 Empty files, directories, and symbolic-link sources are rejected. Playback
 starts through the application interface only after the complete file arrives.
-The client does not add playback during download, transcoding, partial transfer
-resume, or persistent history.
+The client does not add playback during download, transcoding, or partial transfer
+resume. Phase 16 adds persistent history and explicit retries from the beginning.
+
+## Activity history
+
+History opens with one card per other device. Opening a card shows that device's
+files, URL and video handoffs, and connection sessions. Entries retain locally
+observed timestamps for starting, completing files, ending activities, and
+disconnecting. Dates and exact times include milliseconds and the local UTC offset.
+An unexpected app exit leaves an interrupted entry with an unknown end time.
+
+Opening History clears its navigation indicator. Device indicators remain until
+their individual timelines are opened. New activity for a device whose timeline
+is already visible is treated as read. Both levels use the same golden badge.
+
+History is stored locally in `history.bin`. It contains device names, URLs, file
+paths, and operation metadata; it does not copy transferred file contents.
+Clear history removes finished entries and keeps received files and active work.
+Retry creates a linked new attempt, rechecks the trusted connection and source
+file metadata, and uses the existing send flows. The receiver accepts a new file
+offer again. See [the architecture guide](docs/ARCHITECTURE.md#activity-history-and-retry)
+for persistence and retry boundaries.
+
+Phase 16 passed binding generation, Rust formatting, workspace checks,
+warnings-denied Clippy, Rust tests, Flutter formatting, analysis and tests, and
+the Windows release build. Desktop interaction acceptance and GitHub CI remain
+pending. To repeat the complete local validation from the project root, run:
+
+```powershell
+.\scripts\validate.ps1
+```
+
+This requires Rust, Flutter, the Windows desktop build tools, and
+`flutter_rust_bridge_codegen` 2.13.0 on PATH. The script stops at the first failure.
+If Pub's online service rejects its advisory request, dependency resolution is
+retried from the local cache; missing cached packages still fail explicitly.
 
 ## Design goals
 

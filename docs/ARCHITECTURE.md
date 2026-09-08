@@ -46,6 +46,7 @@ ContinueHere client
         ├── PairingUiController
         ├── HandoffUiController
         ├── TransferUiController
+        ├── ActivityUiController
         ├── FilePreviewUiController
         └── SettingsUiController
 ```
@@ -138,6 +139,15 @@ shutdown explicitly release the Handle. Rust `Drop` remains a final safety net,
 not the normal UI cleanup mechanism. Screen disposal does not cancel work that
 the owning controller intentionally keeps alive.
 
+## Activity history and retry
+
+`ActivityManager` owns persistent device-grouped activity through private recording,
+storage, and retry controllers. `ActivityUiController` presents its snapshots in
+History device cards and timelines; `UiNotifications` owns the separate navigation
+and device unread indicators. See [Activity history and retry](HISTORY.md) for
+the persistence format, timestamps, ownership, retry boundaries, and acceptance
+checks.
+
 ## Application root
 
 `ContinueHereBuilder` constructs and starts a `ContinueHere` instance.
@@ -164,6 +174,7 @@ ContinueHere
     ├── PairingManager
     ├── HandoffManager
     ├── FileTransferManager
+    ├── ActivityManager
     └── ModuleRegistry
 ```
 

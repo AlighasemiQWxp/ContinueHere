@@ -94,6 +94,7 @@ pub struct FileTransfer {
     state: FileTransferState,
     failure: Option<FileTransferFailure>,
     destination: Option<PathBuf>,
+    source: Option<PathBuf>,
 }
 
 impl FileTransfer {
@@ -108,6 +109,7 @@ impl FileTransfer {
             state: FileTransferState::Preparing,
             failure: None,
             destination: None,
+            source: Some(config.source.clone()),
         }
     }
 
@@ -127,6 +129,7 @@ impl FileTransfer {
             state: FileTransferState::Offered,
             failure: None,
             destination: None,
+            source: None,
         }
     }
 
@@ -164,6 +167,10 @@ impl FileTransfer {
 
     pub fn destination(&self) -> Option<&std::path::Path> {
         self.destination.as_deref()
+    }
+
+    pub(crate) fn source(&self) -> Option<&std::path::Path> {
+        self.source.as_deref()
     }
 
     pub(crate) fn set_state(&mut self, state: FileTransferState) {

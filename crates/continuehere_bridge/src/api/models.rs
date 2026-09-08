@@ -400,7 +400,7 @@ pub(crate) fn core_language(language: UiLanguage) -> Language {
     }
 }
 
-fn platform(value: Platform) -> UiPlatform {
+pub(crate) fn platform(value: Platform) -> UiPlatform {
     match value {
         Platform::Windows => UiPlatform::Windows,
         Platform::Linux => UiPlatform::Linux,

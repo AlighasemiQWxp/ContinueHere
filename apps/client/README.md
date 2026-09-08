@@ -13,6 +13,18 @@ with the Rust core through `continuehere_bridge`. See the project
 [architecture guide](../../docs/ARCHITECTURE.md) for ownership and lifecycle
 details.
 
+History is organized by device. Each card opens that device's activity timeline,
+including file completion, disconnections, and session end times. Opening History
+clears its navigation badge; opening a device clears that device's badge.
+Failed outgoing activities can be retried after reconnecting. Completed incoming
+content uses the existing opening and preview flow.
+
+Phase 16 passed binding generation, Rust formatting, workspace checks,
+warnings-denied Clippy, Rust tests, Flutter formatting, analysis and tests, and
+the Windows release build. Desktop interaction acceptance and GitHub CI remain
+pending. Run `.\scripts\validate.ps1` manually from the repository root to repeat
+the complete validation.
+
 ## Development
 
 Resolve Flutter dependencies from this directory:

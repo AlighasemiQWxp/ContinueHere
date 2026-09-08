@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../src/rust/api/models.dart';
 import 'screens/devices_screen.dart';
+import 'screens/history_screen.dart';
 import 'screens/send_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/transfers_screen.dart';
@@ -175,6 +176,9 @@ class _ClientShell extends StatelessWidget {
       case UiDestination.settings:
         screen = SettingsScreen(uiManager: uiManager, strings: strings);
         break;
+      case UiDestination.history:
+        screen = HistoryScreen(uiManager: uiManager, strings: strings);
+        break;
     }
     final error = uiManager.errorMessage;
     Widget errorBanner = const SizedBox.shrink(key: ValueKey('no-error'));
@@ -224,6 +228,8 @@ class _ClientShell extends StatelessWidget {
       case UiDestination.transfers:
         return 2;
       case UiDestination.settings:
+        return 4;
+      case UiDestination.history:
         return 3;
     }
   }
@@ -256,6 +262,11 @@ class _ClientShell extends StatelessWidget {
         label: Text(strings.transfers),
       ),
       NavigationRailDestination(
+        icon: _navigationIcon(Icons.history_outlined, UiDestination.history),
+        selectedIcon: _navigationIcon(Icons.history, UiDestination.history),
+        label: Text(strings.history),
+      ),
+      NavigationRailDestination(
         icon: _navigationIcon(Icons.settings_outlined, UiDestination.settings),
         selectedIcon: _navigationIcon(Icons.settings, UiDestination.settings),
         label: Text(strings.settings),
@@ -276,6 +287,10 @@ class _ClientShell extends StatelessWidget {
       NavigationDestination(
         icon: _navigationIcon(Icons.swap_horiz, UiDestination.transfers),
         label: strings.transfers,
+      ),
+      NavigationDestination(
+        icon: _navigationIcon(Icons.history, UiDestination.history),
+        label: strings.history,
       ),
       NavigationDestination(
         icon: _navigationIcon(Icons.settings, UiDestination.settings),

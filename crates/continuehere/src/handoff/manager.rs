@@ -16,7 +16,7 @@ use super::{
 };
 
 pub struct HandoffManager {
-    handles: Mutex<BaseHandleProvider<HandoffOperation>>,
+    handles: Arc<Mutex<BaseHandleProvider<HandoffOperation>>>,
     controller: Arc<HandoffController>,
     handoff_changed: HandoffChangedEvent,
     incoming_changed: IncomingHandoffChangedEvent,
@@ -36,7 +36,7 @@ impl HandoffManager {
             incoming_changed.clone(),
         );
         Self {
-            handles: Mutex::new(BaseHandleProvider::new()),
+            handles: Arc::new(Mutex::new(BaseHandleProvider::new())),
             controller,
             handoff_changed,
             incoming_changed,
@@ -44,17 +44,16 @@ impl HandoffManager {
     }
 
     pub fn get_handle(&self, identifier: &str) -> Result<HandoffHandle, HandoffError> {
-        if !self.controller.is_running() {
-            return Err(HandoffError::ManagerUnavailable);
+        self.capability().get_handle(identifier)
+    }
+
+    pub(crate) fn capability(&self) -> HandoffCapability {
+        HandoffCapability {
+            handles: Arc::clone(&self.handles),
+            controller: Arc::clone(&self.controller),
+            changed: self.handoff_changed.clone(),
+            incoming: self.incoming_changed.clone(),
         }
-        let controller = Arc::clone(&self.controller);
-        let reference = lock(&self.handles)?
-            .get_handle(identifier, {
-                let controller = Arc::clone(&controller);
-                move |identifier| HandoffOperation::new(identifier, controller)
-            })
-            .map_err(map_handle_error)?;
-        Ok(HandoffHandle::new(reference, controller))
     }
 
     pub fn handoffs(&self) -> Vec<Handoff> {
@@ -81,6 +80,44 @@ impl HandoffManager {
         delegate: IncomingHandoffChangedDelegate,
     ) -> IncomingHandoffChangedSubscription {
         self.incoming_changed.subscribe(delegate)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct HandoffCapability {
+    handles: Arc<Mutex<BaseHandleProvider<HandoffOperation>>>,
+    controller: Arc<HandoffController>,
+    changed: HandoffChangedEvent,
+    incoming: IncomingHandoffChangedEvent,
+}
+
+impl HandoffCapability {
+    pub(crate) fn on_changed(
+        &self,
+        delegate: HandoffChangedDelegate,
+    ) -> HandoffChangedSubscription {
+        self.changed.subscribe(delegate)
+    }
+
+    pub(crate) fn on_incoming_changed(
+        &self,
+        delegate: IncomingHandoffChangedDelegate,
+    ) -> IncomingHandoffChangedSubscription {
+        self.incoming.subscribe(delegate)
+    }
+
+    pub(crate) fn get_handle(&self, identifier: &str) -> Result<HandoffHandle, HandoffError> {
+        if !self.controller.is_running() {
+            return Err(HandoffError::ManagerUnavailable);
+        }
+        let controller = Arc::clone(&self.controller);
+        let reference = lock(&self.handles)?
+            .get_handle(identifier, {
+                let controller = Arc::clone(&controller);
+                move |identifier| HandoffOperation::new(identifier, controller)
+            })
+            .map_err(map_handle_error)?;
+        Ok(HandoffHandle::new(reference, controller))
     }
 }
 
@@ -245,6 +282,17 @@ mod tests {
             second_transport.handoff_capability(),
             second_transfers.capability(),
         );
+        let mut history = crate::activity::ActivityManager::new(
+            first_directory.path().to_owned(),
+            first_handoff.capability(),
+            first_transfers.capability(),
+            first_transport.connection_capability(),
+            first_trusted.lookup(),
+        );
+        history
+            .start()
+            .await
+            .expect("history should start before connections");
         first_transport
             .start()
             .await
@@ -360,6 +408,73 @@ mod tests {
         youtube_handle
             .release()
             .expect("YouTube handle should release");
+        assert_eq!(
+            history
+                .activities()
+                .expect("history should be available")
+                .entries()
+                .iter()
+                .filter(|entry| entry.status() == crate::ActivityStatus::Delivered)
+                .count(),
+            2
+        );
+
+        first_transport
+            .disconnect(second_identity.id())
+            .await
+            .expect("peer should disconnect");
+        let failed = first_handoff
+            .get_handle("history-retry-source")
+            .expect("handle should be available");
+        failed
+            .configure_url(second_identity.id().clone(), "https://example.com/retry")
+            .expect("URL should configure");
+        failed.use_handle().expect("attempt should start");
+        wait_until(|| {
+            failed
+                .handoff()
+                .is_some_and(|value| value.state() == HandoffState::Failed)
+        })
+        .await;
+        let failed_id = format!(
+            "handoff.out.{}",
+            failed.handoff().expect("attempt should exist").id()
+        );
+        failed.release().expect("failed handle should release");
+        assert!(matches!(
+            history.retry(&failed_id),
+            Err(crate::ActivityError::NotConnected)
+        ));
+        first_transport
+            .connect(second_identity.id(), &endpoint)
+            .await
+            .expect("peer should reconnect");
+        history
+            .retry(&failed_id)
+            .expect("history should start a new attempt");
+        wait_until(|| {
+            history
+                .activities()
+                .expect("history should exist")
+                .entries()
+                .iter()
+                .any(|entry| {
+                    entry.retry_of() == Some(failed_id.as_str())
+                        && entry.status() == crate::ActivityStatus::Delivered
+                })
+        })
+        .await;
+        wait_until(|| first_handoff.handoffs().is_empty()).await;
+        let snapshot = history.activities().expect("history should exist");
+        assert!(snapshot.entries().iter().any(
+            |entry| entry.id() == failed_id && entry.status() == crate::ActivityStatus::Failed
+        ));
+        assert!(
+            snapshot
+                .entries()
+                .iter()
+                .any(|entry| entry.disconnected_at().is_some())
+        );
         second_handoff.stop().await.expect("handoff should stop");
         first_handoff.stop().await.expect("handoff should stop");
         second_transfers
@@ -372,6 +487,10 @@ mod tests {
             .await
             .expect("transport should stop");
         first_transport.stop().await.expect("transport should stop");
+        history
+            .stop()
+            .await
+            .expect("history should flush after transport stops");
         second_security.stop().await.expect("security should stop");
         first_security.stop().await.expect("security should stop");
         second_devices.stop().await.expect("devices should stop");

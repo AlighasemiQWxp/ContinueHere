@@ -1,6 +1,7 @@
 import '../platform/platform_manager.dart';
 import '../src/rust/api/manager.dart';
 import 'controllers/devices_ui_controller.dart';
+import 'controllers/activity_ui_controller.dart';
 import 'controllers/file_preview_ui_controller.dart';
 import 'controllers/handoff_ui_controller.dart';
 import 'controllers/pairing_ui_controller.dart';
@@ -16,7 +17,14 @@ class UiController {
     void Function() onChanged,
     void Function(Object) onError,
     UiDestinationActivityDelegate onActivity,
-  ) : devices = DevicesUiController(
+    UiDeviceActivityDelegate onHistoryActivity,
+  ) : activity = ActivityUiController(
+        bridge,
+        onChanged,
+        onError,
+        onHistoryActivity,
+      ),
+      devices = DevicesUiController(
         bridge,
         onChanged,
         onError,
@@ -52,6 +60,7 @@ class UiController {
       );
 
   final DevicesUiController devices;
+  final ActivityUiController activity;
   final PairingUiController pairing;
   final HandoffUiController handoff;
   final TransferUiController transfer;
@@ -59,6 +68,7 @@ class UiController {
   final SettingsUiController settings;
 
   Future<void> start() async {
+    await activity.start();
     await devices.start();
     await pairing.start();
     await handoff.start();
@@ -68,7 +78,11 @@ class UiController {
 
   Future<void> dispose() async {
     try {
-      await settings.dispose();
+      try {
+        await activity.dispose();
+      } finally {
+        await settings.dispose();
+      }
     } finally {
       try {
         await filePreview.dispose();

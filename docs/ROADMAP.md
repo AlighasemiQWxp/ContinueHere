@@ -114,6 +114,15 @@ after its implementation and validation requirements are satisfied.
 ## E. Expansion
 
 - [ ] 16. Activity history and retry
+  - Independent Rust ActivityManager with bounded, versioned local history
+  - Device cards opening per-device timelines for files, handoffs, and connection sessions
+  - Exact locally observed start, completion, disconnection, and end timestamps
+  - Interrupted recovery with unknown end times after an unexpected exit
+  - Explicit retry through existing Handoff and FileTransfer Handles
+  - Separate History navigation and device-card unread indicators
+  - Golden circular badges, English/Persian labels, and responsive RTL layouts
+  - Binding generation, full local validation, and Windows release build passed
+  - Desktop interaction acceptance and continuous integration pending
 - [ ] 17. Android application
 - [ ] 18. Linux, macOS, and iOS support
 - [ ] 19. Advanced application and operating-system integrations

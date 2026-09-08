@@ -1,13 +1,13 @@
 use continuehere::{
-    ConnectionChangedDelegate, ConnectionChangedSubscription, ContinueHere,
-    DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription, DirectoryChangedDelegate,
-    DirectoryChangedSubscription, DiscoveryChangedDelegate, DiscoveryChangedSubscription,
-    DiscoveryStatusChangedDelegate, DiscoveryStatusChangedSubscription,
-    FileTransferChangedDelegate, FileTransferChangedSubscription, HandoffChangedDelegate,
-    HandoffChangedSubscription, IncomingHandoffChangedDelegate, IncomingHandoffChangedSubscription,
-    LanguageChangedDelegate, LanguageChangedSubscription, PairingSessionChangedDelegate,
-    PairingSessionChangedSubscription, TrustedDeviceChangedDelegate,
-    TrustedDeviceChangedSubscription,
+    ActivityChangedSubscription, ConnectionChangedDelegate, ConnectionChangedSubscription,
+    ContinueHere, DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription,
+    DirectoryChangedDelegate, DirectoryChangedSubscription, DiscoveryChangedDelegate,
+    DiscoveryChangedSubscription, DiscoveryStatusChangedDelegate,
+    DiscoveryStatusChangedSubscription, FileTransferChangedDelegate,
+    FileTransferChangedSubscription, HandoffChangedDelegate, HandoffChangedSubscription,
+    IncomingHandoffChangedDelegate, IncomingHandoffChangedSubscription, LanguageChangedDelegate,
+    LanguageChangedSubscription, PairingSessionChangedDelegate, PairingSessionChangedSubscription,
+    TrustedDeviceChangedDelegate, TrustedDeviceChangedSubscription,
 };
 
 use crate::frb_generated::StreamSink;
@@ -181,6 +181,7 @@ impl SettingsUiSubscription {
 #[derive(Default)]
 #[flutter_rust_bridge::frb(ignore)]
 pub(crate) struct UiSubscriptions {
+    pub(crate) activity: Option<ActivityChangedSubscription>,
     pub(crate) devices: Option<DevicesUiSubscription>,
     pub(crate) pairing: Option<PairingUiSubscription>,
     pub(crate) handoff: Option<HandoffUiSubscription>,

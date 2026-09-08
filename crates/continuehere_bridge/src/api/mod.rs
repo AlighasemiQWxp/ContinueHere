@@ -1,4 +1,9 @@
+pub(crate) mod activity;
 pub(crate) mod error;
+pub use activity::{
+    UiActivity, UiActivityDirection, UiActivityEvent, UiActivityKind, UiActivitySnapshot,
+    UiActivityStatus,
+};
 pub(crate) mod events;
 pub(crate) mod handles;
 pub(crate) mod manager;

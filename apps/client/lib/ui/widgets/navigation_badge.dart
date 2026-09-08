@@ -35,9 +35,43 @@ class NavigationBadge extends StatelessWidget {
         }
         return Badge(
           isLabelVisible: value > 0,
-          smallSize: 7 * value,
-          backgroundColor: Theme.of(context).colorScheme.tertiary
-              .withValues(alpha: opacity),
+          backgroundColor: Colors.transparent,
+          padding: EdgeInsets.zero,
+          largeSize: 10,
+          label: Opacity(
+            opacity: opacity,
+            child: Transform.scale(
+              scale: value,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const RadialGradient(
+                    center: Alignment(-0.35, -0.45),
+                    colors: [
+                      Color(0xFFFFF3B0),
+                      Color(0xFFFFD45A),
+                      Color(0xFFE9A923),
+                    ],
+                    stops: [0, 0.5, 1],
+                  ),
+                  border: Border.all(
+                    color: const Color(0xFFFFE69A),
+                    width: 0.6,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x66FFBD35),
+                      blurRadius: 9,
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(color: Color(0x33FFDF76), blurRadius: 3),
+                  ],
+                ),
+              ),
+            ),
+          ),
           child: child,
         );
       },

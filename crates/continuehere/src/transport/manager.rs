@@ -44,7 +44,31 @@ struct TransportAccess {
     changed: ConnectionChangedEvent,
 }
 
+#[derive(Clone)]
+pub(crate) struct ConnectionCapability {
+    access: Arc<TransportAccess>,
+}
+
+impl ConnectionCapability {
+    pub(crate) fn is_connected(&self, device_id: &DeviceId) -> bool {
+        lock_or_recover(&self.access.connections).contains_key(device_id)
+    }
+
+    pub(crate) fn on_changed(
+        &self,
+        delegate: ConnectionChangedDelegate,
+    ) -> ConnectionChangedSubscription {
+        self.access.changed.subscribe(delegate)
+    }
+}
+
 impl TransportManager {
+    pub(crate) fn connection_capability(&self) -> ConnectionCapability {
+        ConnectionCapability {
+            access: Arc::clone(&self.access),
+        }
+    }
+
     pub(crate) fn new(
         device_identity: DeviceIdentityCapability,
         security: SecurityCapability,

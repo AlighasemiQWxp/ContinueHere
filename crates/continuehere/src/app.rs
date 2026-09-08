@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     Result,
+    activity::ActivityManager,
     core::{module::Module, modules::CoreModules, registry::ModuleRegistry},
     devices::DeviceManager,
     directories::DirectoryManager,
@@ -19,6 +20,10 @@ pub struct ContinueHere {
 }
 
 impl ContinueHere {
+    pub fn activity(&self) -> &ActivityManager {
+        self.modules.activity()
+    }
+
     pub fn builder(project_directory: impl Into<PathBuf>) -> ContinueHereBuilder {
         ContinueHereBuilder::new(project_directory)
     }

@@ -6,6 +6,77 @@ class UiStrings {
   final UiLanguage language;
 
   String get appTitle => 'ContinueHere';
+  String get history => _text('History', 'تاریخچه');
+  String get historyIntro => _text(
+    'Your activity, organized by device.',
+    'فعالیت‌های شما، به تفکیک دستگاه.',
+  );
+  String get noHistory => _text(
+    'Your device history will appear here.',
+    'تاریخچهٔ دستگاه‌های شما اینجا نمایش داده می‌شود.',
+  );
+  String get noDeviceHistory => _text(
+    'No activity for this device.',
+    'فعالیتی برای این دستگاه وجود ندارد.',
+  );
+  String get historyDevices => _text('All devices', 'همهٔ دستگاه‌ها');
+  String get clearHistory => _text('Clear history', 'پاک کردن تاریخچه');
+  String get clearHistoryMessage => _text(
+    'Remove finished history entries? Your received files and active activities will stay.',
+    'سوابق پایان‌یافته حذف شوند؟ فایل‌های دریافتی و فعالیت‌های جاری باقی می‌مانند.',
+  );
+  String get historyTimes => _text(
+    'Times are shown in your local time zone, including seconds.',
+    'زمان‌ها با منطقهٔ زمانی محلی شما و همراه ثانیه نمایش داده می‌شوند.',
+  );
+  String get historyStoredLocally => _text(
+    'History is saved on this device.',
+    'تاریخچه روی این دستگاه ذخیره می‌شود.',
+  );
+  String get historySent => _text('Sent', 'ارسال‌شده');
+  String get historyReceived => _text('Received', 'دریافت‌شده');
+  String get historyConnection => _text('Connection session', 'نشست اتصال');
+  String get historyAll => _text('All activity', 'همهٔ فعالیت‌ها');
+  String get historyFiles => _text('Files', 'فایل‌ها');
+  String get historyConnections => _text('Connections', 'اتصال‌ها');
+  String get activityStarted => _text('Activity started', 'شروع فعالیت');
+  String get fileCompleted => _text('File completed', 'تکمیل فایل');
+  String get activityEnded => _text('Activity ended', 'پایان فعالیت');
+  String get sessionStarted => _text('Session started', 'شروع نشست');
+  String get sessionEnded => _text('Session ended', 'پایان نشست');
+  String get disconnectedAt => _text('Disconnected', 'قطع اتصال');
+  String get historyEndUnknown => _text(
+    'End time unknown — the app was interrupted.',
+    'زمان پایان نامشخص است؛ اجرای برنامه متوقف شده بود.',
+  );
+  String get retry => _text('Retry', 'تلاش دوباره');
+  String get retryAttempt => _text('Retry attempt', 'تلاش مجدد');
+  String get retryExplanation => _text(
+    'Starts a new attempt. Files are sent from the beginning and require acceptance again.',
+    'تلاش تازه‌ای آغاز می‌شود. فایل از ابتدا ارسال می‌شود و به پذیرش دوباره نیاز دارد.',
+  );
+  String get lastActivity => _text('Last activity', 'آخرین فعالیت');
+  String get historyActive => _text('In progress', 'در حال انجام');
+  String get historyDelivered => _text('Delivered', 'تحویل داده شد');
+  String get historyCompleted => _text('Completed', 'تکمیل شد');
+  String get historyRejected => _text('Declined', 'رد شد');
+  String get historyCancelled => _text('Cancelled', 'لغو شد');
+  String get historyFailed => _text('Failed', 'ناموفق');
+  String get historyDisconnected => _text('Disconnected', 'قطع شده');
+  String get historyInterrupted => _text('Interrupted', 'متوقف شده');
+  String get historyConnected => _text('Connected', 'متصل');
+  String get historySaveFailed => _text(
+    'History could not be saved. Recent activity may be lost when the app closes.',
+    'ذخیرهٔ تاریخچه ناموفق بود. ممکن است فعالیت‌های اخیر با بستن برنامه از دست بروند.',
+  );
+  String get retryConnectFirst => _text(
+    'Connect to this device before retrying.',
+    'پیش از تلاش دوباره به این دستگاه متصل شوید.',
+  );
+  String get historyRemovedFile => _text(
+    'This file may have been moved or removed.',
+    'ممکن است این فایل جابه‌جا یا حذف شده باشد.',
+  );
   String get devices => _text('Devices', 'دستگاه‌ها');
   String get send => _text('Send', 'ارسال');
   String get transfers => _text('Transfers', 'انتقال‌ها');
@@ -68,6 +139,57 @@ class UiStrings {
       _text('The image could not be displayed.', 'تصویر قابل نمایش نیست.');
   String get dismiss => _text('Dismiss', 'بستن');
   String get newActivity => _text('New activity', 'فعالیت جدید');
+
+  String historyFailure(String failure) {
+    switch (failure) {
+      case 'NotConnected':
+        return _text('The device was not connected.', 'دستگاه متصل نبود.');
+      case 'Unsupported':
+        return _text(
+          'This device does not support this activity.',
+          'این دستگاه از این فعالیت پشتیبانی نمی‌کند.',
+        );
+      case 'Invalid':
+        return _text(
+          'The content could not be sent.',
+          'ارسال محتوا ممکن نبود.',
+        );
+      case 'Busy':
+        return _text('The device was busy.', 'دستگاه مشغول بود.');
+      case 'TimedOut':
+        return _text(
+          'The device did not respond in time.',
+          'دستگاه به‌موقع پاسخ نداد.',
+        );
+      case 'Transport':
+        return _text('The connection was interrupted.', 'اتصال قطع شد.');
+      case 'Declined':
+        return _text(
+          'The recipient declined the file.',
+          'گیرنده فایل را نپذیرفت.',
+        );
+      case 'DestinationConflict':
+        return _text(
+          'A file already exists at the destination.',
+          'فایلی در مقصد از قبل وجود دارد.',
+        );
+      case 'Integrity':
+        return _text(
+          'The received file did not pass verification.',
+          'تأیید صحت فایل دریافتی ناموفق بود.',
+        );
+      case 'FileSystem':
+        return _text(
+          'The file could not be read or saved.',
+          'خواندن یا ذخیرهٔ فایل ممکن نبود.',
+        );
+      default:
+        return _text(
+          'The file transfer could not finish.',
+          'انتقال فایل به پایان نرسید.',
+        );
+    }
+  }
 
   String _text(String english, String persian) {
     if (language == UiLanguage.persian) {

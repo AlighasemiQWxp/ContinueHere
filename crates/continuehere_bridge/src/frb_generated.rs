@@ -41,7 +41,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -825814244;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1695895409;
 
 // Section: executor
 
@@ -103,6 +103,119 @@ fn wire__crate__api__manager__UiBridge_accept_transfer_impl(
                             api_selected_directory,
                         )
                         .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__manager__UiBridge_activity_snapshot_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "UiBridge_activity_snapshot",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UiBridge>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::api::error::UiBridgeError>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok =
+                            crate::api::manager::UiBridge::activity_snapshot(&*api_that_guard)
+                                .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__manager__UiBridge_clear_history_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "UiBridge_clear_history",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UiBridge>,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::api::error::UiBridgeError>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok =
+                            crate::api::manager::UiBridge::clear_history(&*api_that_guard).await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -706,6 +819,66 @@ fn wire__crate__api__manager__UiBridge_reject_transfer_impl(
         },
     )
 }
+fn wire__crate__api__manager__UiBridge_remove_activity_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "UiBridge_remove_activity",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UiBridge>,
+            >>::sse_decode(&mut deserializer);
+            let api_activity_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::api::error::UiBridgeError>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = crate::api::manager::UiBridge::remove_activity(
+                            &*api_that_guard,
+                            api_activity_id,
+                        )
+                        .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__manager__UiBridge_remove_incoming_handoff_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -876,6 +1049,66 @@ fn wire__crate__api__manager__UiBridge_remove_trusted_device_impl(
                         let output_ok = crate::api::manager::UiBridge::remove_trusted_device(
                             &*api_that_guard,
                             api_device_id,
+                        )
+                        .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__manager__UiBridge_retry_activity_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "UiBridge_retry_activity",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UiBridge>,
+            >>::sse_decode(&mut deserializer);
+            let api_activity_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::api::error::UiBridgeError>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = crate::api::manager::UiBridge::retry_activity(
+                            &*api_that_guard,
+                            api_activity_id,
                         )
                         .await?;
                         std::result::Result::Ok(output_ok)
@@ -1266,6 +1499,69 @@ fn wire__crate__api__manager__UiBridge_transfers_impl(
                         let api_that_guard = api_that_guard.unwrap();
                         let output_ok =
                             crate::api::manager::UiBridge::transfers(&*api_that_guard).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__manager__UiBridge_watch_activity_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "UiBridge_watch_activity",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UiBridge>,
+            >>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::api::activity::UiActivityEvent,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, crate::api::error::UiBridgeError>(
+                    (move || async move {
+                        let mut api_that_guard = None;
+                        let decode_indices_ =
+                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
+                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                    &api_that, 0, false,
+                                )],
+                            );
+                        for i in decode_indices_ {
+                            match i {
+                                0 => {
+                                    api_that_guard =
+                                        Some(api_that.lockable_decode_async_ref().await)
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        let api_that_guard = api_that_guard.unwrap();
+                        let output_ok = crate::api::manager::UiBridge::watch_activity(
+                            &*api_that_guard,
+                            api_sink,
+                        )
+                        .await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -2949,6 +3245,19 @@ impl SseDecode
     }
 }
 
+impl SseDecode
+    for StreamSink<
+        crate::api::activity::UiActivityEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
 impl SseDecode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3005,6 +3314,18 @@ impl SseDecode for Vec<u8> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<u8>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::activity::UiActivity> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::activity::UiActivity>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -3121,6 +3442,17 @@ impl SseDecode for Option<String> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<String>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u64>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3256,6 +3588,126 @@ impl SseDecode for u8 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_u8().unwrap()
+    }
+}
+
+impl SseDecode for crate::api::activity::UiActivity {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_deviceId = <String>::sse_decode(deserializer);
+        let mut var_deviceName = <String>::sse_decode(deserializer);
+        let mut var_platform = <crate::api::models::UiPlatform>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::activity::UiActivityKind>::sse_decode(deserializer);
+        let mut var_direction =
+            <crate::api::activity::UiActivityDirection>::sse_decode(deserializer);
+        let mut var_status = <crate::api::activity::UiActivityStatus>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_startedAt = <u64>::sse_decode(deserializer);
+        let mut var_endedAt = <Option<u64>>::sse_decode(deserializer);
+        let mut var_completedAt = <Option<u64>>::sse_decode(deserializer);
+        let mut var_disconnectedAt = <Option<u64>>::sse_decode(deserializer);
+        let mut var_fileCompletedAt = <Option<u64>>::sse_decode(deserializer);
+        let mut var_failure = <Option<String>>::sse_decode(deserializer);
+        let mut var_url = <Option<String>>::sse_decode(deserializer);
+        let mut var_positionMillis = <u64>::sse_decode(deserializer);
+        let mut var_retryOf = <Option<String>>::sse_decode(deserializer);
+        let mut var_sessionId = <Option<String>>::sse_decode(deserializer);
+        let mut var_revision = <u64>::sse_decode(deserializer);
+        let mut var_filePath = <Option<String>>::sse_decode(deserializer);
+        let mut var_canRetry = <bool>::sse_decode(deserializer);
+        return crate::api::activity::UiActivity {
+            id: var_id,
+            device_id: var_deviceId,
+            device_name: var_deviceName,
+            platform: var_platform,
+            kind: var_kind,
+            direction: var_direction,
+            status: var_status,
+            title: var_title,
+            started_at: var_startedAt,
+            ended_at: var_endedAt,
+            completed_at: var_completedAt,
+            disconnected_at: var_disconnectedAt,
+            file_completed_at: var_fileCompletedAt,
+            failure: var_failure,
+            url: var_url,
+            position_millis: var_positionMillis,
+            retry_of: var_retryOf,
+            session_id: var_sessionId,
+            revision: var_revision,
+            file_path: var_filePath,
+            can_retry: var_canRetry,
+        };
+    }
+}
+
+impl SseDecode for crate::api::activity::UiActivityDirection {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::activity::UiActivityDirection::Outgoing,
+            1 => crate::api::activity::UiActivityDirection::Incoming,
+            2 => crate::api::activity::UiActivityDirection::Connection,
+            _ => unreachable!("Invalid variant for UiActivityDirection: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::activity::UiActivityEvent {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::activity::UiActivityEvent::Changed,
+            _ => unreachable!("Invalid variant for UiActivityEvent: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::activity::UiActivityKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::activity::UiActivityKind::Url,
+            1 => crate::api::activity::UiActivityKind::YouTube,
+            2 => crate::api::activity::UiActivityKind::File,
+            3 => crate::api::activity::UiActivityKind::LocalVideo,
+            4 => crate::api::activity::UiActivityKind::Session,
+            _ => unreachable!("Invalid variant for UiActivityKind: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::activity::UiActivitySnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_entries = <Vec<crate::api::activity::UiActivity>>::sse_decode(deserializer);
+        let mut var_storageError = <Option<String>>::sse_decode(deserializer);
+        return crate::api::activity::UiActivitySnapshot {
+            entries: var_entries,
+            storage_error: var_storageError,
+        };
+    }
+}
+
+impl SseDecode for crate::api::activity::UiActivityStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::activity::UiActivityStatus::Active,
+            1 => crate::api::activity::UiActivityStatus::Delivered,
+            2 => crate::api::activity::UiActivityStatus::Completed,
+            3 => crate::api::activity::UiActivityStatus::Rejected,
+            4 => crate::api::activity::UiActivityStatus::Cancelled,
+            5 => crate::api::activity::UiActivityStatus::Failed,
+            6 => crate::api::activity::UiActivityStatus::Disconnected,
+            7 => crate::api::activity::UiActivityStatus::Interrupted,
+            _ => unreachable!("Invalid variant for UiActivityStatus: {}", inner),
+        };
     }
 }
 
@@ -3784,261 +4236,291 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        2 => wire__crate__api__manager__UiBridge_connect_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__manager__UiBridge_devices_snapshot_impl(
+        2 => wire__crate__api__manager__UiBridge_activity_snapshot_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__manager__UiBridge_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__manager__UiBridge_discovery_handle_impl(
+        3 => wire__crate__api__manager__UiBridge_clear_history_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__manager__UiBridge_file_transfer_handle_impl(
+        4 => wire__crate__api__manager__UiBridge_connect_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__manager__UiBridge_devices_snapshot_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__manager__UiBridge_handoff_handle_impl(
+        6 => wire__crate__api__manager__UiBridge_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__manager__UiBridge_discovery_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__manager__UiBridge_handoff_snapshot_impl(
+        8 => wire__crate__api__manager__UiBridge_file_transfer_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__manager__UiBridge_pairing_handle_impl(
+        9 => wire__crate__api__manager__UiBridge_handoff_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        10 => wire__crate__api__manager__UiBridge_pairing_snapshot_impl(
+        10 => wire__crate__api__manager__UiBridge_handoff_snapshot_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__manager__UiBridge_reject_transfer_impl(
+        11 => wire__crate__api__manager__UiBridge_pairing_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        12 => wire__crate__api__manager__UiBridge_remove_incoming_handoff_impl(
+        12 => wire__crate__api__manager__UiBridge_pairing_snapshot_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__manager__UiBridge_remove_transfer_impl(
+        13 => wire__crate__api__manager__UiBridge_reject_transfer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__manager__UiBridge_remove_trusted_device_impl(
+        14 => wire__crate__api__manager__UiBridge_remove_activity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__manager__UiBridge_set_default_transfer_directory_impl(
+        15 => wire__crate__api__manager__UiBridge_remove_incoming_handoff_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__manager__UiBridge_set_display_name_impl(
+        16 => wire__crate__api__manager__UiBridge_remove_transfer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => {
+        17 => wire__crate__api__manager__UiBridge_remove_trusted_device_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        18 => wire__crate__api__manager__UiBridge_retry_activity_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        19 => wire__crate__api__manager__UiBridge_set_default_transfer_directory_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        20 => wire__crate__api__manager__UiBridge_set_display_name_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        21 => {
             wire__crate__api__manager__UiBridge_set_language_impl(port, ptr, rust_vec_len, data_len)
         }
-        18 => wire__crate__api__manager__UiBridge_settings_snapshot_impl(
+        22 => wire__crate__api__manager__UiBridge_settings_snapshot_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__manager__UiBridge_shutdown_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__manager__UiBridge_start_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__manager__UiBridge_transfers_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__manager__UiBridge_watch_devices_impl(
+        23 => wire__crate__api__manager__UiBridge_shutdown_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__manager__UiBridge_start_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__manager__UiBridge_transfers_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__manager__UiBridge_watch_activity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__manager__UiBridge_watch_handoffs_impl(
+        27 => wire__crate__api__manager__UiBridge_watch_devices_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__manager__UiBridge_watch_pairing_impl(
+        28 => wire__crate__api__manager__UiBridge_watch_handoffs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__manager__UiBridge_watch_settings_impl(
+        29 => wire__crate__api__manager__UiBridge_watch_pairing_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__api__manager__UiBridge_watch_transfers_impl(
+        30 => wire__crate__api__manager__UiBridge_watch_settings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__handles__UiDiscoveryHandle_advertise_impl(
+        31 => wire__crate__api__manager__UiBridge_watch_transfers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__handles__UiDiscoveryHandle_browse_local_impl(
+        32 => wire__crate__api__handles__UiDiscoveryHandle_advertise_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__handles__UiDiscoveryHandle_release_impl(
+        33 => wire__crate__api__handles__UiDiscoveryHandle_browse_local_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__handles__UiDiscoveryHandle_use_handle_impl(
+        34 => wire__crate__api__handles__UiDiscoveryHandle_release_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__handles__UiDiscoveryHandle_use_manual_endpoint_impl(
+        35 => wire__crate__api__handles__UiDiscoveryHandle_use_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__handles__UiFileTransferHandle_prepare_impl(
+        36 => wire__crate__api__handles__UiDiscoveryHandle_use_manual_endpoint_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__handles__UiFileTransferHandle_release_impl(
+        37 => wire__crate__api__handles__UiFileTransferHandle_prepare_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__handles__UiFileTransferHandle_transfer_impl(
+        38 => wire__crate__api__handles__UiFileTransferHandle_release_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__handles__UiFileTransferHandle_use_handle_impl(
+        39 => wire__crate__api__handles__UiFileTransferHandle_transfer_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__handles__UiHandoffHandle_handoff_impl(
+        40 => wire__crate__api__handles__UiFileTransferHandle_use_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__handles__UiHandoffHandle_prepare_local_video_impl(
+        41 => wire__crate__api__handles__UiHandoffHandle_handoff_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__handles__UiHandoffHandle_prepare_url_impl(
+        42 => wire__crate__api__handles__UiHandoffHandle_prepare_local_video_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__handles__UiHandoffHandle_prepare_youtube_impl(
+        43 => wire__crate__api__handles__UiHandoffHandle_prepare_url_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__handles__UiHandoffHandle_release_impl(
+        44 => wire__crate__api__handles__UiHandoffHandle_prepare_youtube_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__handles__UiHandoffHandle_use_handle_impl(
+        45 => wire__crate__api__handles__UiHandoffHandle_release_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__handles__UiPairingHandle_approve_impl(
+        46 => wire__crate__api__handles__UiHandoffHandle_use_handle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__handles__UiPairingHandle_prepare_initiator_impl(
+        47 => wire__crate__api__handles__UiPairingHandle_approve_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__handles__UiPairingHandle_prepare_receiver_impl(
+        48 => wire__crate__api__handles__UiPairingHandle_prepare_initiator_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__handles__UiPairingHandle_reject_impl(
+        49 => wire__crate__api__handles__UiPairingHandle_prepare_receiver_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__handles__UiPairingHandle_release_impl(
+        50 => wire__crate__api__handles__UiPairingHandle_reject_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__handles__UiPairingHandle_session_impl(
+        51 => wire__crate__api__handles__UiPairingHandle_release_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__handles__UiPairingHandle_use_handle_impl(
+        52 => wire__crate__api__handles__UiPairingHandle_session_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__manager__init_app_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__handles__UiPairingHandle_use_handle_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        54 => wire__crate__api__manager__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4239,6 +4721,160 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::events::TransferUiEvent>
     for crate::api::events::TransferUiEvent
 {
     fn into_into_dart(self) -> crate::api::events::TransferUiEvent {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::activity::UiActivity {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.device_id.into_into_dart().into_dart(),
+            self.device_name.into_into_dart().into_dart(),
+            self.platform.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+            self.direction.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+            self.started_at.into_into_dart().into_dart(),
+            self.ended_at.into_into_dart().into_dart(),
+            self.completed_at.into_into_dart().into_dart(),
+            self.disconnected_at.into_into_dart().into_dart(),
+            self.file_completed_at.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+            self.url.into_into_dart().into_dart(),
+            self.position_millis.into_into_dart().into_dart(),
+            self.retry_of.into_into_dart().into_dart(),
+            self.session_id.into_into_dart().into_dart(),
+            self.revision.into_into_dart().into_dart(),
+            self.file_path.into_into_dart().into_dart(),
+            self.can_retry.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::activity::UiActivity
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::activity::UiActivity>
+    for crate::api::activity::UiActivity
+{
+    fn into_into_dart(self) -> crate::api::activity::UiActivity {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::activity::UiActivityDirection {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Outgoing => 0.into_dart(),
+            Self::Incoming => 1.into_dart(),
+            Self::Connection => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::activity::UiActivityDirection
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::activity::UiActivityDirection>
+    for crate::api::activity::UiActivityDirection
+{
+    fn into_into_dart(self) -> crate::api::activity::UiActivityDirection {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::activity::UiActivityEvent {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Changed => 0.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::activity::UiActivityEvent
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::activity::UiActivityEvent>
+    for crate::api::activity::UiActivityEvent
+{
+    fn into_into_dart(self) -> crate::api::activity::UiActivityEvent {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::activity::UiActivityKind {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Url => 0.into_dart(),
+            Self::YouTube => 1.into_dart(),
+            Self::File => 2.into_dart(),
+            Self::LocalVideo => 3.into_dart(),
+            Self::Session => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::activity::UiActivityKind
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::activity::UiActivityKind>
+    for crate::api::activity::UiActivityKind
+{
+    fn into_into_dart(self) -> crate::api::activity::UiActivityKind {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::activity::UiActivitySnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.entries.into_into_dart().into_dart(),
+            self.storage_error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::activity::UiActivitySnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::activity::UiActivitySnapshot>
+    for crate::api::activity::UiActivitySnapshot
+{
+    fn into_into_dart(self) -> crate::api::activity::UiActivitySnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::activity::UiActivityStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Active => 0.into_dart(),
+            Self::Delivered => 1.into_dart(),
+            Self::Completed => 2.into_dart(),
+            Self::Rejected => 3.into_dart(),
+            Self::Cancelled => 4.into_dart(),
+            Self::Failed => 5.into_dart(),
+            Self::Disconnected => 6.into_dart(),
+            Self::Interrupted => 7.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::activity::UiActivityStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::activity::UiActivityStatus>
+    for crate::api::activity::UiActivityStatus
+{
+    fn into_into_dart(self) -> crate::api::activity::UiActivityStatus {
         self
     }
 }
@@ -5129,6 +5765,18 @@ impl SseEncode
     }
 }
 
+impl SseEncode
+    for StreamSink<
+        crate::api::activity::UiActivityEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
 impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5191,6 +5839,16 @@ impl SseEncode for Vec<u8> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <u8>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::activity::UiActivity> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::activity::UiActivity>::sse_encode(item, serializer);
         }
     }
 }
@@ -5281,6 +5939,16 @@ impl SseEncode for Option<String> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <String>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u64>::sse_encode(value, serializer);
         }
     }
 }
@@ -5410,6 +6078,114 @@ impl SseEncode for u8 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::activity::UiActivity {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.device_id, serializer);
+        <String>::sse_encode(self.device_name, serializer);
+        <crate::api::models::UiPlatform>::sse_encode(self.platform, serializer);
+        <crate::api::activity::UiActivityKind>::sse_encode(self.kind, serializer);
+        <crate::api::activity::UiActivityDirection>::sse_encode(self.direction, serializer);
+        <crate::api::activity::UiActivityStatus>::sse_encode(self.status, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <u64>::sse_encode(self.started_at, serializer);
+        <Option<u64>>::sse_encode(self.ended_at, serializer);
+        <Option<u64>>::sse_encode(self.completed_at, serializer);
+        <Option<u64>>::sse_encode(self.disconnected_at, serializer);
+        <Option<u64>>::sse_encode(self.file_completed_at, serializer);
+        <Option<String>>::sse_encode(self.failure, serializer);
+        <Option<String>>::sse_encode(self.url, serializer);
+        <u64>::sse_encode(self.position_millis, serializer);
+        <Option<String>>::sse_encode(self.retry_of, serializer);
+        <Option<String>>::sse_encode(self.session_id, serializer);
+        <u64>::sse_encode(self.revision, serializer);
+        <Option<String>>::sse_encode(self.file_path, serializer);
+        <bool>::sse_encode(self.can_retry, serializer);
+    }
+}
+
+impl SseEncode for crate::api::activity::UiActivityDirection {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::activity::UiActivityDirection::Outgoing => 0,
+                crate::api::activity::UiActivityDirection::Incoming => 1,
+                crate::api::activity::UiActivityDirection::Connection => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::activity::UiActivityEvent {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::activity::UiActivityEvent::Changed => 0,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::activity::UiActivityKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::activity::UiActivityKind::Url => 0,
+                crate::api::activity::UiActivityKind::YouTube => 1,
+                crate::api::activity::UiActivityKind::File => 2,
+                crate::api::activity::UiActivityKind::LocalVideo => 3,
+                crate::api::activity::UiActivityKind::Session => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::activity::UiActivitySnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::activity::UiActivity>>::sse_encode(self.entries, serializer);
+        <Option<String>>::sse_encode(self.storage_error, serializer);
+    }
+}
+
+impl SseEncode for crate::api::activity::UiActivityStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::activity::UiActivityStatus::Active => 0,
+                crate::api::activity::UiActivityStatus::Delivered => 1,
+                crate::api::activity::UiActivityStatus::Completed => 2,
+                crate::api::activity::UiActivityStatus::Rejected => 3,
+                crate::api::activity::UiActivityStatus::Cancelled => 4,
+                crate::api::activity::UiActivityStatus::Failed => 5,
+                crate::api::activity::UiActivityStatus::Disconnected => 6,
+                crate::api::activity::UiActivityStatus::Interrupted => 7,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

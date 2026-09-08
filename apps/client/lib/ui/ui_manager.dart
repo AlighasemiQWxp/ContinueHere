@@ -4,6 +4,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../platform/platform_manager.dart';
 import '../src/rust/api/manager.dart';
 import '../src/rust/api/models.dart';
+import '../src/rust/api/activity.dart';
 import 'ui_controller.dart';
 import 'ui_file_support.dart';
 import 'ui_notifications.dart';
@@ -19,6 +20,7 @@ class UiManager extends ChangeNotifier {
       notifyListeners,
       _receiveError,
       _receiveActivity,
+      _receiveHistoryActivity,
     );
   }
 
@@ -61,6 +63,10 @@ class UiManager extends ChangeNotifier {
   UiHandoffSnapshot? get handoffs => _controller.handoff.snapshot;
   List<UiFileTransfer> get transfers => _controller.transfer.transfers;
   UiSettingsSnapshot? get settings => _controller.settings.snapshot;
+  List<UiActivity> get history => _controller.activity.entries;
+  String? get historyStorageError => _controller.activity.storageError;
+  String? get historyDevice => _transition.historyDevice;
+  bool get historyBusy => _controller.activity.busy;
   VideoController get filePreviewVideo =>
       _controller.filePreview.videoController;
   UiFilePreview? get filePreview => _controller.filePreview.preview;
@@ -72,6 +78,7 @@ class UiManager extends ChangeNotifier {
         _controller.handoff.busy ||
         _controller.transfer.busy ||
         _controller.settings.busy ||
+        _controller.activity.busy ||
         _controller.filePreview.busy;
   }
 
@@ -92,8 +99,68 @@ class UiManager extends ChangeNotifier {
   }
 
   void show(UiDestination destination) {
+    if (destination == UiDestination.history) {
+      _transition.showHistoryDevice(null);
+    }
     _notifications.open(destination);
     _transition.show(destination);
+  }
+
+  bool hasDeviceNotification(String deviceId) =>
+      _notifications.hasDevice(deviceId);
+
+  void showDeviceHistory(String deviceId) {
+    _notifications.openDevice(deviceId);
+    _transition.showHistoryDevice(deviceId);
+  }
+
+  void showHistoryDevices() => _transition.showHistoryDevice(null);
+
+  Future<void> retryActivity(UiActivity activity) =>
+      _controller.activity.retry(activity);
+  Future<void> removeActivity(UiActivity activity) async {
+    await _controller.activity.remove(activity);
+    _notifications.retainDevices(
+      history.map((entry) => entry.deviceId).toSet(),
+    );
+    notifyListeners();
+  }
+
+  Future<void> clearHistory() async {
+    await _controller.activity.clear();
+    _notifications.retainDevices(
+      history.map((entry) => entry.deviceId).toSet(),
+    );
+    notifyListeners();
+  }
+
+  bool canOpenActivity(UiActivity activity) {
+    return activity.direction == UiActivityDirection.incoming &&
+        (activity.status == UiActivityStatus.completed ||
+            activity.status == UiActivityStatus.delivered) &&
+        (activity.filePath != null || activity.url != null);
+  }
+
+  Future<void> openActivity(UiActivity activity) async {
+    if (!canOpenActivity(activity)) {
+      return;
+    }
+    final path = activity.filePath;
+    if (path == null) {
+      final url = activity.url;
+      if (url != null) {
+        try {
+          await _platform.openExternalUrl(url);
+        } catch (error) {
+          _receiveError(error);
+        }
+      }
+      return;
+    }
+    await _openReceivedFile(
+      path,
+      position: Duration(milliseconds: activity.positionMillis.toInt()),
+    );
   }
 
   void clearError() {
@@ -220,6 +287,13 @@ class UiManager extends ChangeNotifier {
       _receiveError(StateError('This transferred file cannot be opened.'));
       return;
     }
+    await _openReceivedFile(destination);
+  }
+
+  Future<void> _openReceivedFile(
+    String destination, {
+    Duration position = Duration.zero,
+  }) async {
     if (UiFileSupport.isUnsafeToOpen(destination)) {
       _receiveError(
         StateError('Executable and script files cannot be opened here.'),
@@ -228,7 +302,10 @@ class UiManager extends ChangeNotifier {
     }
     final previewKind = UiFileSupport.previewKind(destination);
     if (previewKind != null) {
-      final opened = await _controller.filePreview.open(destination);
+      final opened = await _controller.filePreview.open(
+        destination,
+        position: position,
+      );
       if (opened) {
         _transition.showFilePreview();
       }
@@ -252,13 +329,7 @@ class UiManager extends ChangeNotifier {
       final position = Duration(
         milliseconds: handoff.payload.playbackPositionMillis.toInt(),
       );
-      final opened = await _controller.filePreview.open(
-        filePath,
-        position: position,
-      );
-      if (opened) {
-        _transition.showFilePreview();
-      }
+      await _openReceivedFile(filePath, position: position);
       return;
     }
     await _controller.handoff.openIncoming(handoff);
@@ -328,6 +399,17 @@ class UiManager extends ChangeNotifier {
 
   void _receiveActivity(UiDestination destination) {
     _notifications.receive(destination, _transition.destination);
+  }
+
+  void _receiveHistoryActivity(String deviceId) {
+    _notifications.retainDevices(
+      history.map((entry) => entry.deviceId).toSet(),
+    );
+    _notifications.receiveHistory(
+      deviceId,
+      _transition.destination,
+      _transition.historyDevice,
+    );
   }
 
   Future<void> shutdown() async {

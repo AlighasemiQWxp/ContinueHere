@@ -1,3 +1,4 @@
+mod activity;
 mod app;
 mod core;
 mod devices;
@@ -18,6 +19,11 @@ mod settings;
 mod transfer;
 mod transport;
 
+pub use activity::{
+    Activity, ActivityChange, ActivityChangedDelegate, ActivityChangedSubscription,
+    ActivityDirection, ActivityError, ActivityKind, ActivityManager, ActivitySnapshot,
+    ActivityStatus,
+};
 pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
 pub use devices::{

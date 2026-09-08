@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'activity.dart';
 import 'error.dart';
 import 'events.dart';
 import 'handles.dart';
@@ -19,6 +20,10 @@ abstract class UiBridge implements RustOpaqueInterface {
     required String transferId,
     String? selectedDirectory,
   });
+
+  Future<UiActivitySnapshot> activitySnapshot();
+
+  Future<void> clearHistory();
 
   Future<void> connect({
     required String deviceId,
@@ -44,11 +49,15 @@ abstract class UiBridge implements RustOpaqueInterface {
 
   Future<void> rejectTransfer({required String transferId});
 
+  Future<void> removeActivity({required String activityId});
+
   Future<void> removeIncomingHandoff({required String handoffId});
 
   Future<void> removeTransfer({required String transferId});
 
   Future<void> removeTrustedDevice({required String deviceId});
+
+  Future<void> retryActivity({required String activityId});
 
   Future<void> setDefaultTransferDirectory({required String directory});
 
@@ -66,6 +75,8 @@ abstract class UiBridge implements RustOpaqueInterface {
       .crateApiManagerUiBridgeStart(projectDirectory: projectDirectory);
 
   Future<List<UiFileTransfer>> transfers();
+
+  Stream<UiActivityEvent> watchActivity();
 
   Stream<DevicesUiEvent> watchDevices();
 
