@@ -8,7 +8,8 @@ ownership stay unchanged. Existing activity history and retry belong to this
 migration even though roadmap Phase 16 still has outstanding acceptance work.
 
 The implementation passed formatting, workspace checks, warnings-denied Clippy,
-tests, and the Windows release build locally on September 9, 2026. It is not
+tests, and the Windows release build locally on September 9, 2026. GitHub CI also
+passed its Linux Rust, Windows Slint, and retained Flutter Windows jobs. It is not
 accepted as complete until the interaction checklist passes. No new platform is
 a prerequisite for finishing the Windows migration. Android, Linux, macOS, iOS,
 and remaining product features follow separately.

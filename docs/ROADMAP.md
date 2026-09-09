@@ -113,8 +113,8 @@ after its implementation and validation requirements are satisfied.
     feature-owned Handles and post-commit event subscriptions
   - Formatting, workspace checks, warnings-denied Clippy, tests, and the Windows
     release build passed locally on September 9, 2026
-  - Windows interaction acceptance and GitHub CI remain pending; use the Windows
-    migration checklist
+  - GitHub CI passed on September 9, 2026; Windows interaction acceptance remains
+    pending through the Windows migration checklist
   - Retain Flutter until Windows parity is accepted
   - Additional platforms and new features are outside this migration milestone
 
