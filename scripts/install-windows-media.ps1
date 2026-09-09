@@ -48,9 +48,15 @@ foreach ($package in $packages) {
         throw "Checksum verification failed for $package."
     }
 
-    & msiexec.exe /a $packagePath /qn "TARGETDIR=$extractRoot"
-    if ($LASTEXITCODE -ne 0) {
-        throw "GStreamer package extraction failed with exit code $LASTEXITCODE."
+    $arguments = @(
+        '/a',
+        ('"' + $packagePath + '"'),
+        '/qn',
+        ('TARGETDIR="' + $extractRoot + '"')
+    )
+    $process = Start-Process msiexec.exe -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+    if ($process.ExitCode -ne 0) {
+        throw "GStreamer package extraction failed for $package with exit code $($process.ExitCode)."
     }
 }
 
