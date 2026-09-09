@@ -13,6 +13,17 @@ publish = false
 continuehere = { path = "../../crates/continuehere" }
 slint.workspace = true
 tokio.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+open = "5"
+url.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+rfd = { version = "0.15", default-features = false }
+gstreamer = "0.24"
+gstreamer-app = "0.24"
+gstreamer-video = "0.24"
+winreg = "0.55"
 
 [build-dependencies]
 slint-build = "=1.17.1"

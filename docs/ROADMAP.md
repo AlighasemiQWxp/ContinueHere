@@ -103,17 +103,27 @@ after its implementation and validation requirements are satisfied.
   - Explicit file approval followed by complete-file verification and handoff acknowledgement
   - Exact completed-transfer and authenticated-sender binding on the receiver
   - Player opening and seeking remain application-interface responsibilities
-- [ ] 15. Desktop user interface
-  - Migrate the native client from Flutter to Rust with Slint presentation
+- [ ] 15. Windows user interface migration
+  - Recreate the UI and behavior already implemented in Flutter on Windows using Slint
   - Direct Rust core ownership without a Dart bridge in the final client
-  - Initial Slint slice: startup, shutdown, Devices, Settings, core delegates,
-    discovery Handle ownership, and English/Persian layout
-  - Port pairing, handoff, transfer opening and previews, history, and remaining
-    platform capabilities before removing the Flutter reference
-  - Validate RTL input/layout, accessibility, media behavior, and packaging on
-    every supported platform
+  - Five screens: Devices, Send, Transfers, History, and Settings
+  - Pairing, connection commands, handoffs, file dialogs, transfer approval and
+    opening, image/video previews, existing history/retry, and unread indicators
+  - Preserve Windows application data, English/Persian input and layouts, and
+    feature-owned Handles and post-commit event subscriptions
+  - Formatting, workspace checks, warnings-denied Clippy, tests, and the Windows
+    release build passed locally on September 9, 2026
+  - Windows interaction acceptance and GitHub CI remain pending; use the Windows
+    migration checklist
+  - Retain Flutter until Windows parity is accepted
+  - Additional platforms and new features are outside this migration milestone
 
-## E. Expansion
+## E. Subsequent work
+
+Finish Windows Slint parity first. Existing Phase 16 behavior is part of the
+Flutter reference and must be preserved during migration. After Windows
+acceptance, add the remaining features and platforms in separate steps. Each
+platform receives its own implementation and acceptance cycle.
 
 - [ ] 16. Activity history and retry
   - Independent Rust ActivityManager with bounded, versioned local history
@@ -126,7 +136,7 @@ after its implementation and validation requirements are satisfied.
   - Binding generation, full local validation, and Windows release build passed
   - Desktop interaction acceptance and continuous integration pending
 - [ ] 17. Android application
-- [ ] 18. Linux, macOS, and iOS support
+- [ ] 18. Linux, macOS, and iOS support, one platform at a time
 - [ ] 19. Advanced application and operating-system integrations
 
 ## F. Production

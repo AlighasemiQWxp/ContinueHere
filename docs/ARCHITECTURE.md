@@ -13,8 +13,8 @@ code is added incrementally without coupling unrelated systems together.
 - `crates/continuehere` contains the reusable core application library.
 - `apps/client_slint` contains the native Rust/Slint client that will replace
   the Flutter client incrementally.
-- `apps/client` contains the Flutter application shared by desktop and mobile
-  platforms and remains the feature-complete migration reference.
+- `apps/client` contains the existing Flutter Windows runner and remains the
+  migration reference. Other platform runners have not been brought up.
 - `docs` records stable architectural decisions and the development roadmap.
 
 Application crates may depend on the core library. The core library must not
@@ -30,12 +30,32 @@ loop, where the owning controller rebuilds an immutable display snapshot. Slint
 models contain presentation data only; they do not become a second source of
 application state.
 
-The initial migration slice owns `ContinueHere` directly and provides Devices
-and Settings. `DevicesUiController` retains discovery Handles and subscriptions
-for their complete lifetimes. `SettingsUiController` uses the existing settings,
-directory, device, and localization paths, and refreshes after their persisted
-post-commit events. The top-level manager drops its controllers before consuming
-the core for orderly shutdown.
+The immediate target is Windows parity with the existing Flutter implementation.
+The client owns `ContinueHere` directly and provides Devices, Send, Transfers,
+History, and Settings. Feature controllers retain their own Handles and delegate
+subscriptions. Settings and history continue to use the existing core stores.
+
+Core startup runs on a worker and hands the completed application to the UI
+thread. The core is movable but is not required to be `Sync`. Controllers share
+it locally through `Rc`; the pending connection future remains owned by Devices
+and is polled only when its waker posts a UI event. Dropping the controller drops
+that future before the manager consumes the core for shutdown. Closing during
+startup also consumes and shuts down any successfully constructed core.
+
+The Windows platform boundary owns native file/folder dialogs and external file
+and HTTP/HTTPS opening. The preview controller owns image animation timers and
+the media player. The Windows GStreamer backend owns decoding, audio, seeking,
+and the playback worker; bounded RGBA frames are delivered into Slint images.
+A generation number rejects stale media events after close or replacement. The
+player returns its pipeline to Null and joins its worker on close. GIF and
+animated WebP previews decode frames incrementally and stop their timer on close.
+
+Discovery identifiers are temporary, so they are not treated as trusted device
+IDs. Pairing and authenticated transport have separate listeners. The Devices
+screen displays both listener endpoints and accepts an explicit destination
+transport endpoint for connection commands. TLS still checks the selected
+trusted device. This corrects the Flutter UI's unusable ID matching without
+changing discovery metadata or the protocol.
 
 The Slint package keeps `unsafe_code` and production-placeholder Clippy lints
 denied for handwritten Rust. It does not inherit the workspace-level
@@ -50,20 +70,27 @@ Rust/Slint client
 └── UiManager
     ├── ContinueHere Rust core
     ├── DevicesUiController
+    ├── PairingUiController
+    ├── HandoffUiController
+    ├── TransferUiController
+    ├── HistoryUiController
+    ├── PreviewUiController
     └── SettingsUiController
 ```
 
 During migration, `apps/client` remains available as the behavior reference for
-screens that have not been ported. The Dart bridge is retained only for that
-client and will be removed with Flutter after feature parity and platform
-acceptance.
+all existing screens and behaviors. The Dart bridge is retained only for that
+client and will be removed with Flutter after Windows feature parity and
+interaction acceptance. No Android, Linux, macOS, or iOS UI support is claimed
+by this migration. Non-Windows Rust CI remains a core/workspace portability
+check, not application-platform acceptance.
 
 ### Existing Flutter reference
 
 The Flutter application is a native client of the Rust core. It does not add a
 web application, browser runtime, or WebView layer. Phase 15 introduces the
-Windows runner first; later roadmap phases add Android, Linux, macOS, and iOS
-to the same Flutter source tree.
+Windows runner. Future platform work targets the Slint application after the
+Windows migration has been accepted.
 
 `UiManager` is the main user-interface module. The application root constructs
 it with a narrow Rust bridge and platform capabilities. `UiManager` privately

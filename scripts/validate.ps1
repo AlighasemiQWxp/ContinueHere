@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'use-windows-media.ps1')
 
 function Invoke-ValidationStep {
     param([string]$Program, [string[]]$Arguments)
@@ -37,6 +38,7 @@ try {
     Invoke-ValidationStep 'cargo' @('check', '--workspace', '--all-targets')
     Invoke-ValidationStep 'cargo' @('clippy', '--workspace', '--all-targets', '--all-features', '--', '-D', 'warnings')
     Invoke-ValidationStep 'cargo' @('test', '--workspace')
+    Invoke-ValidationStep 'cargo' @('build', '-p', 'continuehere_client_slint', '--release')
 
     Push-Location -LiteralPath (Join-Path $projectRoot 'apps/client')
     try {

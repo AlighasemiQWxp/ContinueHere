@@ -1,7 +1,10 @@
 use std::{
     cell::RefCell,
+    future::Future,
+    pin::Pin,
     rc::{Rc, Weak as RcWeak},
     sync::{Arc, Mutex},
+    task::{Context, Poll, Wake, Waker},
 };
 
 use continuehere::{
@@ -14,6 +17,17 @@ use continuehere::{
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
 use super::{DeviceRow, MainWindow};
+
+type ConnectionFuture = Pin<Box<dyn Future<Output = Result<(), String>>>>;
+
+struct ConnectionWake(super::support::EventTarget);
+
+impl Wake for ConnectionWake {
+    fn wake(self: Arc<Self>) {
+        self.0
+            .dispatch(|window| window.invoke_poll_connection_requested());
+    }
+}
 
 #[derive(Clone)]
 struct UiEventTarget(Arc<Mutex<slint::Weak<MainWindow>>>);
@@ -31,12 +45,14 @@ impl UiEventTarget {
             .clone();
         let _event_result = window.upgrade_in_event_loop(|window| {
             window.invoke_refresh_devices_requested();
+            super::support::notify(&window, 0);
         });
     }
 }
 
 pub(super) struct DevicesUiController {
     core: Rc<ContinueHere>,
+    connection: Option<ConnectionFuture>,
     local_discovery: Option<DiscoveryHandle>,
     manual_discoveries: Vec<DiscoveryHandle>,
     next_manual_discovery: u64,
@@ -56,6 +72,7 @@ struct DevicesSnapshot {
 }
 
 struct DeviceItem {
+    id: String,
     name: String,
     detail: String,
     connected: bool,
@@ -94,6 +111,7 @@ impl DevicesUiController {
 
         let controller = Rc::new(RefCell::new(Self {
             core,
+            connection: None,
             local_discovery,
             manual_discoveries: Vec::new(),
             next_manual_discovery: 0,
@@ -109,6 +127,30 @@ impl DevicesUiController {
     }
 
     fn bind_callbacks(controller: RcWeak<RefCell<Self>>, window: &MainWindow) {
+        let poll_controller = controller.clone();
+        let poll_window = window.as_weak();
+        window.on_poll_connection_requested(move || {
+            if let (Some(controller), Some(window)) =
+                (poll_controller.upgrade(), poll_window.upgrade())
+            {
+                controller.borrow_mut().poll_connection(&window);
+            }
+        });
+        let action_controller = controller.clone();
+        let action_window = window.as_weak();
+        window.on_device_action(move |id, action, endpoint| {
+            if let (Some(controller), Some(window)) =
+                (action_controller.upgrade(), action_window.upgrade())
+            {
+                let result = controller.borrow_mut().act(
+                    id.as_str(),
+                    action.as_str(),
+                    endpoint.as_str(),
+                    &window,
+                );
+                super::support::show_result(&window, result);
+            }
+        });
         let window_weak = window.as_weak();
         let add_controller = controller.clone();
         window.on_add_manual_endpoint(move |value| {
@@ -150,6 +192,62 @@ impl DevicesUiController {
 
     fn refresh(&self, window: &MainWindow) {
         apply_snapshot(window, snapshot(&self.core));
+        if let Ok(endpoint) = self.core.transport().listening_endpoint() {
+            window.set_transport_endpoint(endpoint.to_string().into());
+        }
+        window.invoke_refresh_history_requested();
+    }
+
+    fn act(
+        &mut self,
+        id: &str,
+        action: &str,
+        endpoint: &str,
+        window: &MainWindow,
+    ) -> super::support::UiResult {
+        let id = continuehere::DeviceId::new(id.to_owned())?;
+        if action == "forget" {
+            self.core.pairing().remove_trusted_device(&id)?;
+            return Ok(());
+        }
+        if window.get_connection_busy() {
+            return Ok(());
+        }
+        let endpoint = if action == "connect" {
+            Some(endpoint.parse::<DiscoveryEndpoint>()?)
+        } else {
+            None
+        };
+        if action != "connect" && action != "disconnect" {
+            return Err("Unknown device action.".into());
+        }
+        let core = Rc::clone(&self.core);
+        window.set_connection_busy(true);
+        self.connection = Some(Box::pin(async move {
+            if let Some(endpoint) = endpoint {
+                core.transport().connect(&id, &endpoint).await.map(|_| ())
+            } else {
+                core.transport().disconnect(&id).await
+            }
+            .map_err(|error| error.to_string())
+        }));
+        self.poll_connection(window);
+        Ok(())
+    }
+
+    fn poll_connection(&mut self, window: &MainWindow) {
+        let Some(connection) = &mut self.connection else {
+            return;
+        };
+        let waker = Waker::from(Arc::new(ConnectionWake(super::support::EventTarget::new(
+            window,
+        ))));
+        if let Poll::Ready(result) = connection.as_mut().poll(&mut Context::from_waker(&waker)) {
+            self.connection.take();
+            window.set_connection_busy(false);
+            super::support::show_result(window, result);
+            self.refresh(window);
+        }
     }
 }
 
@@ -197,6 +295,7 @@ fn snapshot(core: &ContinueHere) -> DevicesSnapshot {
         .candidates()
         .into_iter()
         .map(|candidate| DeviceItem {
+            id: candidate.id().to_string(),
             name: candidate.id().to_string(),
             detail: candidate
                 .endpoints()
@@ -211,6 +310,7 @@ fn snapshot(core: &ContinueHere) -> DevicesSnapshot {
         .trusted_devices()
         .into_iter()
         .map(|device| DeviceItem {
+            id: device.device_id().to_string(),
             name: device.display_name().to_owned(),
             detail: platform_name(device.platform()).to_owned(),
             connected: connections
@@ -232,7 +332,47 @@ fn snapshot(core: &ContinueHere) -> DevicesSnapshot {
 }
 
 fn apply_snapshot(window: &MainWindow, snapshot: DevicesSnapshot) {
+    let selected = window.get_destination_device();
+    if !snapshot
+        .trusted
+        .iter()
+        .any(|item| item.id == selected.as_str() && item.connected)
+    {
+        window.set_destination_device(
+            snapshot
+                .trusted
+                .iter()
+                .find(|item| item.connected)
+                .map(|item| item.id.as_str())
+                .unwrap_or("")
+                .into(),
+        );
+    }
     window.set_local_device_name(snapshot.local_name.into());
+    let connected: Vec<_> = snapshot
+        .trusted
+        .iter()
+        .filter(|item| item.connected)
+        .collect();
+    window.set_connected_device_names(super::support::model(
+        connected
+            .iter()
+            .map(|item| item.name.as_str().into())
+            .collect(),
+    ));
+    window.set_connected_device_ids(super::support::model(
+        connected
+            .iter()
+            .map(|item| item.id.as_str().into())
+            .collect(),
+    ));
+    window.set_destination_index(
+        connected
+            .iter()
+            .position(|item| item.id == window.get_destination_device().as_str())
+            .map(|index| index as i32)
+            .unwrap_or(-1),
+    );
     window.set_local_device_detail(snapshot.local_detail.into());
     window.set_nearby_devices(device_model(snapshot.nearby));
     window.set_trusted_devices(device_model(snapshot.trusted));
@@ -243,6 +383,7 @@ fn device_model(items: Vec<DeviceItem>) -> ModelRc<DeviceRow> {
     let rows: Vec<DeviceRow> = items
         .into_iter()
         .map(|item| DeviceRow {
+            id: item.id.into(),
             name: SharedString::from(item.name),
             detail: SharedString::from(item.detail),
             connected: item.connected,
@@ -251,7 +392,7 @@ fn device_model(items: Vec<DeviceItem>) -> ModelRc<DeviceRow> {
     ModelRc::new(VecModel::from(rows))
 }
 
-fn platform_name(platform: Platform) -> &'static str {
+pub(super) fn platform_name(platform: Platform) -> &'static str {
     match platform {
         Platform::Windows => "Windows",
         Platform::Linux => "Linux",

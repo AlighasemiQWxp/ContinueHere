@@ -46,6 +46,39 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  windows-slint:
+    name: Windows Slint client
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+
+      - name: Use stable Rust
+        run: rustup default stable
+
+      - name: Install native media dependencies
+        shell: pwsh
+        run: ./scripts/install-windows-media.ps1
+
+      - name: Check Windows formatting, types, lint, and tests
+        shell: pwsh
+        run: |
+          . ./scripts/use-windows-media.ps1
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo check --workspace --all-targets --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --workspace --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build -p continuehere_client_slint --release --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   windows-client:
     name: Windows client
     runs-on: windows-latest

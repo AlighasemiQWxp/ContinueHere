@@ -50,8 +50,9 @@ The architectural foundation is complete. It currently provides:
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
 - Native Flutter Windows client with RTL localization and contextual transferred-file previews
-- Initial Rust/Slint desktop client with direct core ownership, Devices, Settings,
-  event-driven snapshots, and English/Persian presentation
+- Rust/Slint Windows migration with all five screens, direct core ownership,
+  pairing, handoffs, transfers, media previews, settings, and activity history
+  (local validation passed; Windows interaction acceptance pending)
 - Device-grouped activity history and manual retry (desktop acceptance pending)
 - Automated tests for the public API, module lifecycle, and handle behavior
 
@@ -63,7 +64,9 @@ local-video handoff with playback position. The existing Flutter Windows
 interface includes contextual file opening without embedding a browser or
 WebView. A Rust/Slint client now runs beside it while the interface is migrated
 feature by feature. Flutter remains the feature-complete reference until the
-Slint client reaches parity and passes platform acceptance.
+Slint client reaches parity and passes Windows acceptance. The immediate target
+is the UI and behavior already implemented in Flutter on Windows. Additional
+platforms and new features follow separately, one at a time.
 
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
@@ -184,6 +187,8 @@ the project directory.
 - `rustfmt`
 - Clippy
 - Slint 1.17.1, resolved by Cargo
+- GStreamer MSVC x64 runtime and development packages for the Windows Slint client;
+  see [Windows client setup](apps/client_slint/README.md)
 - `pkg-config` and `libfontconfig1-dev` when building on Debian or Ubuntu Linux
 - Flutter 3.47.2 on the stable channel
 - Visual Studio 2022 with the Desktop development with C++ workload on Windows
@@ -192,23 +197,40 @@ the project directory.
 The repository includes `rust-toolchain.toml`, so Rustup can install the required
 components automatically.
 
+Prepare the Windows media dependencies once without administrator access:
+
+```powershell
+.\scripts\install-windows-media.ps1
+```
+
 Run the Rust/Slint desktop client from the repository root with:
 
 ```powershell
-cargo run -p continuehere_client_slint
+.\scripts\run-slint.ps1
 ```
 
 The client stores application data in the platform's application-data directory.
 On Windows it intentionally reuses the existing Flutter client's
-`AlighasemiQWxp/ContinueHere` directory. The first migration slice supports local and
-manual discovery, device snapshots, trusted-device connection state, device-name
-and destination-directory settings, and live English/Persian layout changes.
+`AlighasemiQWxp/ContinueHere` directory. The migration implements the existing Windows flows through focused Rust
+controllers, with English/Persian presentation and native file/media support.
+The Flutter reference remains available for direct comparison. See the
+[Windows parity checklist](docs/WINDOWS_SLINT_MIGRATION.md) for the exact scope
+and outstanding acceptance checks.
 
 ### Validation
 
-Run the complete local validation suite from the workspace root:
+For this migration, run `./scripts/validate-slint.ps1` manually from the
+repository root. It formats and checks the Rust workspace, runs warnings-denied
+Clippy and tests, and builds the Windows Slint release client. It also resolves
+the new dependency entries in `Cargo.lock`. The migration passed this local
+validation on September 9, 2026; Windows interaction acceptance remains pending.
+
+The full Flutter-reference validation remains available through
+`./scripts/validate.ps1`. Equivalent manual commands require the Windows media
+environment first:
 
 ```powershell
+. ./scripts/use-windows-media.ps1
 cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets --all-features -- -D warnings

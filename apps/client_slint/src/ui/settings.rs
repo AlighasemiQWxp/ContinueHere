@@ -97,6 +97,25 @@ impl SettingsUiController {
     }
 
     fn bind_callbacks(controller: std::rc::Weak<Self>, window: &MainWindow) {
+        let folder_controller = controller.clone();
+        let folder_window = window.as_weak();
+        window.on_choose_directory(move || {
+            if let (Some(controller), Some(window)) =
+                (folder_controller.upgrade(), folder_window.upgrade())
+            {
+                let result = (|| -> super::support::UiResult {
+                    if let Some(path) = crate::platform::select_directory()? {
+                        controller
+                            .core
+                            .settings()
+                            .directories()
+                            .set_default_transfer_directory(path)?;
+                    }
+                    Ok(())
+                })();
+                super::support::show_result(&window, result);
+            }
+        });
         let window_weak = window.as_weak();
         let save_name_controller = controller.clone();
         let save_name_window = window_weak.clone();
@@ -158,6 +177,9 @@ impl SettingsUiController {
 
     fn refresh(&self, window: &MainWindow) {
         apply_snapshot(window, snapshot(&self.core));
+        window.invoke_refresh_pairing_requested();
+        window.invoke_refresh_transfers_requested();
+        window.invoke_refresh_history_requested();
     }
 }
 
