@@ -127,8 +127,8 @@ offer again. See [the architecture guide](docs/ARCHITECTURE.md#activity-history-
 for persistence and retry boundaries.
 
 The Material redesign, folder protocol, reconnect persistence, and application icon
-passed the complete local validation suite on September 9, 2026. Windows interaction
-and two-computer transfer acceptance remain pending.
+passed the complete local validation suite and GitHub CI on September 9, 2026.
+Windows interaction and two-computer transfer acceptance remain pending.
 Run the complete local validation from the project root:
 
 ```powershell

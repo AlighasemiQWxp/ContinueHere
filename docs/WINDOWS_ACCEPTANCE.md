@@ -4,9 +4,9 @@
 
 The native-client baseline passed local validation and CI on September 9, 2026.
 The current Material redesign, folder protocol, endpoint cache, appearance settings,
-and supplied application icon passed the complete local validation suite on the same
-date. Every interaction and two-computer item below remains pending; automated
-validation does not establish interaction acceptance.
+and supplied application icon passed the complete local validation suite and GitHub
+CI on the same date. Every interaction and two-computer item below remains pending;
+automated validation does not establish interaction acceptance.
 
 Install the Windows prerequisites in [client setup](../apps/client/README.md),
 then run manually from the repository root on the development computer:

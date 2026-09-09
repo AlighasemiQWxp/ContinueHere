@@ -133,7 +133,8 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
   - Separate History navigation and device-card unread indicators
   - Golden circular badges, English/Persian labels, and responsive RTL layouts
   - Native-client baseline local validation, Windows release build, and CI passed
-  - Current revision local validation passed; desktop interaction acceptance pending
+  - Current revision local validation and GitHub CI passed; desktop interaction
+    acceptance pending
 
 - [ ] Windows Material redesign and two-computer transfer acceptance
   - Official Navigation Drawer/Bar, clickable buttons, SnackBar, directory FAB,
@@ -142,8 +143,8 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
   - LAN address and port display, pairing advertisements, authenticated History reconnect
   - Category-filtered native pickers and bounded folder transfer through FileTransfer
   - YouTube link plus entered position; local-video handoff from the in-app player
-  - Formatting, checks, linting, tests, and the release build passed locally on
-    September 9, 2026; CI and the two-computer checklist remain pending
+  - Formatting, checks, linting, tests, the release build, and GitHub CI passed on
+    September 9, 2026; the two-computer checklist remains pending
   - Automatic browser playback capture, streaming while downloading, partial resume,
     offline queues, installers, and additional platforms remain future work
 - [ ] 17. Android application

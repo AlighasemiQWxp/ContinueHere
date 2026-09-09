@@ -31,9 +31,9 @@ The supplied ContinueHere artwork is embedded as the Slint window icon and a
 multi-resolution Windows executable icon. The bundled Material source and small
 accessibility/slider adaptations are documented in [vendor notes](vendor/README.md).
 
-The changes described above passed manual formatting, checks, linting, tests, and
-release compilation on September 9, 2026. Windows interaction and two-computer
-transfer acceptance remain pending.
+The changes described above passed manual formatting, checks, linting, tests,
+release compilation, and GitHub CI on September 9, 2026. Windows interaction and
+two-computer transfer acceptance remain pending.
 
 The client owns `ContinueHere` directly. Focused Rust controllers retain core
 handles and delegate subscriptions. Core delegates schedule refresh requests on
