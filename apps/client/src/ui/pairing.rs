@@ -156,7 +156,7 @@ impl PairingUiController {
             window.set_pairing_status("".into());
         }
         if let Ok(endpoint) = self.core.pairing().listening_endpoint() {
-            window.set_pairing_endpoint(endpoint.to_string().into());
+            window.set_pairing_endpoint(endpoint.port().to_string().into());
         }
     }
 }

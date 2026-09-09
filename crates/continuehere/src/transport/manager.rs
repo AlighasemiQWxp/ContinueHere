@@ -27,6 +27,7 @@ use super::{
 };
 
 pub struct TransportManager {
+    endpoints: Mutex<super::endpoints::EndpointStore>,
     pairing: PairingTransportCapability,
     handoff: HandoffTransportCapability,
     transfer: TransferTransportCapability,
@@ -63,6 +64,15 @@ impl ConnectionCapability {
 }
 
 impl TransportManager {
+    pub(crate) fn with_endpoint_store(mut self, directory: std::path::PathBuf) -> Self {
+        self.endpoints = Mutex::new(super::endpoints::EndpointStore::persistent(directory));
+        self
+    }
+
+    pub fn known_endpoint(&self, device_id: &DeviceId) -> Option<DiscoveryEndpoint> {
+        self.trusted_peers.get(device_id).ok().flatten()?;
+        lock_or_recover(&self.endpoints).get(device_id)
+    }
     pub(crate) fn connection_capability(&self) -> ConnectionCapability {
         ConnectionCapability {
             access: Arc::clone(&self.access),
@@ -75,6 +85,7 @@ impl TransportManager {
         trusted_peers: TrustedPeerLookup,
     ) -> Self {
         Self {
+            endpoints: Mutex::new(super::endpoints::EndpointStore::default()),
             pairing: PairingTransportCapability::new(),
             handoff: HandoffTransportCapability::new(),
             transfer: TransferTransportCapability::new(),
@@ -131,9 +142,13 @@ impl TransportManager {
             })
             .await
             .map_err(|_| TransportError::CommandUnavailable)?;
-        result
+        let connection = result
             .await
-            .map_err(|_| TransportError::CommandUnavailable)?
+            .map_err(|_| TransportError::CommandUnavailable)??;
+        lock(&self.endpoints)?
+            .remember(device_id, endpoint)
+            .map_err(|_| TransportError::EndpointStorage)?;
+        Ok(connection)
     }
 
     pub async fn disconnect(&self, device_id: &DeviceId) -> Result<(), TransportError> {
@@ -187,6 +202,9 @@ impl Module for TransportManager {
     }
 
     async fn start(&mut self) -> Result<(), ModuleError> {
+        lock(&self.endpoints)?
+            .load()
+            .map_err(|_| TransportError::EndpointStorage)?;
         if self.runtime.is_some() {
             return Ok(());
         }

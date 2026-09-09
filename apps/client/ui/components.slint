@@ -1,27 +1,47 @@
-import { Button } from "std-widgets.slint";
+import { FilledButton, MaterialPalette, Slider, TextField } from "@material";
+import { AppTheme } from "theme.slint";
+
+export component AppSlider inherits Slider {
+    callback changed(float);
+    value-changed(value) => { root.changed(value); }
+}
+
+export component AppTextField inherits TextField {
+    min-height: 56px;
+}
+
+export component Button inherits FilledButton {
+    enabled: true;
+    min-height: 48px;
+}
 
 export component Title inherits Text {
     in property <bool> rtl;
-    color: #edf0fa;
+    color: MaterialPalette.on-surface;
     font-size: 24px;
     font-weight: 700;
     horizontal-alignment: rtl ? right : left;
-    wrap: word-wrap;
+    vertical-alignment: center;
+    wrap: char-wrap;
 }
 
 export component Label inherits Text {
     in property <bool> rtl;
-    color: #b5b9c9;
+    color: MaterialPalette.on-surface-variant;
     font-size: 14px;
     horizontal-alignment: rtl ? right : left;
-    wrap: word-wrap;
+    vertical-alignment: center;
+    wrap: char-wrap;
 }
 
 export component Card inherits Rectangle {
-    background: #171b25;
-    border-color: #303442;
+    background: AppTheme.card;
+    border-color: MaterialPalette.outline-variant;
     border-width: 1px;
-    border-radius: 16px;
+    border-radius: 18px;
+    drop-shadow-blur: 18px;
+    drop-shadow-color: #00000028;
+    drop-shadow-offset-y: 5px;
 }
 
 export component Badge inherits Rectangle {
@@ -34,23 +54,4 @@ export component Badge inherits Rectangle {
     animate opacity { duration: 150ms; }
     accessible-role: text;
     accessible-label: "New activity";
-}
-
-export component NavigationItem inherits Rectangle {
-    in property <string> label;
-    in property <bool> active;
-    in property <bool> enabled: true;
-    in property <bool> unread;
-    callback selected();
-    height: 46px;
-    Button {
-        width: parent.width;
-        height: parent.height;
-        text: root.label;
-        enabled: root.enabled;
-        checkable: true;
-        checked: root.active;
-        clicked => { root.selected(); }
-    }
-    Badge { x: parent.width - 14px; y: 4px; shown: root.unread; }
 }

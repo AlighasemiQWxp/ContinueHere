@@ -42,7 +42,6 @@ pub(super) fn notify(window: &MainWindow, page: i32) {
     match page {
         0 => window.set_devices_unread(true),
         1 => window.set_send_unread(true),
-        2 => window.set_transfers_unread(true),
         3 => window.set_history_unread(true),
         _ => {}
     }

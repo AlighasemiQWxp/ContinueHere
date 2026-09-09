@@ -22,6 +22,21 @@ pub struct DiscoveryManager {
 }
 
 impl DiscoveryManager {
+    pub fn local_addresses(&self) -> std::io::Result<Vec<std::net::Ipv4Addr>> {
+        let mut addresses = Vec::new();
+        for interface in if_addrs::get_if_addrs()? {
+            if let std::net::IpAddr::V4(address) = interface.ip()
+                && !address.is_loopback()
+                && !address.is_unspecified()
+                && !address.is_link_local()
+            {
+                addresses.push(address);
+            }
+        }
+        addresses.sort_unstable();
+        addresses.dedup();
+        Ok(addresses)
+    }
     pub(crate) fn new() -> Self {
         let changed = DiscoveryChangedEvent::default();
         let status_changed = DiscoveryStatusChangedEvent::default();

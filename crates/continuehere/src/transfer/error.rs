@@ -3,6 +3,8 @@ use thiserror::Error;
 #[derive(Debug, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum FileTransferError {
+    #[error("source must be an absolute folder without symbolic links or reparse points")]
+    InvalidSourceFolder,
     #[error("file-transfer manager is not running")]
     ManagerUnavailable,
     #[error("file-transfer handle identifier cannot be empty")]

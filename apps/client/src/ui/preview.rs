@@ -64,6 +64,9 @@ impl PreviewUiController {
     }
 
     fn open(&mut self, path: &Path, position: u64, window: &MainWindow) -> UiResult {
+        if path.is_absolute() && path.is_dir() {
+            return platform::open_file(path);
+        }
         if platform::unsafe_file(path) {
             return Err("Executable and script files cannot be opened here.".into());
         }
@@ -83,6 +86,7 @@ impl PreviewUiController {
             return platform::open_file(path);
         }
         self.close(window);
+        window.set_preview_path(path.to_string_lossy().as_ref().into());
         window.set_preview_title(
             path.file_name()
                 .unwrap_or_default()

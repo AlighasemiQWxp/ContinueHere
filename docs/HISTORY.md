@@ -68,21 +68,34 @@ acknowledgement was lost, a manual retry may deliver content again; history does
 not promise exactly-once delivery across attempts or application restarts.
 
 The History destination first presents device cards ordered by their most recent
-activity. Selecting a card opens a lazy per-device timeline with all,
-files, and connection filters. Existing platform opening and file-preview
-capabilities handle completed incoming content. Removing or clearing history
+activity. Selecting a card opens its timeline. Send and Receive also show recent
+activity filtered by direction. Existing platform opening and file-preview
+capabilities handle completed incoming and outgoing content. Removing or clearing history
 never deletes received files; active entries remain.
 
-`UiNotifications` owns two independent unread sets: navigation destinations and
-history device IDs. Activity outside History marks both levels. Opening History
+The shell and `HistoryUiController` own independent unread state for navigation
+destinations and history device IDs. Activity outside History marks both levels. Opening History
 clears its navigation indicator only. Opening a device clears only that device's
 indicator. Events for the currently visible device are read immediately; events
 for another device while History is open mark that device only. These unread
 markers are session-local presentation state, and loading existing history at
 startup creates no notifications. Clearing history also removes stale markers.
 
-The shared navigation badge renders a yellow-to-golden circle and a soft glow,
-with a brief appearance transition respecting reduced-motion preferences.
+Material navigation displays activity indicators; history device cards retain
+their golden circular indicators.
+
+Folder records use kind code 5 in the existing bounded format. Current builds
+can read previous history, but older builds reject records containing the new
+kind. Folder retries re-enumerate the current source folder, including changes
+made since the original attempt. They require fresh receiver approval and restart
+the complete package; they do not reconstruct an immutable historical snapshot.
+
+Reconnect is a Transport action on a History device card. A saved endpoint is
+only a hint associated with a previously authenticated outgoing connection.
+The user can edit its IP/port after a network change or restart. Trust and TLS
+identity checks still apply; forgotten devices must be paired again. Incoming-only
+peers may have no cached endpoint. Endpoint hints live in `endpoints.bin` separately
+from history, so clearing activity does not revoke trust or erase those hints.
 It does not pulse continuously. English and Persian labels, directional spacing,
 and explicit left-to-right timestamp runs support the existing RTL interface.
 

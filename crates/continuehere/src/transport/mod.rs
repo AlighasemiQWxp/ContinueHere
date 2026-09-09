@@ -34,3 +34,4 @@ pub(crate) use transfer_transport::{
     InboundTransfer, InboundTransferHandler, TransferDisposition, TransferRejection,
     TransferTransportCapability, TransferTransportMessage,
 };
+mod endpoints;

@@ -56,7 +56,8 @@ impl CoreModules {
             devices.capability(),
             security.capability(),
             trusted.lookup(),
-        );
+        )
+        .with_endpoint_store(project_directory.clone());
         let pairing = PairingManager::new(
             trusted,
             devices.capability(),

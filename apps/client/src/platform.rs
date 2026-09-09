@@ -4,18 +4,54 @@ pub(super) mod media;
 
 type PlatformResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-pub(super) fn select_file(video: bool) -> PlatformResult<Option<PathBuf>> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SelectionKind {
+    File,
+    Folder,
+    Media,
+    Image,
+    Video,
+}
+
+impl SelectionKind {
+    pub(super) fn parse(value: &str) -> PlatformResult<Self> {
+        match value {
+            "file" => Ok(Self::File),
+            "folder" => Ok(Self::Folder),
+            "media" => Ok(Self::Media),
+            "image" => Ok(Self::Image),
+            "video" => Ok(Self::Video),
+            _ => Err("Unknown content category.".into()),
+        }
+    }
+}
+
+pub(super) fn select_file(kind: SelectionKind) -> PlatformResult<Option<PathBuf>> {
     #[cfg(target_os = "windows")]
     {
         let mut dialog = rfd::FileDialog::new();
-        if video {
-            dialog = dialog.add_filter("Video files", &["mp4", "m4v", "mkv", "webm", "mov", "avi"]);
-        }
+        dialog = match kind {
+            SelectionKind::Folder => return select_directory(),
+            SelectionKind::File => dialog,
+            SelectionKind::Video => {
+                dialog.add_filter("Video", &["mp4", "m4v", "mkv", "webm", "mov", "avi"])
+            }
+            SelectionKind::Image => {
+                dialog.add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp", "bmp"])
+            }
+            SelectionKind::Media => dialog.add_filter(
+                "Media",
+                &[
+                    "mp4", "m4v", "mkv", "webm", "mov", "avi", "png", "jpg", "jpeg", "gif", "webp",
+                    "bmp", "mp3", "wav", "flac", "ogg", "m4a", "aac",
+                ],
+            ),
+        };
         Ok(dialog.pick_file())
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = video;
+        let _ = kind;
         Err("File selection is currently supported on Windows only.".into())
     }
 }

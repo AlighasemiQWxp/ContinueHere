@@ -1,5 +1,10 @@
-import { Button, LineEdit, ScrollView, Slider, ComboBox, Palette } from "std-widgets.slint";
-import { Title, Label, Card, Badge, NavigationItem } from "components.slint";
+import { ScrollView, Palette } from "std-widgets.slint";
+import { Title, Label, Card, Badge, Button, AppSlider, AppTextField } from "components.slint";
+
+import { NavigationDrawer, NavigationBar, NavigationItem, FloatingActionButton, RadioButton, SnackBar, MaterialPalette } from "@material";
+import { AppTheme } from "theme.slint";
+import { DropDownMenu, MenuItem } from "@material";
+export { MenuItem } from "@material";
 
 export struct DeviceRow {
     id: string,
@@ -9,6 +14,8 @@ export struct DeviceRow {
 }
 
 export struct ContentRow {
+    connected: bool,
+    incoming: bool,
     id: string,
     title: string,
     detail: string,
@@ -23,14 +30,15 @@ export struct ContentRow {
 }
 
 export component MainWindow inherits Window {
-    init => { Palette.color-scheme = ColorScheme.dark; }
+    init => { Palette.color-scheme = ColorScheme.dark; root.apply-theme(); }
+    icon: @image-url("../assets/ContinueHere.png");
     title: "ContinueHere";
     preferred-width: 1080px;
     preferred-height: 760px;
-    min-width: 480px;
-    min-height: 560px;
-    background: #0b0e13;
-    in-out property <int> page: 0;
+    min-width: 360px;
+    min-height: 360px;
+    background: AppTheme.backdrop;
+    in-out property <int> page: 1;
     in property <bool> rtl: false;
     in-out property <string> error-message;
     in property <string> local-device-name;
@@ -42,7 +50,7 @@ export component MainWindow inherits Window {
     in-out property <string> default-directory;
     in-out property <int> selected-language: 0;
 
-    in property <string> devices-text: "Devices";
+    in property <string> devices-text: "Receive";
     in property <string> settings-text: "Settings";
     in property <string> this-device-text: "This device";
     in property <string> nearby-devices-text: "Nearby devices";
@@ -56,7 +64,6 @@ export component MainWindow inherits Window {
     in property <string> connected-text: "Connected";
     in property <string> disconnected-text: "Disconnected";
     in property <string> device-name-text: "Device name";
-    in property <string> received-files-folder-text: "Received files folder";
     in property <string> language-text: "Language";
     in property <string> english-text: "English";
     in property <string> persian-text: "Persian";
@@ -65,7 +72,6 @@ export component MainWindow inherits Window {
 
     callback add-manual-endpoint(string);
     callback save-display-name(string);
-    callback save-directory(string);
     callback select-language(int);
     callback refresh-devices-requested();
     callback refresh-settings-requested();
@@ -74,6 +80,7 @@ export component MainWindow inherits Window {
     in property <bool> ready;
     in-out property <string> destination-device;
     in property <[string]> connected-device-names;
+    in property <[MenuItem]> connected-device-menu;
     in property <[string]> connected-device-ids;
     in-out property <int> destination-index: -1;
     in property <bool> connection-busy;
@@ -86,10 +93,10 @@ export component MainWindow inherits Window {
     in property <string> pairing-endpoint;
     in-out property <bool> devices-unread;
     in-out property <bool> send-unread;
-    in-out property <bool> transfers-unread;
     in-out property <bool> history-unread;
     in property <[ContentRow]> incoming-handoffs;
-    in property <[ContentRow]> transfers;
+    in property <[ContentRow]> incoming-transfers;
+    in property <[ContentRow]> outgoing-transfers;
     in property <[ContentRow]> history-devices;
     in property <[ContentRow]> history-entries;
     in-out property <string> history-device;
@@ -110,10 +117,8 @@ export component MainWindow inherits Window {
     in property <int> image-frame-delay;
     in-out property <float> preview-volume: 1;
     in-out property <float> preview-zoom: 1;
-    property <bool> compact: root.width < 760px;
-    property <length> nav-width: root.width >= 1080px ? 220px : 150px;
-    property <[string]> nav-labels: [devices-text, rtl ? "ارسال" : "Send", rtl ? "انتقال‌ها" : "Transfers", rtl ? "تاریخچه" : "History", settings-text];
-    property <[bool]> nav-badges: [devices-unread, send-unread, transfers-unread, history-unread, false];
+    property <bool> compact: root.width < 960px;
+    property <length> nav-width: 280px;
     property <string> close-text: rtl ? "بستن" : "Close";
     property <string> open-text: rtl ? "باز کردن" : "Open";
     property <string> remove-text: rtl ? "حذف" : "Remove";
@@ -130,11 +135,41 @@ export component MainWindow inherits Window {
     callback pairing-action(string, string);
     callback send-handoff(string, string, string, string);
     callback incoming-action(string, string);
-    callback send-file(string);
+    callback send-file(string, string);
     callback transfer-action(string, string);
     callback cancel-video-transfer(string) -> bool;
     callback history-action(string, string);
+    in-out property <int> theme-style;
+    in-out property <float> brightness: 100;
+    in property <string> local-addresses;
+    in-out property <string> reconnect-device;
+    in-out property <string> reconnect-endpoint;
+    in property <string> preview-path;
+    in property <[ContentRow]> sent-activities;
+    in property <[ContentRow]> received-activities;
     callback choose-directory();
+    callback select-theme(int);
+    callback save-brightness(float);
+    callback refresh-network();
+    callback reconnect-requested(string);
+    callback show-notice(string);
+    property <string> notice-text;
+    show-notice(message) => { root.notice-text = message; notice.show(); notice-timer.restart(); }
+    notice := SnackBar { width: root.width; height: root.height; text: root.notice-text; has-close-button: true; }
+    notice-timer := Timer { interval: 4s; running: false; triggered => { notice.close(); self.running = false; } }
+    changed theme-style => { root.apply-theme(); }
+    function apply-theme() {
+        AppTheme.style = root.theme-style;
+        MaterialPalette.schemes = { light: AppTheme.scheme, dark: AppTheme.scheme };
+    }
+    property <[int]> navigation-pages: [1, 0, 3, 4];
+    property <int> navigation-index: root.page == 1 ? 0 : root.page == 0 ? 1 : root.page == 3 ? 2 : 3;
+    property <[NavigationItem]> navigation-items: [
+        { text: root.rtl ? "ارسال" : "Send", icon: @image-url("../assets/send.svg"), show-badge: root.send-unread, badge: root.send-unread ? "●" : "" },
+        { text: root.devices-text, icon: @image-url("../assets/receive.svg"), show-badge: root.devices-unread, badge: root.devices-unread ? "●" : "" },
+        { text: root.rtl ? "تاریخچه" : "History", icon: @image-url("../assets/history.svg"), show-badge: root.history-unread, badge: root.history-unread ? "●" : "" },
+        { text: root.settings-text, icon: @image-url("../assets/settings.svg") }
+    ];
     callback open-file(string, string);
     callback preview-action(string, float);
     callback next-image-frame();
@@ -143,44 +178,84 @@ export component MainWindow inherits Window {
     callback refresh-transfers-requested();
     callback refresh-history-requested();
 
+    Rectangle {
+        width: root.width;
+        height: root.height;
+        background: AppTheme.backdrop;
+    }
+    Rectangle {
+        x: root.rtl ? -root.width * 0.12 : root.width * 0.58;
+        y: -root.height * 0.34;
+        width: max(360px, root.width * 0.62);
+        height: self.width;
+        border-radius: self.width / 2;
+        background: AppTheme.glow;
+    }
+    Rectangle {
+        x: root.rtl ? root.width * 0.64 : -root.width * 0.18;
+        y: root.height * 0.68;
+        width: max(280px, root.width * 0.42);
+        height: self.width;
+        border-radius: self.width / 2;
+        background: AppTheme.glow-secondary;
+    }
+
     if !root.compact: Rectangle {
         x: root.rtl ? root.width - root.nav-width : 0px;
-        width: root.nav-width;
-        height: root.height;
-        background: #11141b;
+        width: root.nav-width; height: root.height;
+        background: AppTheme.sidebar;
+        border-color: MaterialPalette.outline-variant;
+        border-width: 1px;
         VerticalLayout {
-            padding: 16px; spacing: 12px; alignment: start;
-            Text { text: "ContinueHere"; color: #edf0fa; font-size: root.width >= 1080px ? 23px : 17px; font-weight: 700; height: 56px; }
-            for label[index] in root.nav-labels: NavigationItem { enabled: root.ready && !root.preview-visible;
-                label: label; active: root.page == index; unread: root.nav-badges[index];
-                selected => { root.page-selected(index); }
+            padding: 14px; spacing: 14px; alignment: start;
+            Rectangle {
+                height: 68px;
+                background: @linear-gradient(110deg, MaterialPalette.surface-container-high 0%, MaterialPalette.primary-container 100%);
+                border-color: MaterialPalette.outline-variant;
+                border-width: 1px;
+                border-radius: 18px;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 16px;
+                    spacing: 12px;
+                    alignment: center;
+                    Image { source: @image-url("../assets/ContinueHere.png"); width: 40px; height: 40px; image-fit: contain; }
+                    Title { text: "ContinueHere"; font-size: 20px; horizontal-stretch: 1; }
+                }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                NavigationDrawer {
+                    y: 0px;
+                    min-width: 0px; width: parent.width; height: 232px;
+                    groups: [{ title: "", items: root.navigation-items }];
+                    current-index: root.navigation-index;
+                    selected(group, index) => { if root.ready && !root.preview-visible { root.page-selected(root.navigation-pages[index]); } }
+                }
             }
         }
     }
-    if root.compact: Rectangle {
-        y: root.height - 76px;
-        width: root.width; height: 76px;
-        background: #11141b;
-        HorizontalLayout {
-            padding: 10px; spacing: 4px;
-            for label[index] in root.nav-labels: NavigationItem { enabled: root.ready && !root.preview-visible;
-                property <int> destination: root.rtl ? 4 - index : index;
-                label: root.nav-labels[self.destination]; active: root.page == self.destination; unread: root.nav-badges[self.destination];
-                selected => { root.page-selected(self.destination); }
-            }
-        }
+    if root.compact: NavigationBar {
+        z: 20;
+        y: root.height - self.height; width: root.width; height: 80px;
+        items: root.rtl ? [root.navigation-items[3], root.navigation-items[2], root.navigation-items[1], root.navigation-items[0]] : root.navigation-items;
+        current-index: root.rtl ? 3 - root.navigation-index : root.navigation-index;
+        index-changed(index) => { if root.ready && !root.preview-visible { root.page-selected(root.navigation-pages[root.rtl ? 3 - index : index]); } }
     }
     content := Rectangle {
+        z: 10;
         x: root.compact || root.rtl ? 0px : root.nav-width;
         width: root.compact ? root.width : root.width - root.nav-width;
-        height: root.compact ? root.height - 76px : root.height;
+        height: root.compact ? root.height - 80px : root.height;
         opacity: root.reduce-motion ? 1 : root.content-opacity;
         animate opacity { duration: root.reduce-motion ? 0ms : 220ms; easing: ease-out; }
         ScrollView {
             width: parent.width; height: parent.height;
             viewport-width: self.width;
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
             VerticalLayout {
-                padding: root.compact ? 20px : 32px; spacing: 16px; alignment: start;
+                width: parent.width;
+                padding: root.compact ? 14px : 28px; spacing: 16px; alignment: start;
                 if root.page == 0: VerticalLayout {
                     spacing: 16px;
                     Title { text: root.devices-text; rtl: root.rtl; }
@@ -190,9 +265,11 @@ export component MainWindow inherits Window {
                             Label { text: root.this-device-text; rtl: root.rtl; }
                             Title { text: root.local-device-name; rtl: root.rtl; font-size: 20px; }
                             Label { text: root.local-device-detail; rtl: root.rtl; }
+                            Label { text: root.local-addresses; horizontal-alignment: left; font-size: 20px; }
+                            Button { text: root.rtl ? "تازه‌سازی نشانی‌ها" : "Refresh addresses"; clicked => { root.refresh-network(); } }
                             Label { text: (root.rtl ? "درگاه جفت‌سازی: " : "Pairing listener: ") + root.pairing-endpoint; rtl: root.rtl; }
                             Label { text: (root.rtl ? "درگاه اتصال: " : "Connection listener: ") + root.transport-endpoint; rtl: root.rtl; }
-                            Label { text: root.rtl ? "در دستگاه دیگر از نشانی شبکه این رایانه و درگاه بالا استفاده کنید." : "On the other device, use this computer’s LAN address with the port shown above."; rtl: root.rtl; }
+                            Label { text: root.rtl ? "در دستگاه دیگر از نشانی شبکه این رایانه و درگاه بالا استفاده کنید." : "On the same network, enter this address on the sending device. Pair first, then use the connection port."; rtl: root.rtl; }
                         }
                     }
                     Card {
@@ -200,8 +277,8 @@ export component MainWindow inherits Window {
                             padding: 20px; spacing: 12px;
                             Button { text: root.rtl ? "دریافت درخواست جفت‌سازی" : "Receive pairing"; enabled: (!root.pairing-active) && root.ready && !root.preview-visible; clicked => { root.pairing-action("receive", ""); } }
                             if root.pairing-status != "": Label { text: root.pairing-status; rtl: root.rtl; }
-                            if root.pairing-code != "": LineEdit { enabled: root.ready && !root.preview-visible; text: root.pairing-code; read-only: true; horizontal-alignment: center; }
-                            if root.pairing-active: HorizontalLayout {
+                            if root.pairing-code != "": AppTextField { enabled: root.ready && !root.preview-visible; text: root.pairing-code; read-only: true; horizontal-alignment: center; }
+                            if root.pairing-active: VerticalLayout {
                                 spacing: 8px;
                                 Button { text: root.rtl ? "تأیید" : "Approve"; enabled: (root.pairing-verifiable) && root.ready && !root.preview-visible; clicked => { root.pairing-action("approve", ""); } }
                                 Button { text: root.reject-text; enabled: (root.pairing-verifiable) && root.ready && !root.preview-visible; clicked => { root.pairing-action("reject", ""); } }
@@ -209,13 +286,31 @@ export component MainWindow inherits Window {
                             }
                         }
                     }
+                    Title { text: root.rtl ? "محتوای دریافتی" : "Incoming handoffs"; rtl: root.rtl; font-size: 20px; }
+                    if root.incoming-handoffs.length == 0: Label { text: root.rtl ? "هنوز محتوایی دریافت نشده است." : "No incoming handoffs yet."; rtl: root.rtl; }
+                    for item in root.incoming-handoffs: Card {
+                        VerticalLayout {
+                            padding: 16px; spacing: 10px;
+                            Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; }
+                            Label { text: item.detail; rtl: root.rtl; }
+                            VerticalLayout {
+                                spacing: 8px;
+                                Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.incoming-action(item.id, "open"); } }
+                                Button { enabled: root.ready && !root.preview-visible; text: root.remove-text; clicked => { root.incoming-action(item.id, "remove"); } }
+                            }
+                        }
+                    }
+                }
+                if root.page == 1: VerticalLayout {
+                    spacing: 16px;
+                    Title { text: root.rtl ? "ارسال" : "Send"; rtl: root.rtl; }
                     Card {
                         VerticalLayout {
                             padding: 20px; spacing: 12px;
                             Label { text: root.manual-endpoint-text; rtl: root.rtl; }
-                            HorizontalLayout {
+                            VerticalLayout {
                                 spacing: 10px;
-                                endpoint := LineEdit { enabled: root.ready && !root.preview-visible; placeholder-text: "192.168.1.20:5200"; accepted(value) => { root.add-manual-endpoint(value); } }
+                                endpoint := AppTextField { enabled: root.ready && !root.preview-visible; label: "192.168.1.20:5200"; accepted(value) => { root.add-manual-endpoint(value); } }
                                 Button { enabled: root.ready && !root.preview-visible; text: root.add-text; clicked => { root.add-manual-endpoint(endpoint.text); } }
                             }
                         }
@@ -226,7 +321,7 @@ export component MainWindow inherits Window {
                     for device in root.nearby-devices: Card {
                         VerticalLayout {
                             padding: 16px; spacing: 8px;
-                            Label { text: device.name; rtl: root.rtl; color: #edf0fa; }
+                            Label { text: device.name; rtl: root.rtl; color: MaterialPalette.on-surface; }
                             Label { text: device.detail; rtl: root.rtl; }
                             Button { text: root.rtl ? "جفت‌سازی" : "Pair"; enabled: (!root.pairing-active) && root.ready && !root.preview-visible; clicked => { root.pairing-action("pair", device.detail); } }
                         }
@@ -236,79 +331,96 @@ export component MainWindow inherits Window {
                     if root.trusted-devices.length > 0: VerticalLayout {
                         spacing: 8px;
                         Label { text: root.rtl ? "نشانی و درگاه اتصال دستگاه مقصد" : "Destination connection endpoint"; rtl: root.rtl; }
-                        LineEdit { enabled: root.ready && !root.preview-visible; text <=> root.connection-endpoint; placeholder-text: "192.168.1.20:5300"; }
+                        AppTextField { enabled: root.ready && !root.preview-visible; text <=> root.connection-endpoint; label: "192.168.1.20:5300"; }
                     }
                     for device in root.trusted-devices: Card {
                         VerticalLayout {
                             padding: 16px; spacing: 8px;
-                            Label { text: device.name; rtl: root.rtl; color: #edf0fa; font-size: 18px; }
+                            Label { text: device.name; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
                             Label { text: device.detail + " · " + (device.connected ? root.connected-text : root.disconnected-text); rtl: root.rtl; }
-                            HorizontalLayout {
+                            VerticalLayout {
                                 spacing: 8px;
                                 Button { text: device.connected ? (root.rtl ? "قطع اتصال" : "Disconnect") : (root.rtl ? "اتصال" : "Connect"); enabled: (!root.connection-busy) && root.ready && !root.preview-visible; clicked => { root.device-action(device.id, device.connected ? "disconnect" : "connect", root.connection-endpoint); } }
                                 Button { text: root.rtl ? "فراموش کردن" : "Forget"; enabled: (!root.connection-busy) && root.ready && !root.preview-visible; clicked => { root.device-action(device.id, "forget", ""); } }
                             }
                         }
                     }
-                }
-                if root.page == 1: VerticalLayout {
-                    spacing: 16px;
-                    Title { text: root.nav-labels[1]; rtl: root.rtl; }
+                    if root.pairing-active: Card {
+                        VerticalLayout {
+                            padding: 16px; spacing: 8px;
+                            Label { text: root.pairing-status; rtl: root.rtl; }
+                            Label { text: root.pairing-code; horizontal-alignment: center; font-size: 24px; }
+                            Button { text: root.accept-text; enabled: root.pairing-verifiable; clicked => { root.pairing-action("approve", ""); } }
+                            Button { text: root.reject-text; enabled: root.pairing-verifiable; clicked => { root.pairing-action("reject", ""); } }
+                            Button { text: root.cancel-text; clicked => { root.pairing-action("cancel", ""); } }
+                        }
+                    }
+
                     Label { text: root.rtl ? "دستگاه مقصد" : "Destination device"; rtl: root.rtl; }
-                    ComboBox {
-                        model: root.connected-device-names; current-index <=> root.destination-index;
+                    DropDownMenu {
+                        min-height: 56px; items: root.connected-device-menu; current-index <=> root.destination-index;
                         enabled: (root.connected-device-names.length > 0) && root.ready && !root.preview-visible;
                         selected(value) => { root.destination-device = root.connected-device-ids[self.current-index]; }
                     }
                     if root.connected-device-names.length == 0: Label { text: root.rtl ? "ابتدا یک دستگاه را جفت و متصل کنید." : "Pair and connect a device first."; rtl: root.rtl; }
-                    url-field := LineEdit { enabled: root.ready && !root.preview-visible; placeholder-text: root.rtl ? "نشانی اینترنتی" : "Enter URL"; }
-                    position-field := LineEdit { enabled: root.ready && !root.preview-visible; placeholder-text: root.rtl ? "موقعیت پخش (ثانیه، دقیقه:ثانیه یا ساعت:دقیقه:ثانیه)" : "Playback position (seconds, MM:SS, or HH:MM:SS)"; }
-                    HorizontalLayout {
+                    url-field := AppTextField { enabled: root.ready && !root.preview-visible; label: root.rtl ? "نشانی اینترنتی" : "Enter URL"; }
+                    position-field := AppTextField { enabled: root.ready && !root.preview-visible; label: root.rtl ? "موقعیت پخش (ثانیه، دقیقه:ثانیه یا ساعت:دقیقه:ثانیه)" : "Playback position (seconds, MM:SS, or HH:MM:SS)"; }
+                    VerticalLayout {
                         spacing: 8px;
                         Button { text: root.rtl ? "ارسال پیوند" : "Send URL"; enabled: (root.destination-device != "") && root.ready && !root.preview-visible; clicked => { root.send-handoff("url", root.destination-device, url-field.text, position-field.text); } }
                         Button { text: root.rtl ? "ارسال یوتیوب" : "Send YouTube"; enabled: (root.destination-device != "") && root.ready && !root.preview-visible; clicked => { root.send-handoff("youtube", root.destination-device, url-field.text, position-field.text); } }
                     }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Button { text: root.rtl ? "ارسال ویدیو" : "Send video"; enabled: (root.destination-device != "") && root.ready && !root.preview-visible; clicked => { root.send-handoff("video", root.destination-device, "", position-field.text); } }
-                        Button { text: root.rtl ? "ارسال فایل" : "Send file"; enabled: (root.destination-device != "") && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device); } }
-                    }
-                    Title { text: root.rtl ? "محتوای دریافتی" : "Incoming handoffs"; rtl: root.rtl; font-size: 20px; }
-                    if root.incoming-handoffs.length == 0: Label { text: root.rtl ? "هنوز محتوایی دریافت نشده است." : "No incoming handoffs yet."; rtl: root.rtl; }
-                    for item in root.incoming-handoffs: Card {
-                        VerticalLayout {
-                            padding: 16px; spacing: 10px;
-                            Label { text: item.title; rtl: root.rtl; color: #edf0fa; }
-                            Label { text: item.detail; rtl: root.rtl; }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.incoming-action(item.id, "open"); } }
-                                Button { enabled: root.ready && !root.preview-visible; text: root.remove-text; clicked => { root.incoming-action(item.id, "remove"); } }
-                            }
+                    Label { text: root.rtl ? "انتخاب محتوا" : "Choose Content"; rtl: root.rtl; font-size: 18px; }
+                    if content.width < 620px: GridLayout {
+                        spacing: 10px;
+                        Row {
+                            Button { text: root.rtl ? "فایل" : "File"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "file"); } }
+                            Button { text: root.rtl ? "پوشه" : "Folder"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "folder"); } }
+                        }
+                        Row {
+                            Button { text: root.rtl ? "رسانه" : "Media"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "media"); } }
+                            Button { text: root.rtl ? "تصویر" : "Image"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "image"); } }
+                        }
+                        Row {
+                            Button { colspan: 2; text: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
                         }
                     }
+                    if content.width >= 620px: GridLayout {
+                        spacing: 10px;
+                        Row {
+                            Button { text: root.rtl ? "فایل" : "File"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "file"); } }
+                            Button { text: root.rtl ? "پوشه" : "Folder"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "folder"); } }
+                            Button { text: root.rtl ? "رسانه" : "Media"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "media"); } }
+                        }
+                        Row {
+                            Button { text: root.rtl ? "تصویر" : "Image"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "image"); } }
+                            Button { colspan: 2; text: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
+                        }
+                    }
+                    Button { text: root.rtl ? "پیش‌نمایش ویدیو" : "Preview local video"; enabled: root.ready && !root.preview-visible; clicked => { root.send-handoff("preview", "", "", ""); } }
+                    Button { text: root.rtl ? "ارسال ویدیو از زمان واردشده" : "Send video at entered time"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-handoff("video", root.destination-device, "", position-field.text); } }
                 }
-                if root.page == 2: VerticalLayout {
+                if root.page == 0 || root.page == 1: VerticalLayout {
                     spacing: 16px;
-                    Title { text: root.nav-labels[2]; rtl: root.rtl; }
-                    if root.transfers.length == 0: Label { text: root.rtl ? "هنوز انتقالی وجود ندارد." : "No transfers yet."; rtl: root.rtl; }
-                    for item in root.transfers: Card {
+                    Title { text: root.rtl ? "انتقال‌ها" : "Transfers"; rtl: root.rtl; font-size: 20px; }
+                    if (root.page == 0 ? root.incoming-transfers.length : root.outgoing-transfers.length) == 0: Label { text: root.rtl ? "هنوز انتقالی وجود ندارد." : "No transfers yet."; rtl: root.rtl; }
+                    for item in (root.page == 0 ? root.incoming-transfers : root.outgoing-transfers): Card {
                         VerticalLayout {
                             padding: 20px; spacing: 12px;
-                            Label { text: item.title; rtl: root.rtl; color: #edf0fa; font-size: 18px; }
-                            Label { text: item.status; rtl: root.rtl; color: #a8bbff; }
+                            Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                            Label { text: item.status; rtl: root.rtl; color: MaterialPalette.primary; }
                             Label { text: item.detail; rtl: root.rtl; }
                             Rectangle {
-                                height: 5px; background: #303442; border-radius: 3px;
-                                Rectangle { x: root.rtl ? parent.width - self.width : 0px; width: parent.width * clamp(item.progress, 0, 1); height: parent.height; background: #a8bbff; border-radius: 3px; }
+                                height: 5px; background: MaterialPalette.outline-variant; border-radius: 3px;
+                                Rectangle { x: root.rtl ? parent.width - self.width : 0px; width: parent.width * clamp(item.progress, 0, 1); height: parent.height; background: MaterialPalette.primary; border-radius: 3px; }
                             }
-                            if item.offered: HorizontalLayout {
+                            if item.offered: VerticalLayout {
                                 spacing: 8px;
                                 Button { enabled: root.ready && !root.preview-visible; text: root.accept-text; clicked => { root.transfer-action(item.id, "accept"); } }
                                 Button { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.transfer-action(item.id, "folder"); } }
                                 Button { enabled: root.ready && !root.preview-visible; text: root.reject-text; clicked => { root.transfer-action(item.id, "reject"); } }
                             }
-                            HorizontalLayout {
+                            VerticalLayout {
                                 spacing: 8px;
                                 if item.can-open: Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.transfer-action(item.id, "open"); } }
                                 Button { enabled: root.ready && !root.preview-visible; text: item.active ? root.cancel-text : root.remove-text; clicked => { root.transfer-action(item.id, "remove"); } }
@@ -316,10 +428,23 @@ export component MainWindow inherits Window {
                         }
                     }
                 }
+                if root.page == 0 || root.page == 1: VerticalLayout {
+                    spacing: 12px;
+                    Title { text: root.rtl ? "فعالیت‌های اخیر" : "Recent activity"; rtl: root.rtl; font-size: 20px; }
+                    for item in (root.page == 0 ? root.received-activities : root.sent-activities): Card {
+                        VerticalLayout {
+                            padding: 16px; spacing: 8px;
+                            Label { text: item.title; rtl: root.rtl; }
+                            Label { text: item.status + "\n" + item.detail; rtl: root.rtl; }
+                            if item.can-open: Button { text: root.open-text; enabled: root.ready && !root.preview-visible; clicked => { root.history-action(item.id, "open"); } }
+                            if item.retryable: Button { text: root.retry-text; enabled: item.can-retry && !root.preview-visible; clicked => { root.history-action(item.id, "retry"); } }
+                        }
+                    }
+                }
                 if root.page == 3: VerticalLayout {
                     spacing: 16px;
-                    Title { text: root.nav-labels[3]; rtl: root.rtl; }
-                    if root.history-error != "": Label { text: root.history-error; rtl: root.rtl; color: #ffb4ab; }
+                    Title { text: root.rtl ? "تاریخچه" : "History"; rtl: root.rtl; }
+                    if root.history-error != "": Label { text: root.history-error; rtl: root.rtl; color: MaterialPalette.error; }
                     if root.history-device == "": VerticalLayout {
                         spacing: 12px;
                         Label { text: root.rtl ? "برای دیدن فعالیت‌ها یک دستگاه را انتخاب کنید." : "Choose a device to view its activity timeline."; rtl: root.rtl; }
@@ -328,11 +453,12 @@ export component MainWindow inherits Window {
                             VerticalLayout {
                                 padding: 20px; spacing: 12px;
                                 HorizontalLayout {
-                                    Label { text: item.title; rtl: root.rtl; color: #edf0fa; font-size: 18px; }
+                                    Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
                                     Badge { shown: item.unread; }
                                 }
                                 Label { text: item.detail; rtl: root.rtl; }
                                 Button { enabled: root.ready && !root.preview-visible; text: root.rtl ? "مشاهده فعالیت‌ها" : "View activity"; clicked => { root.history-action(item.id, "device"); } }
+                                Button { text: item.connected ? root.connected-text : (root.rtl ? "اتصال دوباره" : "Reconnect"); enabled: !item.connected && !root.connection-busy && !root.preview-visible; clicked => { root.reconnect-requested(item.id); } }
                             }
                         }
                         Button { text: root.rtl ? "پاک کردن تاریخچه" : "Clear history"; enabled: (root.history-devices.length > 0) && root.ready && !root.preview-visible; clicked => { root.history-action("", "clear"); } }
@@ -345,11 +471,11 @@ export component MainWindow inherits Window {
                         for item in root.history-entries: Card {
                             VerticalLayout {
                                 padding: 20px; spacing: 12px;
-                                Label { text: item.title; rtl: root.rtl; color: #edf0fa; font-size: 18px; }
+                                Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
                                 Label { text: item.status; rtl: root.rtl; color: #ffd16a; }
                                 Label { text: item.detail; rtl: root.rtl; }
                                 if item.retryable && !item.can-retry: Label { text: root.rtl ? "برای تلاش دوباره ابتدا به دستگاه متصل شوید." : "Reconnect to the device before retrying."; rtl: root.rtl; }
-                                HorizontalLayout {
+                                VerticalLayout {
                                     spacing: 8px;
                                     if item.retryable: Button { text: root.retry-text; enabled: (item.can-retry) && root.ready && !root.preview-visible; clicked => { root.history-action(item.id, "retry"); } }
                                     if item.can-open: Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.history-action(item.id, "open"); } }
@@ -363,17 +489,31 @@ export component MainWindow inherits Window {
                     spacing: 16px;
                     Title { text: root.settings-text; rtl: root.rtl; }
                     Label { text: root.device-name-text; rtl: root.rtl; }
-                    name-field := LineEdit { enabled: root.ready && !root.preview-visible; text <=> root.display-name; horizontal-alignment: root.rtl ? right : left; accepted(value) => { root.save-display-name(value); } }
+                    name-field := AppTextField { enabled: root.ready && !root.preview-visible; text <=> root.display-name; horizontal-alignment: root.rtl ? right : left; accepted(value) => { root.save-display-name(value); } }
                     Button { enabled: root.ready && !root.preview-visible; text: root.save-text; clicked => { root.save-display-name(name-field.text); } }
-                    Label { text: root.received-files-folder-text; rtl: root.rtl; }
-                    Label { text: root.default-directory; rtl: root.rtl; }
-                    Button { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.choose-directory(); } }
-                    Label { text: root.language-text; rtl: root.rtl; }
-                    HorizontalLayout {
-                        spacing: 10px;
-                        Button { enabled: root.ready && !root.preview-visible; text: root.rtl ? root.persian-text : root.english-text; checkable: true; checked: root.rtl ? root.selected-language == 1 : root.selected-language == 0; clicked => { root.select-language(root.rtl ? 1 : 0); } }
-                        Button { enabled: root.ready && !root.preview-visible; text: root.rtl ? root.english-text : root.persian-text; checkable: true; checked: root.rtl ? root.selected-language == 0 : root.selected-language == 1; clicked => { root.select-language(root.rtl ? 0 : 1); } }
+                    Title { text: root.rtl ? "مسیر ذخیره" : "Save Directory"; rtl: root.rtl; font-size: 20px; }
+                    Label { text: root.default-directory; horizontal-alignment: left; }
+                    if root.ready && !root.preview-visible: FloatingActionButton {
+                        icon: @image-url("../assets/folder.svg"); text: root.choose-folder-text;
+                        clicked => { root.choose-directory(); }
                     }
+                    Title { text: root.rtl ? "رنگ پوسته" : "Theme Style"; rtl: root.rtl; font-size: 20px; }
+                    for theme[index] in [root.rtl ? "بنفش" : "Purple", root.rtl ? "قرمز" : "Red", root.rtl ? "سبز" : "Green"]: HorizontalLayout {
+                        spacing: 12px;
+                        RadioButton { checked: root.theme-style == index; enabled: root.ready && !root.preview-visible; accessible-label: theme; clicked => { root.select-theme(index); } }
+                        Label { text: theme; rtl: root.rtl; }
+                    }
+                    Title { text: root.language-text; rtl: root.rtl; font-size: 20px; }
+                    for language[index] in [root.english-text, root.persian-text]: HorizontalLayout {
+                        spacing: 12px;
+                        RadioButton { checked: root.selected-language == index; enabled: root.ready && !root.preview-visible; accessible-label: language; clicked => { root.select-language(index); } }
+                        Label { text: language; rtl: root.rtl; }
+                    }
+                    Title { text: root.rtl ? "روشنایی برنامه" : "Application brightness"; rtl: root.rtl; font-size: 20px; }
+                    Label { text: round(root.brightness) + "%"; rtl: root.rtl; }
+                    AppSlider { minimum: 50; maximum: 100; step: 1; value <=> root.brightness; enabled: root.ready && !root.preview-visible; changed(value) => { root.save-brightness(value); } }
+                    Label { text: "Made with Slint · slint.dev"; }
+
                 }
             }
         }
@@ -381,8 +521,8 @@ export component MainWindow inherits Window {
     if !root.ready: Rectangle {
         x: root.compact || root.rtl ? 0px : root.nav-width;
         width: root.compact ? root.width : root.width - root.nav-width;
-        height: root.compact ? root.height - 76px : root.height;
-        background: #0b0e13;
+        height: root.compact ? root.height - 80px : root.height;
+        background: MaterialPalette.background;
         TouchArea {}
         VerticalLayout {
             padding: 40px; alignment: center; spacing: 16px;
@@ -403,47 +543,73 @@ export component MainWindow inherits Window {
             Card {
                 x: 24px; y: 24px; width: parent.width - 48px; height: parent.height - 48px;
                 TouchArea {}
-                VerticalLayout {
-                    padding: 16px; spacing: 12px;
-                    HorizontalLayout {
-                        Label { text: root.preview-title; rtl: root.rtl; color: #edf0fa; font-size: 18px; }
-                        Button { text: root.close-text; clicked => { root.preview-action("close", 0); } }
-                    }
-                    if root.preview-error != "": Label { text: root.preview-error; rtl: root.rtl; color: #ffb4ab; }
-                    viewer := ScrollView {
-                        vertical-stretch: 1;
-                        viewport-width: self.width * root.preview-zoom;
-                        viewport-height: self.height * root.preview-zoom;
-                        Image { width: viewer.viewport-width; height: viewer.viewport-height; source: root.preview-image; image-fit: contain; }
-                    }
-                    if !root.preview-video: HorizontalLayout {
-                        spacing: 8px;
-                        Label { text: root.rtl ? "بزرگ‌نمایی" : "Zoom"; rtl: root.rtl; }
-                        Slider { minimum: 1; maximum: 5; step: 0.1; value <=> root.preview-zoom; }
-                        Button { text: "1:1"; clicked => { root.preview-zoom = 1; } }
-                    }
-                    if root.preview-video: VerticalLayout {
-                        spacing: 8px;
-                        Slider { minimum: 0; maximum: max(1, root.preview-duration); value: root.preview-position; enabled: root.preview-duration > 0; changed(value) => { root.preview-action("seek", value); } }
+                ScrollView {
+                    width: 100%; height: 100%; viewport-width: self.width;
+                    VerticalLayout {
+                        padding: 16px; spacing: 12px;
                         HorizontalLayout {
-                            spacing: 10px;
-                            Button { text: root.preview-playing ? (root.rtl ? "مکث" : "Pause") : (root.rtl ? "پخش" : "Play"); clicked => { root.preview-action("pause", 0); } }
-                            Label { text: root.preview-time; }
-                            Label { text: root.rtl ? "صدا" : "Volume"; rtl: root.rtl; }
-                            Slider { minimum: 0; maximum: 1; step: 0.01; value <=> root.preview-volume; changed(value) => { root.preview-action("volume", value); } }
+                            Label { text: root.preview-title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                            Button { text: root.close-text; clicked => { root.preview-action("close", 0); } }
+                        }
+                        if root.preview-error != "": Label { text: root.preview-error; rtl: root.rtl; color: MaterialPalette.error; }
+                        viewer := ScrollView {
+                            height: max(120px, root.height * 0.45);
+                            viewport-width: self.width * root.preview-zoom;
+                            viewport-height: self.height * root.preview-zoom;
+                            Image { width: viewer.viewport-width; height: viewer.viewport-height; source: root.preview-image; image-fit: contain; }
+                        }
+                        if !root.preview-video: VerticalLayout {
+                            spacing: 8px;
+                            Label { text: root.rtl ? "بزرگ‌نمایی" : "Zoom"; rtl: root.rtl; }
+                            AppSlider { minimum: 1; maximum: 5; step: 0.1; value <=> root.preview-zoom; }
+                            Button { text: "1:1"; clicked => { root.preview-zoom = 1; } }
+                        }
+                        if root.preview-video: VerticalLayout {
+                            DropDownMenu { min-height: 56px; items: root.connected-device-menu; current-index <=> root.destination-index; selected(value) => { root.destination-device = root.connected-device-ids[self.current-index]; } }
+                            Button { text: root.rtl ? "ادامه در دستگاه مقصد" : "Continue on device"; enabled: root.destination-device != "" && root.preview-duration > 0; clicked => { root.send-handoff("current-video", root.destination-device, root.preview-path, ""); } }
+
+                            spacing: 8px;
+                            AppSlider { minimum: 0; maximum: max(1, root.preview-duration); value: root.preview-position; enabled: root.preview-duration > 0; changed(value) => { root.preview-action("seek", value); } }
+                            VerticalLayout {
+                                spacing: 10px;
+                                Button { text: root.preview-playing ? (root.rtl ? "مکث" : "Pause") : (root.rtl ? "پخش" : "Play"); clicked => { root.preview-action("pause", 0); } }
+                                Label { text: root.preview-time; }
+                                Label { text: root.rtl ? "صدا" : "Volume"; rtl: root.rtl; }
+                                AppSlider { minimum: 0; maximum: 1; step: 0.01; value <=> root.preview-volume; changed(value) => { root.preview-action("volume", value); } }
+                            }
                         }
                     }
                 }
             }
         }
     }
+    if root.reconnect-device != "": Rectangle {
+        width: root.width; height: root.height; background: #b8000000;
+        TouchArea {}
+        Card {
+            x: 16px; y: 24px; width: parent.width - 32px;
+            height: parent.height - 48px;
+            ScrollView {
+                width: 100%; height: 100%; viewport-width: self.width;
+                VerticalLayout {
+                    padding: 16px; spacing: 12px;
+                    Title { text: root.rtl ? "اتصال دوباره" : "Reconnect"; rtl: root.rtl; }
+                    Label { text: root.rtl ? "نشانی و درگاه اتصال دستگاه" : "Device IP address and connection port"; rtl: root.rtl; }
+                    AppTextField { text <=> root.reconnect-endpoint; label: "192.168.1.20:5300"; }
+                    Button { text: root.rtl ? "اتصال" : "Connect"; clicked => { root.device-action(root.reconnect-device, "connect", root.reconnect-endpoint); root.reconnect-device = ""; } }
+                    Button { text: root.cancel-text; clicked => { root.reconnect-device = ""; } }
+                }
+            }
+        }
+    }
     if root.ready && root.error-message != "": Rectangle {
         x: 20px; y: 16px; width: root.width - 40px;
-        height: 88px; background: #5a2430; border-radius: 12px;
+        min-height: 88px; background: MaterialPalette.error-container; border-radius: 12px;
         HorizontalLayout {
             padding: 14px; spacing: 12px;
             Label { text: root.error-message; rtl: root.rtl; color: #ffffff; }
             Button { text: root.dismiss-text; clicked => { root.error-message = ""; } }
         }
     }
+    Rectangle { width: root.width; height: root.height; background: #000000; opacity: 1 - clamp(root.brightness, 50, 100) / 100; }
 }

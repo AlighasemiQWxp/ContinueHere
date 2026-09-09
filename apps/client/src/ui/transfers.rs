@@ -23,10 +23,21 @@ impl TransferUiController {
         let target = EventTarget::new(window);
         let changed = core
             .file_transfers()
-            .on_transfer_changed(FileTransferChangedDelegate::new(move |_| {
-                target.dispatch(|window| {
+            .on_transfer_changed(FileTransferChangedDelegate::new(move |change| {
+                let transfer = match change {
+                    continuehere::FileTransferChange::Added(value)
+                    | continuehere::FileTransferChange::Updated(value)
+                    | continuehere::FileTransferChange::Removed(value) => value,
+                    _ => return,
+                };
+                let page = if transfer.direction() == FileTransferDirection::Incoming {
+                    0
+                } else {
+                    1
+                };
+                target.dispatch(move |window| {
                     window.invoke_refresh_transfers_requested();
-                    notify(&window, 2);
+                    notify(&window, page);
                 });
             }));
         let controller = Rc::new(RefCell::new(Self {
@@ -37,9 +48,9 @@ impl TransferUiController {
         }));
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
-        window.on_send_file(move |device| {
+        window.on_send_file(move |device, kind| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
-                let result = controller.borrow_mut().send(device.as_str());
+                let result = controller.borrow_mut().send(device.as_str(), kind.as_str());
                 show_result(&window, result);
             }
         });
@@ -65,7 +76,8 @@ impl TransferUiController {
         controller
     }
 
-    fn send(&mut self, device: &str) -> UiResult {
+    fn send(&mut self, device: &str, kind: &str) -> UiResult {
+        let kind = crate::platform::SelectionKind::parse(kind)?;
         let device = DeviceId::new(device.to_owned())?;
         if !self
             .core
@@ -76,7 +88,7 @@ impl TransferUiController {
         {
             return Err("Connect to the trusted device before sending.".into());
         }
-        let Some(path) = crate::platform::select_file(false)? else {
+        let Some(path) = crate::platform::select_file(kind)? else {
             return Ok(());
         };
         self.next_handle += 1;
@@ -84,7 +96,11 @@ impl TransferUiController {
             .core
             .file_transfers()
             .get_handle(&format!("ui.transfer.{}", self.next_handle))?;
-        handle.configure(device, path)?;
+        if kind == crate::platform::SelectionKind::Folder {
+            handle.configure_folder(device, path)?;
+        } else {
+            handle.configure(device, path)?;
+        }
         handle.use_handle()?;
         self.handles.push(handle);
         Ok(())
@@ -132,7 +148,24 @@ impl TransferUiController {
                 let path = transfer
                     .destination()
                     .ok_or("The received file is unavailable.")?;
-                window.invoke_open_file(path.to_string_lossy().as_ref().into(), "0".into());
+                let position = self
+                    .core
+                    .handoff()
+                    .incoming()
+                    .iter()
+                    .find_map(|handoff| {
+                        if let continuehere::HandoffPayload::LocalVideo(video) = handoff.payload()
+                            && video.transfer_id() == Some(transfer.id())
+                        {
+                            return Some(video.playback_position().as_millis());
+                        }
+                        None
+                    })
+                    .unwrap_or(0);
+                window.invoke_open_file(
+                    path.to_string_lossy().as_ref().into(),
+                    position.to_string().into(),
+                );
             }
             _ => return Err("Unknown transfer action.".into()),
         }
@@ -141,7 +174,7 @@ impl TransferUiController {
 
     fn refresh(&mut self, window: &MainWindow) {
         let rtl = window.get_rtl();
-        let rows = self
+        let rows: Vec<ContentRow> = self
             .core
             .file_transfers()
             .transfers()
@@ -186,6 +219,7 @@ impl TransferUiController {
                     transfer.transferred_bytes() as f32 / transfer.file_size() as f32
                 };
                 ContentRow {
+                    incoming: transfer.direction() == FileTransferDirection::Incoming,
                     id: transfer.id().to_string().into(),
                     title: transfer.file_name().into(),
                     detail: detail.into(),
@@ -208,7 +242,12 @@ impl TransferUiController {
                 }
             })
             .collect();
-        window.set_transfers(model(rows));
+        window.set_incoming_transfers(model(
+            rows.iter().filter(|item| item.incoming).cloned().collect(),
+        ));
+        window.set_outgoing_transfers(model(
+            rows.iter().filter(|item| !item.incoming).cloned().collect(),
+        ));
         self.handles.retain(|handle| {
             handle.transfer().is_some_and(|transfer| {
                 !matches!(

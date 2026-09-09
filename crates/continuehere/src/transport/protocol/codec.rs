@@ -22,6 +22,7 @@ const TRANSFER_CANCEL_KIND: u16 = 12;
 const TRANSFER_ACCEPTED_KIND: u16 = 13;
 const TRANSFER_REJECTED_KIND: u16 = 14;
 const LOCAL_VIDEO_HANDOFF_KIND: u16 = 15;
+const FOLDER_OFFER_KIND: u16 = 16;
 const MAX_IDENTIFIER_SIZE: usize = 64;
 const MAX_DISPLAY_NAME_SIZE: usize = 128;
 const MAX_CAPABILITY_COUNT: usize = 16;
@@ -259,7 +260,7 @@ fn decode_payload(decoder: &mut Decoder<'_>, kind: u16) -> Result<ProtocolMessag
             )?;
             Ok(ProtocolMessage::HandoffRejected { handoff_id, reason })
         }
-        TRANSFER_OFFER_KIND => {
+        TRANSFER_OFFER_KIND | FOLDER_OFFER_KIND => {
             require_array(decoder, 3)?;
             let transfer_id = decode_identifier(decoder)?;
             let file_name = decoder.str().map_err(|_| TransportError::InvalidMessage)?;
@@ -269,9 +270,16 @@ fn decode_payload(decoder: &mut Decoder<'_>, kind: u16) -> Result<ProtocolMessag
             let file_size = decoder.u64().map_err(|_| TransportError::InvalidMessage)?;
             Ok(ProtocolMessage::Transfer {
                 transfer_id,
-                message: TransferTransportMessage::Offer {
-                    file_name: file_name.to_owned(),
-                    file_size,
+                message: if kind == FOLDER_OFFER_KIND {
+                    TransferTransportMessage::FolderOffer {
+                        file_name: file_name.to_owned(),
+                        file_size,
+                    }
+                } else {
+                    TransferTransportMessage::Offer {
+                        file_name: file_name.to_owned(),
+                        file_size,
+                    }
                 },
             })
         }
@@ -452,6 +460,10 @@ fn message_kind(message: &ProtocolMessage) -> u16 {
             ..
         } => TRANSFER_OFFER_KIND,
         ProtocolMessage::Transfer {
+            message: TransferTransportMessage::FolderOffer { .. },
+            ..
+        } => FOLDER_OFFER_KIND,
+        ProtocolMessage::Transfer {
             message: TransferTransportMessage::Chunk { .. },
             ..
         } => TRANSFER_CHUNK_KIND,
@@ -559,6 +571,10 @@ fn encode_transfer(
 ) -> Result<(), TransportError> {
     match message {
         TransferTransportMessage::Offer {
+            file_name,
+            file_size,
+        }
+        | TransferTransportMessage::FolderOffer {
             file_name,
             file_size,
         } => {
@@ -701,6 +717,7 @@ fn encode_capability(capability: Capability) -> u8 {
         Capability::PlaybackPositionHandoff => 2,
         Capability::FileTransfer => 3,
         Capability::LocalVideoHandoff => 4,
+        Capability::FolderTransfer => 5,
     }
 }
 
@@ -710,6 +727,7 @@ fn decode_capability(value: u8) -> Result<Capability, TransportError> {
         2 => Ok(Capability::PlaybackPositionHandoff),
         3 => Ok(Capability::FileTransfer),
         4 => Ok(Capability::LocalVideoHandoff),
+        5 => Ok(Capability::FolderTransfer),
         _ => Err(TransportError::InvalidMessage),
     }
 }
@@ -722,6 +740,25 @@ mod tests {
         ApplicationHello, HandoffTransportPayload, ProtocolEnvelope, ProtocolMessage,
         TransferTransportMessage, decode, encode,
     };
+
+    #[test]
+    fn folder_offer_round_trip_keeps_its_distinct_kind() {
+        let envelope = ProtocolEnvelope::transfer(
+            42,
+            [9; 16],
+            crate::transport::TransferTransportMessage::FolderOffer {
+                file_name: "Photos".into(),
+                file_size: 123,
+            },
+        )
+        .unwrap();
+        let bytes = encode(&envelope).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(
+            matches!(decoded.message(), ProtocolMessage::Transfer { message: crate::transport::TransferTransportMessage::FolderOffer { file_name, file_size: 123 }, .. } if file_name == "Photos")
+        );
+        assert_eq!(encode(&decoded).unwrap(), bytes);
+    }
 
     #[test]
     fn hello_round_trip_is_deterministic() {

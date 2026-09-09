@@ -18,6 +18,6 @@ mod generated {
     slint::include_modules!();
 }
 
-pub(crate) use generated::{ContentRow, DeviceRow, MainWindow};
+pub(crate) use generated::{ContentRow, DeviceRow, MainWindow, MenuItem};
 pub(crate) use manager::UiManager;
 pub(crate) use startup::StartupUiController;

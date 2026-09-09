@@ -27,14 +27,17 @@ impl HandoffUiController {
         let changed = core
             .handoff()
             .on_handoff_changed(HandoffChangedDelegate::new(move |_| {
-                target.dispatch(|window| window.invoke_refresh_handoffs_requested());
+                target.dispatch(|window| {
+                    window.invoke_refresh_handoffs_requested();
+                    notify(&window, 1);
+                });
             }));
         let incoming = core
             .handoff()
             .on_incoming_changed(IncomingHandoffChangedDelegate::new(move |_| {
                 incoming_target.dispatch(|window| {
                     window.invoke_refresh_handoffs_requested();
-                    notify(&window, 1);
+                    notify(&window, 0);
                 });
             }));
         let controller = Rc::new(RefCell::new(Self {
@@ -48,6 +51,40 @@ impl HandoffUiController {
         let view = window.as_weak();
         window.on_send_handoff(move |kind, device, value, position| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
+                if kind.as_str() == "preview" {
+                    let result = (|| -> UiResult {
+                        if let Some(path) =
+                            crate::platform::select_file(crate::platform::SelectionKind::Video)?
+                        {
+                            window.invoke_open_file(
+                                path.to_string_lossy().as_ref().into(),
+                                "0".into(),
+                            );
+                        }
+                        Ok(())
+                    })();
+                    show_result(&window, result);
+                    return;
+                }
+                if kind.as_str() == "current-video" {
+                    let result = controller.borrow_mut().send_current_video(
+                        device.as_str(),
+                        value.as_str(),
+                        window.get_preview_position(),
+                    );
+                    if result.is_ok() {
+                        window.invoke_show_notice(
+                            super::support::text(
+                                window.get_rtl(),
+                                "Video handoff started.",
+                                "ارسال ویدیو آغاز شد.",
+                            )
+                            .into(),
+                        );
+                    }
+                    show_result(&window, result);
+                    return;
+                }
                 let result = controller.borrow_mut().send(
                     kind.as_str(),
                     device.as_str(),
@@ -120,13 +157,44 @@ impl HandoffUiController {
             "url" => handle.configure_url(device, value.trim())?,
             "youtube" => handle.configure_youtube(device, value.trim(), position)?,
             "video" => {
-                let Some(path) = crate::platform::select_file(true)? else {
+                let Some(path) =
+                    crate::platform::select_file(crate::platform::SelectionKind::Video)?
+                else {
                     return Ok(());
                 };
                 handle.configure_local_video(device, path, position)?;
             }
             _ => return Err("Unknown handoff kind.".into()),
         }
+        handle.use_handle()?;
+        self.handles.push(handle);
+        Ok(())
+    }
+
+    fn send_current_video(&mut self, device: &str, path: &str, seconds: f32) -> UiResult {
+        if !seconds.is_finite() || seconds < 0.0 {
+            return Err("Invalid playback position.".into());
+        }
+        let device = DeviceId::new(device.to_owned())?;
+        if !self
+            .core
+            .transport()
+            .connections()
+            .iter()
+            .any(|value| value.device_id() == &device)
+        {
+            return Err("Connect to the trusted device before sending.".into());
+        }
+        self.next_handle += 1;
+        let handle = self
+            .core
+            .handoff()
+            .get_handle(&format!("ui.handoff.{}", self.next_handle))?;
+        handle.configure_local_video(
+            device,
+            std::path::PathBuf::from(path),
+            std::time::Duration::from_secs_f64(f64::from(seconds)),
+        )?;
         handle.use_handle()?;
         self.handles.push(handle);
         Ok(())

@@ -18,6 +18,7 @@ impl ActivityChange {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityKind {
+    Folder,
     Url,
     YouTube,
     File,

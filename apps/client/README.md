@@ -6,10 +6,34 @@ additional platforms and new features follow in separate milestones.
 The implementation includes startup/shutdown, discovery, pairing verification,
 trusted-device connection commands, URL/YouTube/local-video handoffs, file
 transfers, native dialogs, contextual image/video previews, settings, and
-device-grouped history with retry and unread indicators. Rust formatting,
-workspace checks, warnings-denied Clippy, tests, and the Windows release build
-passed locally on September 9, 2026. Windows interaction acceptance is tracked
-separately.
+device-grouped history with retry and unread indicators. The current redesign
+uses Send, Receive, History, and Settings. Slint's official Material library
+supplies Navigation Drawer, Navigation Bar, buttons, SnackBar, Floating Action
+Button, Radio Button, Slider, TextField, and DropDownMenu components.
+
+The drawer is used at widths of at least 960 logical pixels; smaller windows use
+bottom navigation. Content and preview controls scroll at a minimum window size
+of 360 by 360 logical pixels. The primary content surface scrolls vertically
+without placing a horizontal scrollbar over compact navigation. Drawer actions
+remain top-aligned, and content-category actions use a responsive two- or
+three-column grid. Purple, Red, and Green themes provide coordinated gradients,
+highlights, cards, and controls; theme selection and application brightness
+(50–100 percent) persist through SettingsManager. Brightness affects application
+rendering, not the physical monitor or Windows file dialogs.
+
+Save Directory displays the saved path and opens a native folder dialog. File,
+Folder, Media, Image, and Video selection uses native dialogs with category
+filters. Folder transfers preserve nested content and empty directories. The
+Receive screen shows IPv4 interface addresses and both listener ports. History
+can reuse an editable, previously authenticated connection endpoint.
+
+The supplied ContinueHere artwork is embedded as the Slint window icon and a
+multi-resolution Windows executable icon. The bundled Material source and small
+accessibility/slider adaptations are documented in [vendor notes](vendor/README.md).
+
+The changes described above passed manual formatting, checks, linting, tests, and
+release compilation on September 9, 2026. Windows interaction and two-computer
+transfer acceptance remain pending.
 
 The client owns `ContinueHere` directly. Focused Rust controllers retain core
 handles and delegate subscriptions. Core delegates schedule refresh requests on

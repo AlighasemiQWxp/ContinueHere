@@ -27,6 +27,7 @@ winreg = "0.55"
 
 [build-dependencies]
 slint-build = "=1.17.1"
+winresource = "0.1"
 
 [lints.rust]
 unsafe_code = "deny"

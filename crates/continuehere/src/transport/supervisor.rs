@@ -39,6 +39,7 @@ const MAX_INCOMING_PER_ADDRESS: usize = 10;
 const MAX_RATE_LIMIT_ADDRESSES: usize = 256;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const TRANSFER_OFFER_TIMEOUT: Duration = Duration::from_secs(65);
+const TRANSFER_FINISH_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 pub(crate) type ConnectionStore = Arc<Mutex<BTreeMap<DeviceId, AuthenticatedConnection>>>;
 
@@ -144,6 +145,9 @@ struct PendingRequest {
 }
 
 enum PendingOperation {
+    KeepAlive {
+        nonce: u64,
+    },
     Probe {
         nonce: u64,
         response: oneshot::Sender<Result<(), TransportError>>,
@@ -468,6 +472,15 @@ async fn handle_command(
                 let _ = response.send(Err(TransportError::NotConnected));
                 return false;
             };
+            if matches!(&message, TransferTransportMessage::FolderOffer { .. })
+                && !connection
+                    .snapshot
+                    .capabilities()
+                    .contains(&Capability::FolderTransfer)
+            {
+                let _ = response.send(Err(TransportError::UnsupportedCapability));
+                return false;
+            }
             if !connection
                 .snapshot
                 .capabilities()
@@ -755,6 +768,7 @@ async fn establish(
     }
     if transfer.is_supported() {
         capabilities.push(Capability::FileTransfer);
+        capabilities.push(Capability::FolderTransfer);
         if handoff.is_supported() {
             capabilities.push(Capability::LocalVideoHandoff);
         }
@@ -886,9 +900,11 @@ async fn run_connection(
                             }
                             let timeout = if matches!(
                                 &message,
-                                TransferTransportMessage::Offer { .. }
+                                TransferTransportMessage::Offer { .. } | TransferTransportMessage::FolderOffer { .. }
                             ) {
                                 TRANSFER_OFFER_TIMEOUT
+                            } else if matches!(&message, TransferTransportMessage::Finish { .. }) {
+                                TRANSFER_FINISH_TIMEOUT
                             } else {
                                 REQUEST_TIMEOUT
                             };
@@ -940,6 +956,7 @@ async fn run_connection(
                                 .remove(&envelope.request_id())
                                 .ok_or(TransportError::ProtocolViolation)?;
                             match request.operation {
+                                PendingOperation::KeepAlive { nonce: expected } if expected == *nonce => {}
                                 PendingOperation::Probe {
                                     nonce: expected,
                                     response,
@@ -1089,11 +1106,21 @@ async fn run_connection(
                         .collect::<Vec<_>>();
                     for identifier in timed_out {
                         if let Some(request) = pending.remove(&identifier) {
+                            if matches!(&request.operation, PendingOperation::KeepAlive { .. }) { return Err(TransportError::TimedOut); }
                             fail_pending(request, TransportError::TimedOut);
                         }
                     }
                     if now.duration_since(last_activity) >= idle_timeout {
                         return Ok(());
+                    }
+                    if now.duration_since(last_activity) >= idle_timeout / 3
+                        && pending.len() < maximum_in_flight_requests
+                        && !pending.values().any(|request| matches!(&request.operation, PendingOperation::KeepAlive { .. })) {
+                        let nonce = random_u64()?;
+                        writer.send(&ProtocolEnvelope::ping(request_identifier, nonce)?, maximum_frame_size).await?;
+                        pending.insert(request_identifier, PendingRequest { started: now, timeout: REQUEST_TIMEOUT, operation: PendingOperation::KeepAlive { nonce } });
+                        request_identifier = next_request_identifier(request_identifier);
+                        last_activity = now;
                     }
                 }
             }
@@ -1105,6 +1132,7 @@ async fn run_connection(
     for request in pending.into_values() {
         fail_pending(request, TransportError::ConnectionFailed);
     }
+    transfer.connection_closed(&peer_device_id);
     result
 }
 
@@ -1152,6 +1180,7 @@ fn complete_transfer(
 
 fn fail_pending(request: PendingRequest, error: TransportError) {
     match request.operation {
+        PendingOperation::KeepAlive { .. } => {}
         PendingOperation::Probe { response, .. } => {
             let _ = response.send(Err(error));
         }

@@ -351,11 +351,65 @@ handoff record. Playback positions and handoff records remain in memory.
 
 ## Persistence boundaries
 
+### Folder extension and connection lifetime
+
+The Material client revision adds FolderTransfer capability code `5` and
+FolderOffer message kind `16`. Its payload has the same bounded shape as FileOffer:
+`[transfer_id, directory_name, package_size]`. It reuses the existing acceptance,
+chunk, finish, cancellation, and rejection messages. The supervisor requires the
+peer's FolderTransfer capability before sending an offer. Both test computers
+must run this updated build: older strict capability decoders reject the new hello
+capability, so mixed-version connections are not supported by this extension.
+
+The byte stream is an uncompressed `CHFOLD01` package, protected by the normal
+transfer SHA-256 digest. All integers below are unsigned little-endian:
+
+| Field | Encoding |
+| --- | --- |
+| Magic | 8 bytes, `CHFOLD01` |
+| Entry count | u32; at most 4096 |
+| Each entry | directory flag u8 (0 or 1), path length u16, content size u64 |
+| Path | UTF-8 relative path of the declared length, followed by file bytes |
+
+Directory entries have zero content bytes. A parent directory must precede its
+children. Limits are 1024 path bytes, 32 segments, and 100 GiB for the complete
+package including headers. Parsing rejects truncation, trailing bytes, invalid
+UTF-8, absolute/traversal paths, backslashes, portable filename violations,
+duplicate case-folded paths, missing/non-directory parents, and inconsistent
+sizes. The package cannot encode links or filesystem permissions. Source
+enumeration rejects symlinks and Windows reparse points; it does not freeze the
+source tree against concurrent local edits. Invalid or changing sources fail.
+
+Every manifest entry is validated before destination extraction begins. A private
+staging directory is used on the destination filesystem. Final publication reserves
+a new directory name and creates directories/hard links without overwriting an
+existing destination. Completion is published only when the whole tree is ready.
+Whole-directory publication is not atomic to unrelated local processes. Normal
+cancellation/error removes the newly reserved tree and staging; process/power loss
+may leave partial content. Receiver disk requirements include both the packaged
+stream and extracted data until cleanup. The sender also needs temporary package
+space. Existing single-file commit semantics remain unchanged.
+
+Authenticated connections exchange correlated nonce-checked Ping/Pong messages
+after one third of the negotiated idle interval. A missing keepalive response
+times out after 15 seconds. File/folder offer requests allow 65 seconds for the
+receiver's decision; finish requests allow 30 minutes for disk synchronization
+and folder extraction. Ordinary control requests remain bounded to 15 seconds.
+Closing a connection resolves pending incoming decisions and fails/cleans active
+receives, including cancellation of folder extraction. No idle connections are
+kept alive after explicit disconnect, trust revocation, or protocol failure.
+
+`endpoints.bin` contains versioned deterministic CBOR endpoint hints, at most 128
+entries and 128 KiB. Only authenticated outgoing connections can add hints; lookup
+requires current trust, and reconnect always repeats TLS authentication. It stores
+no credentials. Malformed cache data is preserved and reported at startup.
+
 Security-sensitive state remains separate from user preferences and the public
 device identity:
 
 - `settings.bin` contains preferences only;
 - `device_identity.bin` contains the stable non-secret device identity only;
+- `endpoints.bin` contains non-secret connection hints, independently of trust;
 - platform secure storage contains local private-key material;
 - the pairing system owns versioned, bounded, atomically replaced trusted-peer
   records;

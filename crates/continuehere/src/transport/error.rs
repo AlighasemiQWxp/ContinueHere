@@ -3,6 +3,8 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum TransportError {
+    #[error("the connection endpoint cache could not be read or saved")]
+    EndpointStorage,
     #[error("transport manager is not running")]
     ManagerUnavailable,
     #[error("pairing listener is unavailable")]

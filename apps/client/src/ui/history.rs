@@ -134,12 +134,41 @@ impl HistoryUiController {
         }
         groups.sort_by_key(|group| std::cmp::Reverse(activity_time(group[0])));
         let rtl = window.get_rtl();
+        let entries = snapshot.entries();
+        window.set_sent_activities(model(
+            entries
+                .iter()
+                .filter(|item| {
+                    item.direction() == ActivityDirection::Outgoing
+                        && item.kind() != ActivityKind::Session
+                })
+                .take(100)
+                .map(|item| activity_row(item, &self.core, rtl))
+                .collect(),
+        ));
+        window.set_received_activities(model(
+            entries
+                .iter()
+                .filter(|item| {
+                    item.direction() == ActivityDirection::Incoming
+                        && item.kind() != ActivityKind::Session
+                })
+                .take(100)
+                .map(|item| activity_row(item, &self.core, rtl))
+                .collect(),
+        ));
         window.set_history_devices(model(
             groups
                 .iter()
                 .map(|group| {
                     let item = group[0];
                     ContentRow {
+                        connected: self
+                            .core
+                            .transport()
+                            .connections()
+                            .iter()
+                            .any(|connection| connection.device_id().as_str() == item.device_id()),
                         id: item.device_id().into(),
                         title: item.device_name().into(),
                         detail: format!(
@@ -202,12 +231,10 @@ fn timestamp(value: u64) -> String {
 }
 
 fn can_open(item: &Activity) -> bool {
-    item.direction() == ActivityDirection::Incoming
-        && matches!(
-            item.status(),
-            ActivityStatus::Completed | ActivityStatus::Delivered
-        )
-        && (item.file_path().is_some() || item.url().is_some())
+    matches!(
+        item.status(),
+        ActivityStatus::Completed | ActivityStatus::Delivered
+    ) && (item.file_path().is_some() || item.url().is_some())
 }
 
 fn activity_row(item: &Activity, core: &ContinueHere, rtl: bool) -> ContentRow {

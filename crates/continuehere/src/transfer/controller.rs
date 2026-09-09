@@ -494,6 +494,7 @@ impl FileTransferController {
         sender_device_id: DeviceId,
         file_name: String,
         file_size: u64,
+        folder: bool,
     ) -> TransferDisposition {
         if validate_file_name(&file_name).is_err() || file_size > MAX_FILE_SIZE {
             return TransferDisposition::Rejected(TransferRejection::Invalid);
@@ -517,12 +518,15 @@ impl FileTransferController {
             {
                 return TransferDisposition::Rejected(TransferRejection::Busy);
             }
-            let transfer = FileTransfer::incoming(
+            let mut transfer = FileTransfer::incoming(
                 transfer_id.clone(),
                 sender_device_id.clone(),
                 file_name,
                 file_size,
             );
+            if folder {
+                transfer.set_folder();
+            }
             state
                 .transfers
                 .insert(transfer_id.clone(), transfer.clone());
@@ -651,21 +655,38 @@ impl FileTransferController {
             transfer.set_state(FileTransferState::Verifying);
             (session, transfer.clone())
         };
+        let folder = verifying.is_folder();
         self.changed.publish(FileTransferChange::Updated(verifying));
 
         let calculated: [u8; 32] = session.hasher.clone().finalize().into();
         if calculated != digest {
+            drop(session.file);
             let _ = fs::remove_file(&session.temporary_path);
             self.fail_incoming(transfer_id, FileTransferFailure::Integrity);
             return TransferDisposition::Rejected(TransferRejection::Integrity);
         }
         if session.file.flush().is_err() || session.file.sync_all().is_err() {
+            drop(session.file);
             let _ = fs::remove_file(&session.temporary_path);
             self.fail_incoming(transfer_id, FileTransferFailure::FileSystem);
             return TransferDisposition::Rejected(TransferRejection::FileSystem);
         }
         drop(session.file);
-        if fs::hard_link(&session.temporary_path, &session.destination_path).is_err() {
+        let committed = if folder {
+            super::folder::unpack(&session.temporary_path, &session.destination_path, || {
+                lock(&self.state)
+                    .map(|state| {
+                        !state.running
+                            || !state.transfers.get(transfer_id).is_some_and(|transfer| {
+                                transfer.state() == FileTransferState::Verifying
+                            })
+                    })
+                    .unwrap_or(true)
+            })
+        } else {
+            fs::hard_link(&session.temporary_path, &session.destination_path)
+        };
+        if committed.is_err() {
             let failure = if session.destination_path.exists() {
                 FileTransferFailure::DestinationConflict
             } else {
@@ -689,8 +710,17 @@ impl FileTransferController {
                 }
             };
             let Some(transfer) = state.transfers.get_mut(transfer_id) else {
+                if folder {
+                    let _ = fs::remove_dir_all(&session.destination_path);
+                }
                 return TransferDisposition::Rejected(TransferRejection::Unavailable);
             };
+            if transfer.state() != FileTransferState::Verifying {
+                if folder {
+                    let _ = fs::remove_dir_all(&session.destination_path);
+                }
+                return TransferDisposition::Rejected(TransferRejection::Unavailable);
+            }
             transfer.set_state(FileTransferState::Completed);
             transfer.clone()
         };
@@ -771,6 +801,30 @@ impl FileTransferController {
 }
 
 impl InboundTransferHandler for FileTransferController {
+    fn connection_closed(&self, device_id: &DeviceId) {
+        let pending = {
+            let Ok(mut state) = lock(&self.state) else {
+                return;
+            };
+            state
+                .incoming
+                .iter_mut()
+                .filter(|(_, operation)| &operation.sender_device_id == device_id)
+                .map(|(id, operation)| {
+                    if let Some(decision) = operation.decision.take() {
+                        let _ = decision.send(TransferDisposition::Rejected(
+                            TransferRejection::Unavailable,
+                        ));
+                    }
+                    id.clone()
+                })
+                .collect::<Vec<_>>()
+        };
+        for id in pending {
+            self.fail_incoming(&id, FileTransferFailure::Transport);
+        }
+    }
+
     fn receive(&self, transfer: InboundTransfer) -> TransferDisposition {
         let (transfer_id, sender_device_id, message) = transfer.into_parts();
         let transfer_id = FileTransferId::from_bytes(transfer_id);
@@ -778,7 +832,11 @@ impl InboundTransferHandler for FileTransferController {
             TransferTransportMessage::Offer {
                 file_name,
                 file_size,
-            } => self.receive_offer(transfer_id, sender_device_id, file_name, file_size),
+            } => self.receive_offer(transfer_id, sender_device_id, file_name, file_size, false),
+            TransferTransportMessage::FolderOffer {
+                file_name,
+                file_size,
+            } => self.receive_offer(transfer_id, sender_device_id, file_name, file_size, true),
             TransferTransportMessage::Chunk { offset, bytes } => {
                 self.receive_chunk(&transfer_id, &sender_device_id, offset, &bytes)
             }
@@ -802,13 +860,55 @@ fn run_outgoing(
     controller: Arc<FileTransferController>,
     handle_identifier: String,
     transfer_id: FileTransferId,
-    config: FileTransferConfig,
+    mut config: FileTransferConfig,
     commands: mpsc::Receiver<OperationCommand>,
 ) {
+    let packed = if config.folder {
+        match super::folder::pack(&config.source, || {
+            !matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty))
+        }) {
+            Ok(file) => Some(file),
+            Err(_) => {
+                controller.finish_outgoing(
+                    &handle_identifier,
+                    OperationResult::Failed(FileTransferFailure::Invalid),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    if let Some(file) = &packed {
+        let size = match file.as_file().metadata() {
+            Ok(metadata) => metadata.len(),
+            Err(_) => {
+                controller.finish_outgoing(
+                    &handle_identifier,
+                    OperationResult::Failed(FileTransferFailure::FileSystem),
+                );
+                return;
+            }
+        };
+        config.file_size = size;
+        config.source = file.path().to_path_buf();
+        if let Ok(mut state) = lock(&controller.state)
+            && let Some(transfer) = state.transfers.get_mut(&transfer_id)
+        {
+            transfer.set_size(size);
+        }
+    }
     controller.update_outgoing_state(&handle_identifier, FileTransferState::WaitingForAcceptance);
-    let offer = TransferTransportMessage::Offer {
-        file_name: config.file_name.clone(),
-        file_size: config.file_size,
+    let offer = if config.folder {
+        TransferTransportMessage::FolderOffer {
+            file_name: config.file_name.clone(),
+            file_size: config.file_size,
+        }
+    } else {
+        TransferTransportMessage::Offer {
+            file_name: config.file_name.clone(),
+            file_size: config.file_size,
+        }
     };
     match send_and_wait(
         &controller,
@@ -985,6 +1085,10 @@ fn send_cancel(
 }
 
 fn validate_source(config: &FileTransferConfig) -> Result<(), FileTransferError> {
+    if config.folder {
+        return super::folder::validate_root(&config.source)
+            .map_err(|_| FileTransferError::InvalidSourceFolder);
+    }
     let metadata = config
         .source
         .symlink_metadata()
@@ -1143,5 +1247,133 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         panic!("incoming offer should become available");
+    }
+
+    #[test]
+    fn folder_transfer_uses_acceptance_chunks_and_integrity_before_publication() {
+        for valid_digest in [false, true] {
+            let project = tempdir().unwrap();
+            let source = project.path().join("source");
+            let destination = project.path().join("received");
+            fs::create_dir_all(source.join("empty")).unwrap();
+            fs::create_dir(&destination).unwrap();
+            fs::write(source.join("content.bin"), [42; 70_000]).unwrap();
+            let packed = crate::transfer::folder::pack(&source, || false).unwrap();
+            let bytes = fs::read(packed.path()).unwrap();
+            let settings = SettingsManager::new(project.path().to_path_buf()).unwrap();
+            settings
+                .directories()
+                .set_default_transfer_directory(destination.clone())
+                .unwrap();
+            let controller = FileTransferController::new(
+                TransferTransportCapability::new(),
+                settings.directories().shared(),
+                FileTransferChangedEvent::default(),
+            );
+            controller.start().unwrap();
+            let sender = DeviceId::new("sender").unwrap();
+            let receiving = Arc::clone(&controller);
+            let receiving_sender = sender.clone();
+            let size = bytes.len() as u64;
+            let transfer_id = [8; 16];
+            let offer = thread::spawn(move || {
+                receiving.receive(InboundTransfer::new(
+                    transfer_id,
+                    receiving_sender,
+                    TransferTransportMessage::FolderOffer {
+                        file_name: "Folder".into(),
+                        file_size: size,
+                    },
+                ))
+            });
+            let id = wait_for_offer(&controller);
+            assert!(controller.transfers()[0].is_folder());
+            assert!(!destination.join("Folder").exists());
+            controller.accept_incoming(&id, None).unwrap();
+            assert_eq!(offer.join().unwrap(), TransferDisposition::Accepted);
+            for (index, chunk) in bytes.chunks(32 * 1024).enumerate() {
+                assert_eq!(
+                    controller.receive(InboundTransfer::new(
+                        transfer_id,
+                        sender.clone(),
+                        TransferTransportMessage::Chunk {
+                            offset: (index * 32 * 1024) as u64,
+                            bytes: chunk.to_vec()
+                        }
+                    )),
+                    TransferDisposition::Accepted
+                );
+            }
+            assert!(!destination.join("Folder").exists());
+            let digest = if valid_digest {
+                Sha256::digest(&bytes).into()
+            } else {
+                [0; 32]
+            };
+            let result = controller.receive(InboundTransfer::new(
+                transfer_id,
+                sender,
+                TransferTransportMessage::Finish { digest },
+            ));
+            if valid_digest {
+                assert_eq!(result, TransferDisposition::Accepted);
+                assert!(destination.join("Folder/empty").is_dir());
+                assert_eq!(
+                    fs::read(destination.join("Folder/content.bin")).unwrap(),
+                    vec![42; 70_000]
+                );
+            } else {
+                assert!(matches!(result, TransferDisposition::Rejected(_)));
+                assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+            }
+            controller.stop().unwrap();
+        }
+    }
+
+    #[test]
+    fn lost_connection_resolves_offers_and_removes_partial_files() {
+        for accepted in [false, true] {
+            let project = tempdir().unwrap();
+            let destination = project.path().join("received");
+            fs::create_dir(&destination).unwrap();
+            let settings = SettingsManager::new(project.path().to_path_buf()).unwrap();
+            settings
+                .directories()
+                .set_default_transfer_directory(destination.clone())
+                .unwrap();
+            let controller = FileTransferController::new(
+                TransferTransportCapability::new(),
+                settings.directories().shared(),
+                FileTransferChangedEvent::default(),
+            );
+            controller.start().unwrap();
+            let sender = DeviceId::new("sender").unwrap();
+            let receiving = Arc::clone(&controller);
+            let receiving_sender = sender.clone();
+            let offer = thread::spawn(move || {
+                receiving.receive(InboundTransfer::new(
+                    [9; 16],
+                    receiving_sender,
+                    TransferTransportMessage::Offer {
+                        file_name: "file.bin".into(),
+                        file_size: 10,
+                    },
+                ))
+            });
+            let id = wait_for_offer(&controller);
+            if accepted {
+                controller.accept_incoming(&id, None).unwrap();
+            }
+            controller.connection_closed(&sender);
+            let result = offer.join().unwrap();
+            if accepted {
+                assert_eq!(result, TransferDisposition::Accepted);
+            } else {
+                assert!(matches!(result, TransferDisposition::Rejected(_)));
+            }
+            assert_eq!(controller.transfers()[0].state(), FileTransferState::Failed);
+            assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+            controller.stop().unwrap();
+        }
     }
 }

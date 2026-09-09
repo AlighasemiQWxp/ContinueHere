@@ -232,7 +232,11 @@ impl ActivityController {
                 FileTransferDirection::Incoming => ActivityDirection::Incoming,
             },
         );
-        record.kind = ActivityKind::File;
+        record.kind = if transfer.is_folder() {
+            ActivityKind::Folder
+        } else {
+            ActivityKind::File
+        };
         record.title = transfer.file_name().to_owned();
         record.transfer_id = Some(transfer.id().as_str().to_owned());
         record.path = transfer
@@ -354,7 +358,9 @@ impl ActivityController {
                 ) {
                     record.completed_at = Some(time);
                 }
-                if record.kind == ActivityKind::File && record.status == ActivityStatus::Completed {
+                if matches!(record.kind, ActivityKind::File | ActivityKind::Folder)
+                    && record.status == ActivityStatus::Completed
+                {
                     record.file_completed_at = Some(time);
                 }
             }

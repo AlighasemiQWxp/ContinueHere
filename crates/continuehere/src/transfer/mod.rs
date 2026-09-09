@@ -21,3 +21,4 @@ pub(crate) use controller::FileTransferController;
 pub(crate) use event::FileTransferChangedEvent;
 pub(crate) use handle::FileTransferOperation;
 pub(crate) use model::FileTransferConfig;
+mod folder;

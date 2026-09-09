@@ -12,6 +12,7 @@
 /device_identity.bin
 /trusted_devices.bin
 /history.bin
+/endpoints.bin
 
 # Editors
 .idea/

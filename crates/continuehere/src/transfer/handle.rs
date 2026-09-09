@@ -45,6 +45,15 @@ impl FileTransferHandle {
         self.reference.use_handle().map_err(map_handle_error)
     }
 
+    pub fn configure_folder(
+        &self,
+        device_id: DeviceId,
+        source: impl Into<PathBuf>,
+    ) -> Result<(), FileTransferError> {
+        let config = FileTransferConfig::folder(device_id, source.into())?;
+        self.reference.configure(config).map_err(map_handle_error)
+    }
+
     pub fn transfer(&self) -> Option<FileTransfer> {
         self.controller.transfer_for_handle(self.identifier())
     }

@@ -5,4 +5,5 @@ pub enum Capability {
     PlaybackPositionHandoff,
     FileTransfer,
     LocalVideoHandoff,
+    FolderTransfer,
 }

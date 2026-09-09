@@ -58,7 +58,10 @@ pub use pairing::{
     TrustedDevice, TrustedDeviceChange, TrustedDeviceChangedDelegate,
     TrustedDeviceChangedSubscription,
 };
-pub use settings::{DirectorySettings, LocalizationSettings, SettingsManager};
+pub use settings::{
+    Appearance, AppearanceChangedDelegate, AppearanceChangedSubscription, AppearanceSettings,
+    DirectorySettings, LocalizationSettings, SettingsManager, ThemeStyle,
+};
 pub use transfer::{
     FileTransfer, FileTransferChange, FileTransferChangedDelegate, FileTransferChangedSubscription,
     FileTransferDirection, FileTransferError, FileTransferFailure, FileTransferHandle,

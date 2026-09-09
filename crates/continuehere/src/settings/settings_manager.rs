@@ -15,6 +15,7 @@ use super::{
 };
 
 pub struct SettingsManager {
+    appearance: super::appearance::AppearanceSettings,
     store: Arc<Mutex<SettingsStore>>,
     directories: DirectorySettings,
     localization: LocalizationSettings,
@@ -39,6 +40,7 @@ impl SettingsManager {
         let directories = DirectorySettings::new(Arc::clone(&store), project_directory);
         let localization = LocalizationSettings::new(Arc::clone(&store));
         Ok(Self {
+            appearance: super::appearance::AppearanceSettings::new(Arc::clone(&store)),
             store,
             directories,
             localization,
@@ -47,6 +49,10 @@ impl SettingsManager {
 
     pub fn directories(&self) -> &DirectorySettings {
         &self.directories
+    }
+
+    pub fn appearance(&self) -> &super::appearance::AppearanceSettings {
+        &self.appearance
     }
 
     pub fn localization(&self) -> &LocalizationSettings {
@@ -67,6 +73,7 @@ impl Module for SettingsManager {
             .load()?;
         self.directories.load()?;
         self.localization.load()?;
+        self.appearance.load()?;
         Ok(())
     }
 

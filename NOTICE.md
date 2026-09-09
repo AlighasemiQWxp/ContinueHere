@@ -24,3 +24,9 @@ The native Rust client uses the Slint UI framework under Slint's royalty-free
 license option. The application includes the required visible Slint disclosure.
 Slint remains copyright its respective contributors and is distributed under
 its own license terms: <https://slint.dev/legal/royalty-free-license/>.
+
+The separately vendored Slint Material component library is copyright SixtyFPS
+GmbH and licensed under MIT. Its original [license](apps/client/vendor/material/LICENSE.md)
+is retained. These third-party files remain governed by their own license, not
+the project's source-available restrictions. Version and local adaptations are
+recorded in [vendor notes](apps/client/vendor/README.md).

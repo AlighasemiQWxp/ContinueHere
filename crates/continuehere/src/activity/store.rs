@@ -118,6 +118,7 @@ fn encode_entry(write: &mut Writer, value: &Activity) -> Result<(), ActivityErro
         ActivityKind::File => 2,
         ActivityKind::LocalVideo => 3,
         ActivityKind::Session => 4,
+        ActivityKind::Folder => 5,
     });
     write.u8(match value.direction {
         ActivityDirection::Outgoing => 0,
@@ -178,6 +179,7 @@ fn decode_entry(read: &mut Reader<'_>) -> Result<Activity, ActivityError> {
             2 => ActivityKind::File,
             3 => ActivityKind::LocalVideo,
             4 => ActivityKind::Session,
+            5 => ActivityKind::Folder,
             _ => return Err(ActivityError::InvalidData),
         },
         direction: match read.u8()? {

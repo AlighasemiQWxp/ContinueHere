@@ -85,6 +85,7 @@ pub enum FileTransferFailure {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileTransfer {
+    folder: bool,
     id: FileTransferId,
     peer_device_id: DeviceId,
     file_name: String,
@@ -100,6 +101,7 @@ pub struct FileTransfer {
 impl FileTransfer {
     pub(crate) fn outgoing(id: FileTransferId, config: &FileTransferConfig) -> Self {
         Self {
+            folder: config.folder,
             id,
             peer_device_id: config.device_id.clone(),
             file_name: config.file_name.clone(),
@@ -120,6 +122,7 @@ impl FileTransfer {
         file_size: u64,
     ) -> Self {
         Self {
+            folder: false,
             id,
             peer_device_id,
             file_name,
@@ -135,6 +138,17 @@ impl FileTransfer {
 
     pub fn id(&self) -> &FileTransferId {
         &self.id
+    }
+
+    pub const fn is_folder(&self) -> bool {
+        self.folder
+    }
+
+    pub(crate) fn set_folder(&mut self) {
+        self.folder = true;
+    }
+    pub(crate) fn set_size(&mut self, size: u64) {
+        self.file_size = size;
     }
 
     pub fn peer_device_id(&self) -> &DeviceId {
@@ -212,6 +226,7 @@ pub enum FileTransferChange {
 
 #[derive(Clone)]
 pub(crate) struct FileTransferConfig {
+    pub(crate) folder: bool,
     pub(crate) device_id: DeviceId,
     pub(crate) source: PathBuf,
     pub(crate) file_name: String,
@@ -219,6 +234,23 @@ pub(crate) struct FileTransferConfig {
 }
 
 impl FileTransferConfig {
+    pub(crate) fn folder(device_id: DeviceId, source: PathBuf) -> Result<Self, FileTransferError> {
+        super::folder::validate_root(&source)
+            .map_err(|_| FileTransferError::InvalidSourceFolder)?;
+        let file_name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or(FileTransferError::InvalidFileName)?
+            .to_owned();
+        validate_file_name(&file_name)?;
+        Ok(Self {
+            device_id,
+            source,
+            file_name,
+            file_size: 0,
+            folder: true,
+        })
+    }
     pub(crate) fn new(device_id: DeviceId, source: PathBuf) -> Result<Self, FileTransferError> {
         if !source.is_absolute() {
             return Err(FileTransferError::InvalidSourceFile);
@@ -239,6 +271,7 @@ impl FileTransferConfig {
             .to_owned();
         validate_file_name(&file_name)?;
         Ok(Self {
+            folder: false,
             device_id,
             source,
             file_name,

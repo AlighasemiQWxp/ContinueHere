@@ -35,7 +35,7 @@ impl UiManager {
             let Some(window) = view.upgrade() else {
                 return;
             };
-            if !(0..=4).contains(&page) {
+            if ![0, 1, 3, 4].contains(&page) || window.get_preview_visible() {
                 return;
             }
             window.set_reduce_motion(crate::platform::reduce_motion());
@@ -43,7 +43,6 @@ impl UiManager {
             match page {
                 0 => window.set_devices_unread(false),
                 1 => window.set_send_unread(false),
-                2 => window.set_transfers_unread(false),
                 3 => {
                     window.set_history_unread(false);
                     window.set_history_device("".into());

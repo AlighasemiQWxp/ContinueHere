@@ -51,6 +51,9 @@ impl UiEventTarget {
 }
 
 pub(super) struct DevicesUiController {
+    advertisements: Vec<DiscoveryHandle>,
+    addresses: Vec<std::net::Ipv4Addr>,
+    network_timer: slint::Timer,
     core: Rc<ContinueHere>,
     connection: Option<ConnectionFuture>,
     local_discovery: Option<DiscoveryHandle>,
@@ -110,6 +113,9 @@ impl DevicesUiController {
                 )));
 
         let controller = Rc::new(RefCell::new(Self {
+            advertisements: Vec::new(),
+            addresses: Vec::new(),
+            network_timer: slint::Timer::default(),
             core,
             connection: None,
             local_discovery,
@@ -122,11 +128,62 @@ impl DevicesUiController {
             _connection_changed: connection_changed,
         }));
         Self::bind_callbacks(Rc::downgrade(&controller), window);
+        controller.borrow_mut().refresh_network(window);
+        let view = window.as_weak();
+        controller.borrow().network_timer.start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_secs(5),
+            move || {
+                if let Some(window) = view.upgrade() {
+                    window.invoke_refresh_network();
+                }
+            },
+        );
         controller.borrow().refresh(window);
         controller
     }
 
     fn bind_callbacks(controller: RcWeak<RefCell<Self>>, window: &MainWindow) {
+        let network_controller = controller.clone();
+        let network_view = window.as_weak();
+        window.on_refresh_network(move || {
+            if let (Some(controller), Some(window)) =
+                (network_controller.upgrade(), network_view.upgrade())
+            {
+                controller.borrow_mut().refresh_network(&window);
+            }
+        });
+        let reconnect_controller = controller.clone();
+        let reconnect_view = window.as_weak();
+        window.on_reconnect_requested(move |id| {
+            if let (Some(controller), Some(window)) =
+                (reconnect_controller.upgrade(), reconnect_view.upgrade())
+            {
+                let controller = controller.borrow();
+                let result = (|| -> super::support::UiResult {
+                    let device = continuehere::DeviceId::new(id.to_string())?;
+                    if !controller
+                        .core
+                        .pairing()
+                        .trusted_devices()
+                        .iter()
+                        .any(|peer| peer.device_id() == &device)
+                    {
+                        return Err("Pair this device again before reconnecting.".into());
+                    }
+                    let endpoint = controller
+                        .core
+                        .transport()
+                        .known_endpoint(&device)
+                        .map(|value| value.to_string())
+                        .unwrap_or_default();
+                    window.set_reconnect_endpoint(endpoint.into());
+                    window.set_reconnect_device(id.clone());
+                    Ok(())
+                })();
+                super::support::show_result(&window, result);
+            }
+        });
         let poll_controller = controller.clone();
         let poll_window = window.as_weak();
         window.on_poll_connection_requested(move || {
@@ -193,7 +250,7 @@ impl DevicesUiController {
     fn refresh(&self, window: &MainWindow) {
         apply_snapshot(window, snapshot(&self.core));
         if let Ok(endpoint) = self.core.transport().listening_endpoint() {
-            window.set_transport_endpoint(endpoint.to_string().into());
+            window.set_transport_endpoint(endpoint.port().to_string().into());
         }
         window.invoke_refresh_history_requested();
     }
@@ -235,6 +292,59 @@ impl DevicesUiController {
         Ok(())
     }
 
+    fn refresh_network(&mut self, window: &MainWindow) {
+        let addresses = match self.core.discovery().local_addresses() {
+            Ok(value) => value,
+            Err(error) => {
+                window.set_local_addresses(
+                    format!("Unable to read network addresses: {error}").into(),
+                );
+                return;
+            }
+        };
+        let label = if addresses.is_empty() {
+            super::support::text(
+                window.get_rtl(),
+                "No LAN address available. Connect to Wi-Fi or Ethernet.",
+                "نشانی شبکه موجود نیست. به وای‌فای یا کابل شبکه متصل شوید.",
+            )
+            .to_owned()
+        } else {
+            addresses
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        window.set_local_addresses(label.into());
+        if addresses == self.addresses && !self.advertisements.is_empty() {
+            return;
+        }
+        for handle in self.advertisements.drain(..) {
+            let _ = handle.release();
+        }
+        self.addresses = addresses;
+        let Ok(listener) = self.core.pairing().listening_endpoint() else {
+            return;
+        };
+        for (index, address) in self.addresses.iter().enumerate() {
+            let result = (|| -> Result<DiscoveryHandle, continuehere::DiscoveryError> {
+                let endpoint = DiscoveryEndpoint::new(address.to_string(), listener.port())?;
+                let handle = self
+                    .core
+                    .discovery()
+                    .get_handle(&format!("ui.discovery.receive.{index}"))?;
+                handle.configure(DiscoveryMode::AdvertiseEndpoint(endpoint))?;
+                handle.use_handle()?;
+                Ok(handle)
+            })();
+            match result {
+                Ok(handle) => self.advertisements.push(handle),
+                Err(error) => window.set_error_message(error.to_string().into()),
+            }
+        }
+    }
+
     fn poll_connection(&mut self, window: &MainWindow) {
         let Some(connection) = &mut self.connection else {
             return;
@@ -253,6 +363,10 @@ impl DevicesUiController {
 
 impl Drop for DevicesUiController {
     fn drop(&mut self) {
+        self.network_timer.stop();
+        for handle in &self.advertisements {
+            let _ = handle.release();
+        }
         for handle in &self.manual_discoveries {
             let _release_result = handle.release();
         }
@@ -364,6 +478,16 @@ fn apply_snapshot(window: &MainWindow, snapshot: DevicesSnapshot) {
         connected
             .iter()
             .map(|item| item.id.as_str().into())
+            .collect(),
+    ));
+    window.set_connected_device_menu(super::support::model(
+        connected
+            .iter()
+            .map(|item| super::MenuItem {
+                text: item.name.as_str().into(),
+                enabled: true,
+                ..Default::default()
+            })
             .collect(),
     ));
     window.set_destination_index(

@@ -106,7 +106,7 @@ after its implementation and validation requirements are satisfied.
 - [ ] 15. Windows user interface migration
   - Native Rust/Slint UI for the implemented Windows behavior
   - Direct Rust core ownership in the application client
-  - Five screens: Devices, Send, Transfers, History, and Settings
+  - Four screens: Send, Receive, History, and Settings; transfer activity is contextual
   - Pairing, connection commands, handoffs, file dialogs, transfer approval and
     opening, image/video previews, existing history/retry, and unread indicators
   - Preserve Windows application data, English/Persian input and layouts, and
@@ -115,7 +115,8 @@ after its implementation and validation requirements are satisfied.
     release build passed locally on September 9, 2026
   - GitHub CI passed on September 9, 2026; Windows interaction acceptance remains
     pending through the Windows migration checklist
-  - Additional platforms and new features are outside this migration milestone
+  - The subsequent approved Material redesign and transfer extensions below passed
+    the complete local validation suite on September 9, 2026
 
 ## E. Subsequent work
 
@@ -131,8 +132,20 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
   - Explicit retry through existing Handoff and FileTransfer Handles
   - Separate History navigation and device-card unread indicators
   - Golden circular badges, English/Persian labels, and responsive RTL layouts
-  - Binding generation, full local validation, and Windows release build passed
-  - Desktop interaction acceptance and continuous integration pending
+  - Native-client baseline local validation, Windows release build, and CI passed
+  - Current revision local validation passed; desktop interaction acceptance pending
+
+- [ ] Windows Material redesign and two-computer transfer acceptance
+  - Official Navigation Drawer/Bar, clickable buttons, SnackBar, directory FAB,
+    language/theme radio buttons, persisted appearance and brightness slider
+  - Responsive Send/Receive activity and previews; supplied application icon
+  - LAN address and port display, pairing advertisements, authenticated History reconnect
+  - Category-filtered native pickers and bounded folder transfer through FileTransfer
+  - YouTube link plus entered position; local-video handoff from the in-app player
+  - Formatting, checks, linting, tests, and the release build passed locally on
+    September 9, 2026; CI and the two-computer checklist remain pending
+  - Automatic browser playback capture, streaming while downloading, partial resume,
+    offline queues, installers, and additional platforms remain future work
 - [ ] 17. Android application
 - [ ] 18. Linux, macOS, and iOS support, one platform at a time
 - [ ] 19. Advanced application and operating-system integrations

@@ -8,6 +8,7 @@ use super::{SupervisorCommand, TransportError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TransferTransportMessage {
+    FolderOffer { file_name: String, file_size: u64 },
     Offer { file_name: String, file_size: u64 },
     Chunk { offset: u64, bytes: Vec<u8> },
     Finish { digest: [u8; 32] },
@@ -57,6 +58,7 @@ impl InboundTransfer {
 
 pub(crate) trait InboundTransferHandler: Send + Sync {
     fn receive(&self, transfer: InboundTransfer) -> TransferDisposition;
+    fn connection_closed(&self, _device_id: &DeviceId) {}
 }
 
 #[derive(Clone, Default)]
@@ -71,6 +73,14 @@ struct TransferTransportInner {
 }
 
 impl TransferTransportCapability {
+    pub(crate) fn connection_closed(&self, device_id: &DeviceId) {
+        let handler = lock(&self.inner.handler)
+            .ok()
+            .and_then(|value| value.as_ref().and_then(Weak::upgrade));
+        if let Some(handler) = handler {
+            handler.connection_closed(device_id);
+        }
+    }
     pub(crate) fn new() -> Self {
         Self::default()
     }

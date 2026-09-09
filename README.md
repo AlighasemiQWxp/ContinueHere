@@ -49,9 +49,17 @@ The architectural foundation is complete. It currently provides:
 - File-transfer progress, state, cancellation, and cleanup delegate events
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
-- Native Rust/Slint Windows client with all five screens, direct core ownership,
+- Native Rust/Slint Windows client with Send, Receive, History, and Settings, direct core ownership,
   pairing, handoffs, transfers, media previews, settings, and activity history
-  (local validation passed; Windows interaction acceptance pending)
+  (Windows interaction acceptance pending)
+- Official Slint Material Navigation Drawer and compact Navigation Bar, clickable
+  buttons, unobstructed vertical scrolling, top-aligned drawer actions, responsive
+  content-category grids, save confirmation SnackBar, theme/language radio buttons,
+  and app brightness
+- Persisted Purple, Red, and Green appearance styles and a native Save Directory picker
+- File, Folder, Media, Image, and Video selection with native category filters
+- Bounded folder transfer preserving nested files and empty directories
+- LAN address display, temporary pairing advertisements, and trusted History reconnect hints
 - Device-grouped activity history and manual retry (desktop acceptance pending)
 - Automated tests for the public API, module lifecycle, and handle behavior
 
@@ -118,9 +126,10 @@ file metadata, and uses the existing send flows. The receiver accepts a new file
 offer again. See [the architecture guide](docs/ARCHITECTURE.md#activity-history-and-retry)
 for persistence and retry boundaries.
 
-Phase 16 passed Rust formatting, workspace checks, warnings-denied Clippy, Rust
-tests, and the Windows release build. Desktop interaction acceptance remains
-pending. To repeat the complete local validation from the project root, run:
+The Material redesign, folder protocol, reconnect persistence, and application icon
+passed the complete local validation suite on September 9, 2026. Windows interaction
+and two-computer transfer acceptance remain pending.
+Run the complete local validation from the project root:
 
 ```powershell
 .\scripts\validate.ps1
@@ -165,8 +174,8 @@ local identity at `device_identity.bin` inside that directory:
 let app = ContinueHere::builder(project_directory).build().await?;
 ```
 
-The generated root `settings.bin`, `device_identity.bin`, and
-`trusted_devices.bin` files are ignored by Git. Private cryptographic identity
+The generated root `settings.bin`, `device_identity.bin`, `history.bin`,
+`endpoints.bin`, and `trusted_devices.bin` files are ignored by Git. Private cryptographic identity
 material is stored through the operating system's credential store instead of
 the project directory.
 

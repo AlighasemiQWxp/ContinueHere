@@ -4,9 +4,10 @@ use std::{
 };
 
 use continuehere::{
-    ContinueHere, DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription,
-    DirectoryChangedDelegate, DirectoryChangedSubscription, Language, LanguageChangedDelegate,
-    LanguageChangedSubscription,
+    AppearanceChangedDelegate, AppearanceChangedSubscription, ContinueHere,
+    DeviceIdentityChangedDelegate, DeviceIdentityChangedSubscription, DirectoryChangedDelegate,
+    DirectoryChangedSubscription, Language, LanguageChangedDelegate, LanguageChangedSubscription,
+    ThemeStyle,
 };
 use slint::ComponentHandle;
 
@@ -33,6 +34,7 @@ impl UiEventTarget {
 }
 
 pub(super) struct SettingsUiController {
+    _appearance_changed: AppearanceChangedSubscription,
     core: Rc<ContinueHere>,
     _identity_changed: DeviceIdentityChangedSubscription,
     _directory_changed: DirectoryChangedSubscription,
@@ -61,7 +63,6 @@ struct UiStrings {
     connected: &'static str,
     disconnected: &'static str,
     device_name: &'static str,
-    received_files_folder: &'static str,
     language: &'static str,
     english: &'static str,
     persian: &'static str,
@@ -72,6 +73,13 @@ struct UiStrings {
 impl SettingsUiController {
     pub(super) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Rc<Self> {
         let event_target = UiEventTarget::new(window.as_weak());
+        let appearance_target = event_target.clone();
+        let appearance_changed =
+            core.settings()
+                .appearance()
+                .on_changed(AppearanceChangedDelegate::new(move |_| {
+                    appearance_target.request_refresh()
+                }));
         let identity_changed =
             core.devices()
                 .on_identity_changed(DeviceIdentityChangedDelegate::new(refresh_delegate(
@@ -86,6 +94,7 @@ impl SettingsUiController {
             .localization()
             .on_language_changed(LanguageChangedDelegate::new(refresh_delegate(event_target)));
         let controller = Rc::new(Self {
+            _appearance_changed: appearance_changed,
             core,
             _identity_changed: identity_changed,
             _directory_changed: directory_changed,
@@ -97,6 +106,46 @@ impl SettingsUiController {
     }
 
     fn bind_callbacks(controller: std::rc::Weak<Self>, window: &MainWindow) {
+        let theme_controller = controller.clone();
+        let theme_view = window.as_weak();
+        window.on_select_theme(move |index| {
+            if let (Some(controller), Some(window)) =
+                (theme_controller.upgrade(), theme_view.upgrade())
+            {
+                let theme = match index {
+                    0 => ThemeStyle::Purple,
+                    1 => ThemeStyle::Red,
+                    2 => ThemeStyle::Green,
+                    _ => return,
+                };
+                super::support::show_result(
+                    &window,
+                    controller.core.settings().appearance().set_theme(theme),
+                );
+                controller.refresh(&window);
+            }
+        });
+        let brightness_controller = controller.clone();
+        let brightness_view = window.as_weak();
+        window.on_save_brightness(move |value| {
+            if !value.is_finite() {
+                return;
+            }
+            let Some(controller) = brightness_controller.upgrade() else {
+                return;
+            };
+            if let Some(window) = brightness_view.upgrade() {
+                super::support::show_result(
+                    &window,
+                    controller
+                        .core
+                        .settings()
+                        .appearance()
+                        .set_brightness(value.round().clamp(50.0, 100.0) as u8),
+                );
+                controller.refresh(&window);
+            }
+        });
         let folder_controller = controller.clone();
         let folder_window = window.as_weak();
         window.on_choose_directory(move || {
@@ -127,21 +176,23 @@ impl SettingsUiController {
                 .core
                 .devices()
                 .set_display_name(display_name.as_str());
+            if result.is_ok()
+                && let Some(window) = save_name_window.upgrade()
+            {
+                let name = controller
+                    .core
+                    .devices()
+                    .identity()
+                    .display_name()
+                    .to_owned();
+                let message = if window.get_rtl() {
+                    format!("نام دستگاه به {name} تغییر یافت.")
+                } else {
+                    format!("Device name saved as {name}.")
+                };
+                window.invoke_show_notice(message.into());
+            }
             show_result(result, &save_name_window);
-        });
-
-        let save_directory_controller = controller.clone();
-        let save_directory_window = window_weak.clone();
-        window.on_save_directory(move |directory| {
-            let Some(controller) = save_directory_controller.upgrade() else {
-                return;
-            };
-            let result = controller
-                .core
-                .settings()
-                .directories()
-                .set_default_transfer_directory(directory.as_str());
-            show_result(result, &save_directory_window);
         });
 
         let language_controller = controller.clone();
@@ -176,6 +227,13 @@ impl SettingsUiController {
     }
 
     fn refresh(&self, window: &MainWindow) {
+        let appearance = self.core.settings().appearance().appearance();
+        window.set_theme_style(match appearance.theme() {
+            ThemeStyle::Purple => 0,
+            ThemeStyle::Red => 1,
+            ThemeStyle::Green => 2,
+        });
+        window.set_brightness(f32::from(appearance.brightness()));
         apply_snapshot(window, snapshot(&self.core));
         window.invoke_refresh_pairing_requested();
         window.invoke_refresh_transfers_requested();
@@ -237,7 +295,6 @@ fn apply_snapshot(window: &MainWindow, snapshot: SettingsSnapshot) {
     window.set_connected_text(snapshot.strings.connected.into());
     window.set_disconnected_text(snapshot.strings.disconnected.into());
     window.set_device_name_text(snapshot.strings.device_name.into());
-    window.set_received_files_folder_text(snapshot.strings.received_files_folder.into());
     window.set_language_text(snapshot.strings.language.into());
     window.set_english_text(snapshot.strings.english.into());
     window.set_persian_text(snapshot.strings.persian.into());
@@ -259,7 +316,7 @@ impl UiStrings {
     fn new(language: Language) -> Self {
         match language {
             Language::English => Self {
-                devices: "Devices",
+                devices: "Receive",
                 settings: "Settings",
                 this_device: "This device",
                 nearby_devices: "Nearby devices",
@@ -273,7 +330,6 @@ impl UiStrings {
                 connected: "Connected",
                 disconnected: "Disconnected",
                 device_name: "Device name",
-                received_files_folder: "Received files folder",
                 language: "Language",
                 english: "English",
                 persian: "Persian",
@@ -281,7 +337,7 @@ impl UiStrings {
                 dismiss: "Dismiss",
             },
             Language::Persian => Self {
-                devices: "دستگاه‌ها",
+                devices: "دریافت",
                 settings: "تنظیمات",
                 this_device: "این دستگاه",
                 nearby_devices: "دستگاه‌های نزدیک",
@@ -295,7 +351,6 @@ impl UiStrings {
                 connected: "متصل",
                 disconnected: "قطع شده",
                 device_name: "نام دستگاه",
-                received_files_folder: "پوشه فایل‌های دریافتی",
                 language: "زبان",
                 english: "انگلیسی",
                 persian: "فارسی",

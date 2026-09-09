@@ -1,0 +1,66 @@
+import { MaterialScheme } from "@material";
+
+export global AppTheme {
+    in property <int> style;
+    out property <color> accent: style == 1 ? #ffb4ab : style == 2 ? #a2d69a : #d6baff;
+    property <color> container: style == 1 ? #542c2b : style == 2 ? #29432c : #443056;
+    property <color> background: style == 1 ? #181111 : style == 2 ? #101610 : #15111a;
+    property <color> low: style == 1 ? #211919 : style == 2 ? #182019 : #1e1826;
+    property <color> surface: style == 1 ? #2b2020 : style == 2 ? #1e2920 : #292031;
+    out property <color> sidebar: style == 1 ? #1f1517 : style == 2 ? #141d16 : #1c1623;
+    out property <color> glow: style == 1 ? #ff6f6433 : style == 2 ? #67d77c33 : #8c55d933;
+    out property <color> glow-secondary: style == 1 ? #764cdb24 : style == 2 ? #5bd5b124 : #30a8e824;
+    out property <brush> backdrop: @linear-gradient(145deg, root.background 0%, root.low 64%, root.container 100%);
+    out property <brush> card: @linear-gradient(145deg, root.surface.brighter(5%) 0%, root.surface 62%, root.low 100%);
+    out property <MaterialScheme> scheme: {
+        primary: root.accent,
+        surfaceTint: root.accent,
+        onPrimary: root.background,
+        primaryContainer: root.container,
+        onPrimaryContainer: #f4eaff,
+        secondary: root.accent,
+        onSecondary: root.background,
+        secondaryContainer: root.container,
+        onSecondaryContainer: #f4eaff,
+        tertiary: root.accent,
+        onTertiary: root.background,
+        tertiaryContainer: root.container,
+        onTertiaryContainer: #f4eaff,
+        error: #ffb4ab,
+        onError: #690005,
+        errorContainer: #93000a,
+        onErrorContainer: #ffdad6,
+        background: root.background,
+        onBackground: #eee8ed,
+        surface: root.background,
+        onSurface: #eee8ed,
+        surfaceVariant: root.surface,
+        onSurfaceVariant: #cec5ce,
+        outline: #998e9b,
+        outlineVariant: #504552,
+        shadow: #000000,
+        scrim: #000000,
+        inverseSurface: #eee8ed,
+        inverseOnSurface: #302b30,
+        inversePrimary: root.container,
+        primaryFixed: #f4eaff,
+        onPrimaryFixed: root.background,
+        primaryFixedDim: root.accent,
+        onPrimaryFixedVariant: root.container,
+        secondaryFixed: #f4eaff,
+        onSecondaryFixed: root.background,
+        secondaryFixedDim: root.accent,
+        onSecondaryFixedVariant: root.container,
+        tertiaryFixed: #f4eaff,
+        onTertiaryFixed: root.background,
+        tertiaryFixedDim: root.accent,
+        onTertiaryFixedVariant: root.container,
+        surfaceDim: root.background,
+        surfaceBright: root.surface,
+        surfaceContainerLowest: root.background,
+        surfaceContainerLow: root.low,
+        surfaceContainer: root.surface,
+        surfaceContainerHigh: root.surface.brighter(8%),
+        surfaceContainerHighest: root.surface.brighter(15%),
+    };
+}

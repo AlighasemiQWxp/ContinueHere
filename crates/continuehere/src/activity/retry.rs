@@ -173,16 +173,18 @@ impl RetryController {
 
     fn begin(&self, activity: &Activity, peer: DeviceId) -> Result<RetryHandle, ActivityError> {
         let identifier = format!("history.retry.{}", uuid::Uuid::new_v4());
-        if activity.kind == ActivityKind::File {
+        if matches!(activity.kind, ActivityKind::File | ActivityKind::Folder) {
             let handle = self
                 .transfer
                 .get_handle(&identifier)
                 .map_err(|error| ActivityError::Retry(error.to_string()))?;
             let source = activity.path.as_ref().ok_or(ActivityError::SourceChanged)?;
-            if let Err(error) = handle
-                .configure(peer, source)
-                .and_then(|()| handle.use_handle())
-            {
+            let configured = if activity.kind == ActivityKind::Folder {
+                handle.configure_folder(peer, source)
+            } else {
+                handle.configure(peer, source)
+            };
+            if let Err(error) = configured.and_then(|()| handle.use_handle()) {
                 handle
                     .release()
                     .map_err(|error| ActivityError::Retry(error.to_string()))?;
@@ -278,6 +280,19 @@ impl RetryController {
 }
 
 pub(super) fn validate_source(activity: &Activity) -> Result<(), ActivityError> {
+    if activity.kind == ActivityKind::Folder {
+        let path = activity.path.as_ref().ok_or(ActivityError::SourceChanged)?;
+        let metadata = path
+            .symlink_metadata()
+            .map_err(|_| ActivityError::SourceChanged)?;
+        if !path.is_absolute()
+            || !metadata.file_type().is_dir()
+            || metadata.file_type().is_symlink()
+        {
+            return Err(ActivityError::SourceChanged);
+        }
+        return Ok(());
+    }
     if !matches!(activity.kind, ActivityKind::File | ActivityKind::LocalVideo) {
         return Ok(());
     }

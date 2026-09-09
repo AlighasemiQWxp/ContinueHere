@@ -27,8 +27,8 @@ loop, where the owning controller rebuilds an immutable display snapshot. Slint
 models contain presentation data only; they do not become a second source of
 application state.
 
-The Windows client owns `ContinueHere` directly and provides Devices, Send,
-Transfers, History, and Settings. Feature controllers retain their own Handles
+The Windows client owns `ContinueHere` directly and provides Send, Receive,
+History, and Settings. Feature controllers retain their own Handles
 and delegate subscriptions. Settings and history continue to use the existing
 core stores.
 
@@ -48,11 +48,20 @@ player returns its pipeline to Null and joins its worker on close. GIF and
 animated WebP previews decode frames incrementally and stop their timer on close.
 
 Discovery identifiers are temporary, so they are not treated as trusted device
-IDs. Pairing and authenticated transport have separate listeners. The Devices
-screen displays both listener endpoints and accepts an explicit destination
-transport endpoint for connection commands. TLS still checks the selected
-trusted device. Explicit endpoints avoid treating temporary discovery IDs as
-trusted identities without changing discovery metadata or the protocol.
+IDs. Pairing and authenticated transport have separate listeners. Receive shows
+IPv4 interface addresses and both ports; Send owns discovery, manual pairing,
+and trusted connection controls. DiscoveryManager enumerates local interfaces;
+the client refreshes addresses every five seconds and retains advertisement
+Handles for the pairing listener. Interface addresses may include VPN adapters.
+Advertising an endpoint does not approve pairing or establish trust.
+
+TransportManager privately owns a bounded atomic `endpoints.bin` cache. Only a
+successful authenticated outgoing connection records an endpoint, and lookup
+requires that the peer remains trusted. History presents this hint in an editable
+Reconnect dialog and calls the existing Transport connect API. Inbound sessions
+do not reveal the peer's application listener, so their first reconnect requires
+manual entry. Ports can change after restart. Every reconnect still authenticates
+the selected peer; the cache is neither discovery metadata nor trust storage.
 
 The Slint package keeps `unsafe_code` and production-placeholder Clippy lints
 denied for handwritten Rust. It does not inherit the workspace-level
@@ -115,11 +124,46 @@ the owning controller intentionally keeps alive.
 ## Activity history and retry
 
 `ActivityManager` owns persistent device-grouped activity through private recording,
-storage, and retry controllers. `ActivityUiController` presents its snapshots in
-History device cards and timelines; `UiNotifications` owns the separate navigation
-and device unread indicators. See [Activity history and retry](HISTORY.md) for
+storage, and retry controllers. `HistoryUiController` presents its snapshots in
+History device cards, timelines, and recent Send/Receive activity. It owns device
+unread indicators, while the shell owns navigation unread properties. See [Activity history and retry](HISTORY.md) for
 the persistence format, timestamps, ownership, retry boundaries, and acceptance
 checks.
+
+### Appearance and native components
+
+SettingsManager owns typed AppearanceSettings, ThemeStyle, and brightness inside
+the existing versioned settings store. Missing appearance data uses Purple and
+100 percent brightness. Updates commit before publishing the custom appearance
+delegate. Slint's MaterialPalette receives a full color scheme, and application
+brightness dims the client without changing monitor settings. Device-name save
+confirmation is emitted only after DeviceManager accepts the saved value.
+
+The official MIT Slint Material library is vendored at version 1.17.1. The client
+uses its NavigationDrawer above the compact breakpoint and NavigationBar below
+it. Action buttons retain button semantics; selection belongs to navigation and
+radio controls. Native Windows picker filters live in the platform adapter.
+The Slint window and Windows resource build use the supplied application icon.
+
+### Folder transfers
+
+FileTransferHandle adds `configure_folder(device, path)`. A private folder helper
+packages a bounded manifest and file bytes on the existing outgoing transfer
+worker. Transfer remains the single owner of acceptance, authenticated chunks,
+SHA-256 verification, cancellation, and progress. The temporary package is held
+for the worker's lifetime; the source folder stays in history for explicit retry.
+
+After integrity verification, the receiver validates every path before extracting
+to a private destination-local staging directory. It reserves the final directory
+name without replacement and publishes its contents using no-overwrite hard links.
+The UI exposes completion only after every entry is published. This is not an
+atomic whole-directory rename: another local process can see the reserved directory
+during final publication. Ordinary failure/cancellation cleans the newly created
+directory; an abrupt process or power failure can leave staging/partial content.
+Filesystems must support hard links. Folder packages are bounded to 4096 entries,
+32 path segments, 1024 UTF-8 bytes per relative path, and 100 GiB total package size.
+No compression, symlinks, reparse points, permissions, or timestamp preservation
+is provided. See the protocol document for the exact envelope and validation rules.
 
 ## Application root
 
