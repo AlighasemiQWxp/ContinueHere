@@ -1,5 +1,5 @@
 [package]
-name = "continuehere_client_slint"
+name = "continuehere_client"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

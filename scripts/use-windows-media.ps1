@@ -24,7 +24,7 @@ $mediaRoot = $mediaCandidates | Where-Object {
 } | Select-Object -First 1
 
 if (-not $mediaRoot) {
-    throw 'Install the GStreamer MSVC x64 runtime and development packages with scripts/install-windows-media.ps1. See apps/client_slint/README.md.'
+    throw 'Install the GStreamer MSVC x64 runtime and development packages with scripts/install-windows-media.ps1. See apps/client/README.md.'
 }
 
 $env:PATH = (Join-Path $mediaRoot 'bin') + ';' + $env:PATH

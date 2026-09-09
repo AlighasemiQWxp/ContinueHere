@@ -4,7 +4,7 @@
 API is `activities()`, `retry(id)`, `remove(id)`, `clear()`, and
 `on_changed(delegate)`. Private `ActivityController`, `ActivityStore`, and
 `RetryController` children own recording, persistence, and retry Handle lifetimes.
-The core remains independent of Flutter.
+The core remains independent of Slint.
 
 The composition root injects narrow Handoff, FileTransfer, Connection, and
 trusted-peer capabilities. Typed delegates record outgoing and incoming handoffs,
@@ -21,7 +21,7 @@ and preserves the separate file-completion timestamp and playback position.
 A verified incoming file can briefly appear on its own before the associated
 local-video handoff arrives and groups it.
 
-Timestamps are this installation's observed UTC Unix milliseconds. Flutter
+Timestamps are this installation's observed UTC Unix milliseconds. The client
 renders their full local date, time, milliseconds, and UTC offset. A connection
 end means the local Transport observed removal, whether caused by peer closure,
 a local disconnect, revocation, or shutdown. It is not proof of the exact remote
@@ -67,8 +67,8 @@ retries, offline queues, and partial-transfer resume are not included. If an
 acknowledgement was lost, a manual retry may deliver content again; history does
 not promise exactly-once delivery across attempts or application restarts.
 
-The Flutter History destination first presents device cards ordered by their most
-recent activity. Selecting a card opens a lazy per-device timeline with all,
+The History destination first presents device cards ordered by their most recent
+activity. Selecting a card opens a lazy per-device timeline with all,
 files, and connection filters. Existing platform opening and file-preview
 capabilities handle completed incoming content. Removing or clearing history
 never deletes received files; active entries remain.
@@ -81,18 +81,17 @@ for another device while History is open mark that device only. These unread
 markers are session-local presentation state, and loading existing history at
 startup creates no notifications. Clearing history also removes stale markers.
 
-The shared Flutter Badge renders a yellow-to-golden circular gradient and a soft
-glow, with a brief appearance transition respecting reduced-motion preferences.
+The shared navigation badge renders a yellow-to-golden circle and a soft glow,
+with a brief appearance transition respecting reduced-motion preferences.
 It does not pulse continuously. English and Persian labels, directional spacing,
 and explicit left-to-right timestamp runs support the existing RTL interface.
 
 ### Phase 16 validation
 
-Binding generation, Rust formatting, workspace checks, warnings-denied Clippy,
-Rust tests, Flutter formatting, analysis and tests, and the Windows release build
-passed locally. Desktop interaction acceptance and continuous integration remain
-pending. Run `.\scripts\validate.ps1` from the repository root to repeat the
-complete local suite.
+Rust formatting, workspace checks, warnings-denied Clippy, tests, and the Windows
+release build passed locally. Run `.\scripts\validate.ps1` from the repository
+root to repeat the complete local suite. Desktop interaction acceptance remains
+tracked separately.
 
 Desktop acceptance should cover two different installations: create traffic,
 disconnect while viewing Transfers/Receive, observe the History navigation badge,

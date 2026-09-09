@@ -11,10 +11,7 @@ code is added incrementally without coupling unrelated systems together.
 ## Workspace boundaries
 
 - `crates/continuehere` contains the reusable core application library.
-- `apps/client_slint` contains the native Rust/Slint client that will replace
-  the Flutter client incrementally.
-- `apps/client` contains the existing Flutter Windows runner and remains the
-  migration reference. Other platform runners have not been brought up.
+- `apps/client` contains the native Rust/Slint application.
 - `docs` records stable architectural decisions and the development roadmap.
 
 Application crates may depend on the core library. The core library must not
@@ -30,10 +27,10 @@ loop, where the owning controller rebuilds an immutable display snapshot. Slint
 models contain presentation data only; they do not become a second source of
 application state.
 
-The immediate target is Windows parity with the existing Flutter implementation.
-The client owns `ContinueHere` directly and provides Devices, Send, Transfers,
-History, and Settings. Feature controllers retain their own Handles and delegate
-subscriptions. Settings and history continue to use the existing core stores.
+The Windows client owns `ContinueHere` directly and provides Devices, Send,
+Transfers, History, and Settings. Feature controllers retain their own Handles
+and delegate subscriptions. Settings and history continue to use the existing
+core stores.
 
 Core startup runs on a worker and hands the completed application to the UI
 thread. The core is movable but is not required to be `Sync`. Controllers share
@@ -54,8 +51,8 @@ Discovery identifiers are temporary, so they are not treated as trusted device
 IDs. Pairing and authenticated transport have separate listeners. The Devices
 screen displays both listener endpoints and accepts an explicit destination
 transport endpoint for connection commands. TLS still checks the selected
-trusted device. This corrects the Flutter UI's unusable ID matching without
-changing discovery metadata or the protocol.
+trusted device. Explicit endpoints avoid treating temporary discovery IDs as
+trusted identities without changing discovery metadata or the protocol.
 
 The Slint package keeps `unsafe_code` and production-placeholder Clippy lints
 denied for handwritten Rust. It does not inherit the workspace-level
@@ -78,120 +75,29 @@ Rust/Slint client
     └── SettingsUiController
 ```
 
-During migration, `apps/client` remains available as the behavior reference for
-all existing screens and behaviors. The Dart bridge is retained only for that
-client and will be removed with Flutter after Windows feature parity and
-interaction acceptance. No Android, Linux, macOS, or iOS UI support is claimed
-by this migration. Non-Windows Rust CI remains a core/workspace portability
-check, not application-platform acceptance.
+### Current application boundary
 
-### Existing Flutter reference
+The application root constructs `UiManager` directly around the Rust core and
+platform capabilities. Focused controllers own state and operation lifetimes for
+one interface area. Page selection, unread indicators, and transitions remain
+presentation concerns; pairing, handoff, transfer, history, and settings rules
+remain authoritative in the core.
 
-The Flutter application is a native client of the Rust core. It does not add a
-web application, browser runtime, or WebView layer. Phase 15 introduces the
-Windows runner. Future platform work targets the Slint application after the
-Windows migration has been accepted.
-
-`UiManager` is the main user-interface module. The application root constructs
-it with a narrow Rust bridge and platform capabilities. `UiManager` privately
-constructs and owns `UiController`, `UiTransition`, and `UiNotifications`;
-none of these children is exposed to widgets. Widgets read immutable UI state
-and express user intentions through the small public `UiManager` API.
-
-The UI hierarchy is:
-
-```text
-ContinueHere client
-├── UiBridge
-│   └── ContinueHere Rust core
-├── PlatformManager
-└── UiManager
-    ├── UiTransition
-    ├── UiNotifications
-    └── UiController
-        ├── DevicesUiController
-        ├── PairingUiController
-        ├── HandoffUiController
-        ├── TransferUiController
-        ├── ActivityUiController
-        ├── FilePreviewUiController
-        └── SettingsUiController
-```
-
-`UiController` coordinates presentation workflows. Its focused child
-controllers own the state and operation lifetimes for one area of the
-interface, preventing the parent from collecting feature-specific logic.
-`UiTransition` owns route, dialog, and animation sequencing only. It never
-decides whether a pairing, handoff, or transfer succeeds.
-
-`UiNotifications` owns unread presentation state for navigation destinations.
-Focused controllers report meaningful post-commit activity after refreshing
-their authoritative snapshots. Activity on the current destination is ignored;
-activity elsewhere sets one unread badge, and opening that destination clears
-it. Repeated events remain coalesced into the same badge, so discovery and
-transfer progress cannot create an unbounded notification count. Startup
-snapshot loading never creates unread state.
-
-Short state-driven animations render route changes, badge appearance, error
-presentation, file-preview opening, connection changes, and empty-to-populated
-content changes. `UiMotion` defines their shared timing and curves and disables
-their duration when the operating system requests reduced motion. Animations do
-not delay commands, loop decoratively, or animate continuous event traffic
-beyond the existing progress indicators.
-
-`UiBridge` is the only Dart-to-Rust boundary. It starts and stops the core,
-converts typed models and errors, forwards system events, and presents opaque
-wrappers around the existing Rust Handles. It contains no presentation or
-workflow policy. The `continuehere` core crate remains unaware of Flutter.
-
-`PlatformManager` is an application-level sibling of `UiManager`. It owns
-replaceable platform operations such as file and directory selection and
-opening external URLs. Controllers receive only the platform capabilities they
-need. Opening ordinary transferred files through an installed application
-belongs to `PlatformManager`. Local image and video preview state, video
-seeking, and cleanup belong to `FilePreviewUiController`, while the media
-backend remains replaceable.
-
-### Transferred-file opening
-
-File opening is contextual and does not add a permanent navigation destination.
-Every completed incoming transfer with a committed destination offers Open on
-its transfer card. `UiManager.openTransfer` validates that state and selects
-the appropriate presentation path.
-
-Images open in a fade-in application overlay using Flutter's file-backed image
-decoder and an interactive viewer for pan and zoom. Videos use the same overlay
-with the existing MediaKit player. `UiTransition` owns overlay visibility and
-transition sequencing; `FilePreviewUiController` owns the active preview and
-player lifecycle. Closing the overlay stops video playback and clears its
-state. Received local-video handoffs use this path and preserve their requested
-playback position.
-
-Other files are passed to the operating system's associated installed
-application through `PlatformManager`. A missing association or platform error
-is reported through the normal UI error path. Executable and script extensions
-are refused rather than launched. The preview itself has no browser, WebView,
-or hosted-media dependency.
-
-Known UI modules are explicit typed fields rather than entries in a general
-registry. No service locator, repository layer, or separate ViewModel layer is
-introduced. A new abstraction is added only when more than one real
-implementation or consumer requires it.
-
-### UI commands and events
+Transferred-file opening is contextual. Completed incoming images open in the
+preview overlay with pan and zoom. Animated image timers and the GStreamer video
+player are owned by `PreviewUiController`; closing the overlay stops playback and
+releases its resources. Other safe files and HTTP/HTTPS URLs are passed to the
+operating system. Executable and script extensions are refused.
 
 A UI command expresses an intention, such as starting discovery, approving a
-pairing, or sending a URL. Rust remains authoritative for security, protocol,
-path, size, and Handle-state validation. `UiManager` performs only immediate
-presentation validation, such as requiring a selected device or parsing a
-playback position.
+pairing, or sending a URL. Controllers perform immediate presentation parsing,
+then call typed core APIs. Post-commit delegates schedule a refresh on Slint's
+event loop. Generic maps, global event buses, and a separate presentation state
+store are not used.
 
-Core delegates are forwarded as typed Dart streams. A controller receives a
-post-commit event, refreshes its immutable UI state from the authoritative
-snapshot when necessary, and notifies `UiManager`. Generic maps and a global
-event bus are not used. Commands request changes; events announce completed
-state changes.
-
+Known UI modules are explicit typed fields rather than entries in a general
+registry. A new abstraction is added only when more than one real implementation
+or consumer requires it.
 ### UI Handle ownership
 
 The interface preserves the shared Handle lifecycle:

@@ -1,3 +1,0 @@
-rust_input: crate::api
-rust_root: ../../crates/continuehere_bridge/
-dart_output: lib/src/rust

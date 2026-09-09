@@ -1,8 +1,7 @@
 [workspace]
 members = [
-    "apps/client_slint",
+    "apps/client",
     "crates/continuehere",
-    "crates/continuehere_bridge",
 ]
 resolver = "3"
 

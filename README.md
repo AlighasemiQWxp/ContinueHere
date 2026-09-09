@@ -49,8 +49,7 @@ The architectural foundation is complete. It currently provides:
 - File-transfer progress, state, cancellation, and cleanup delegate events
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
-- Native Flutter Windows client with RTL localization and contextual transferred-file previews
-- Rust/Slint Windows migration with all five screens, direct core ownership,
+- Native Rust/Slint Windows client with all five screens, direct core ownership,
   pairing, handoffs, transfers, media previews, settings, and activity history
   (local validation passed; Windows interaction acceptance pending)
 - Device-grouped activity history and manual retry (desktop acceptance pending)
@@ -60,13 +59,10 @@ The protocol and security design, Discovery, Pairing, and authenticated
 Transport are complete. Phase 11 provides the validated URL handoff technical
 MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
 13 provides validated streaming file transfer. Phase 14 provides validated
-local-video handoff with playback position. The existing Flutter Windows
-interface includes contextual file opening without embedding a browser or
-WebView. A Rust/Slint client now runs beside it while the interface is migrated
-feature by feature. Flutter remains the feature-complete reference until the
-Slint client reaches parity and passes Windows acceptance. The immediate target
-is the UI and behavior already implemented in Flutter on Windows. Additional
-platforms and new features follow separately, one at a time.
+local-video handoff with playback position. The native Rust/Slint Windows
+interface provides contextual file opening, image and video previews, responsive
+English/Persian layouts, and direct ownership of the reusable Rust core.
+Additional platforms and new features follow separately, one at a time.
 
 Discovery candidates are only untrusted connection hints. Application data must
 use an authenticated Transport connection. See the
@@ -122,19 +118,16 @@ file metadata, and uses the existing send flows. The receiver accepts a new file
 offer again. See [the architecture guide](docs/ARCHITECTURE.md#activity-history-and-retry)
 for persistence and retry boundaries.
 
-Phase 16 passed binding generation, Rust formatting, workspace checks,
-warnings-denied Clippy, Rust tests, Flutter formatting, analysis and tests, and
-the Windows release build. Desktop interaction acceptance and GitHub CI remain
+Phase 16 passed Rust formatting, workspace checks, warnings-denied Clippy, Rust
+tests, and the Windows release build. Desktop interaction acceptance remains
 pending. To repeat the complete local validation from the project root, run:
 
 ```powershell
 .\scripts\validate.ps1
 ```
 
-This requires Rust, Flutter, the Windows desktop build tools, and
-`flutter_rust_bridge_codegen` 2.13.0 on PATH. The script stops at the first failure.
-If Pub's online service rejects its advisory request, dependency resolution is
-retried from the local cache; missing cached packages still fail explicitly.
+This requires Rust, the Windows desktop build tools, and the documented native
+media dependencies. The script stops at the first failure.
 
 ## Design goals
 
@@ -150,11 +143,9 @@ retried from the local cache; missing cached packages still fail explicitly.
 ```text
 ContinueHere/
 ├── apps/
-│   ├── client/           Existing Flutter migration reference
-│   └── client_slint/     Native Rust/Slint application
+│   └── client/           Native Rust/Slint application
 ├── crates/
-│   ├── continuehere/     Core Rust library
-│   └── continuehere_bridge/  Flutter bridge
+│   └── continuehere/     Core Rust library
 └── docs/                 Architecture and roadmap documentation
 ```
 
@@ -188,11 +179,9 @@ the project directory.
 - Clippy
 - Slint 1.17.1, resolved by Cargo
 - GStreamer MSVC x64 runtime and development packages for the Windows Slint client;
-  see [Windows client setup](apps/client_slint/README.md)
+  see [Windows client setup](apps/client/README.md)
 - `pkg-config` and `libfontconfig1-dev` when building on Debian or Ubuntu Linux
-- Flutter 3.47.2 on the stable channel
 - Visual Studio 2022 with the Desktop development with C++ workload on Windows
-- `flutter_rust_bridge_codegen` 2.13.0 when changing the bridge API
 
 The repository includes `rust-toolchain.toml`, so Rustup can install the required
 components automatically.
@@ -206,27 +195,20 @@ Prepare the Windows media dependencies once without administrator access:
 Run the Rust/Slint desktop client from the repository root with:
 
 ```powershell
-.\scripts\run-slint.ps1
+.\scripts\run.ps1
 ```
 
 The client stores application data in the platform's application-data directory.
-On Windows it intentionally reuses the existing Flutter client's
-`AlighasemiQWxp/ContinueHere` directory. The migration implements the existing Windows flows through focused Rust
-controllers, with English/Persian presentation and native file/media support.
-The Flutter reference remains available for direct comparison. See the
-[Windows parity checklist](docs/WINDOWS_SLINT_MIGRATION.md) for the exact scope
-and outstanding acceptance checks.
+On Windows it uses `AlighasemiQWxp/ContinueHere`. Focused Rust controllers own
+the Windows flows, with English/Persian presentation and native file/media
+support. See the [Windows acceptance checklist](docs/WINDOWS_ACCEPTANCE.md) for
+the outstanding interaction checks.
 
 ### Validation
 
-For this migration, run `./scripts/validate-slint.ps1` manually from the
-repository root. It formats and checks the Rust workspace, runs warnings-denied
-Clippy and tests, and builds the Windows Slint release client. It also resolves
-the new dependency entries in `Cargo.lock`. The migration passed this local
-validation on September 9, 2026; Windows interaction acceptance remains pending.
-
-The full Flutter-reference validation remains available through
-`./scripts/validate.ps1`. Equivalent manual commands require the Windows media
+Run `./scripts/validate.ps1` manually from the repository root. It formats and
+checks the Rust workspace, runs warnings-denied Clippy and tests, and builds the
+Windows release client. Equivalent manual commands require the Windows media
 environment first:
 
 ```powershell
@@ -235,12 +217,7 @@ cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
-cd apps/client
-flutter pub get
-dart format --output=none --set-exit-if-changed lib test
-flutter analyze
-flutter test
-flutter build windows
+cargo build -p continuehere_client --release
 ```
 
 ## Contributing

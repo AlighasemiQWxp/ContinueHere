@@ -104,8 +104,8 @@ after its implementation and validation requirements are satisfied.
   - Exact completed-transfer and authenticated-sender binding on the receiver
   - Player opening and seeking remain application-interface responsibilities
 - [ ] 15. Windows user interface migration
-  - Recreate the UI and behavior already implemented in Flutter on Windows using Slint
-  - Direct Rust core ownership without a Dart bridge in the final client
+  - Native Rust/Slint UI for the implemented Windows behavior
+  - Direct Rust core ownership in the application client
   - Five screens: Devices, Send, Transfers, History, and Settings
   - Pairing, connection commands, handoffs, file dialogs, transfer approval and
     opening, image/video previews, existing history/retry, and unread indicators
@@ -115,15 +115,13 @@ after its implementation and validation requirements are satisfied.
     release build passed locally on September 9, 2026
   - GitHub CI passed on September 9, 2026; Windows interaction acceptance remains
     pending through the Windows migration checklist
-  - Retain Flutter until Windows parity is accepted
   - Additional platforms and new features are outside this migration milestone
 
 ## E. Subsequent work
 
-Finish Windows Slint parity first. Existing Phase 16 behavior is part of the
-Flutter reference and must be preserved during migration. After Windows
-acceptance, add the remaining features and platforms in separate steps. Each
-platform receives its own implementation and acceptance cycle.
+Finish Windows interaction acceptance first. After Windows acceptance, add the
+remaining features and platforms in separate steps. Each platform receives its
+own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
 
 - [ ] 16. Activity history and retry
   - Independent Rust ActivityManager with bounded, versioned local history
