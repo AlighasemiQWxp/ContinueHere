@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::BTreeMap,
     future::Future,
     pin::Pin,
     rc::{Rc, Weak as RcWeak},
@@ -53,11 +54,12 @@ impl UiEventTarget {
 pub(super) struct DevicesUiController {
     advertisements: Vec<DiscoveryHandle>,
     addresses: Vec<std::net::Ipv4Addr>,
+    advertised_listener: Option<DiscoveryEndpoint>,
     network_timer: slint::Timer,
     core: Rc<ContinueHere>,
     connection: Option<ConnectionFuture>,
     local_discovery: Option<DiscoveryHandle>,
-    manual_discoveries: Vec<DiscoveryHandle>,
+    manual_discoveries: BTreeMap<DiscoveryEndpoint, DiscoveryHandle>,
     next_manual_discovery: u64,
     _identity_changed: DeviceIdentityChangedSubscription,
     _discovery_changed: DiscoveryChangedSubscription,
@@ -115,11 +117,12 @@ impl DevicesUiController {
         let controller = Rc::new(RefCell::new(Self {
             advertisements: Vec::new(),
             addresses: Vec::new(),
+            advertised_listener: None,
             network_timer: slint::Timer::default(),
             core,
             connection: None,
             local_discovery,
-            manual_discoveries: Vec::new(),
+            manual_discoveries: BTreeMap::new(),
             next_manual_discovery: 0,
             _identity_changed: identity_changed,
             _discovery_changed: discovery_changed,
@@ -218,7 +221,18 @@ impl DevicesUiController {
                 return;
             };
             match controller.borrow_mut().add_manual_endpoint(value.as_str()) {
-                Ok(()) => window.set_error_message("".into()),
+                Ok(true) => window.set_error_message("".into()),
+                Ok(false) => {
+                    window.set_error_message("".into());
+                    window.invoke_show_notice(
+                        super::support::text(
+                            window.get_rtl(),
+                            "This endpoint is already in the list.",
+                            "این نشانی از قبل در فهرست وجود دارد.",
+                        )
+                        .into(),
+                    );
+                }
                 Err(error) => window.set_error_message(error.to_string().into()),
             }
         });
@@ -236,15 +250,18 @@ impl DevicesUiController {
         });
     }
 
-    fn add_manual_endpoint(&mut self, value: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn add_manual_endpoint(&mut self, value: &str) -> Result<bool, Box<dyn std::error::Error>> {
         let endpoint = value.parse::<DiscoveryEndpoint>()?;
+        if self.manual_discoveries.contains_key(&endpoint) {
+            return Ok(false);
+        }
         self.next_manual_discovery += 1;
         let identifier = format!("ui.discovery.manual.{}", self.next_manual_discovery);
         let handle = self.core.discovery().get_handle(&identifier)?;
-        handle.configure(DiscoveryMode::ManualEndpoint(endpoint))?;
+        handle.configure(DiscoveryMode::ManualEndpoint(endpoint.clone()))?;
         handle.use_handle()?;
-        self.manual_discoveries.push(handle);
-        Ok(())
+        self.manual_discoveries.insert(endpoint, handle);
+        Ok(true)
     }
 
     fn refresh(&self, window: &MainWindow) {
@@ -317,16 +334,24 @@ impl DevicesUiController {
                 .join("\n")
         };
         window.set_local_addresses(label.into());
-        if addresses == self.addresses && !self.advertisements.is_empty() {
-            return;
-        }
-        for handle in self.advertisements.drain(..) {
-            let _ = handle.release();
-        }
-        self.addresses = addresses;
-        let Ok(listener) = self.core.pairing().listening_endpoint() else {
-            return;
+        let listener = match self.core.pairing().listening_endpoint() {
+            Ok(listener) => listener,
+            Err(_) => {
+                self.release_advertisements();
+                self.addresses = addresses;
+                self.advertised_listener = None;
+                return;
+            }
         };
+        if addresses == self.addresses
+            && self.advertised_listener.as_ref() == Some(&listener)
+            && !self.advertisements.is_empty()
+        {
+            return;
+        }
+        self.release_advertisements();
+        self.addresses = addresses;
+        self.advertised_listener = Some(listener.clone());
         for (index, address) in self.addresses.iter().enumerate() {
             let result = (|| -> Result<DiscoveryHandle, continuehere::DiscoveryError> {
                 let endpoint = DiscoveryEndpoint::new(address.to_string(), listener.port())?;
@@ -342,6 +367,12 @@ impl DevicesUiController {
                 Ok(handle) => self.advertisements.push(handle),
                 Err(error) => window.set_error_message(error.to_string().into()),
             }
+        }
+    }
+
+    fn release_advertisements(&mut self) {
+        for handle in self.advertisements.drain(..) {
+            let _ = handle.release();
         }
     }
 
@@ -367,7 +398,7 @@ impl Drop for DevicesUiController {
         for handle in &self.advertisements {
             let _ = handle.release();
         }
-        for handle in &self.manual_discoveries {
+        for handle in self.manual_discoveries.values() {
             let _release_result = handle.release();
         }
         if let Some(handle) = &self.local_discovery {
@@ -404,21 +435,17 @@ where
 fn snapshot(core: &ContinueHere) -> DevicesSnapshot {
     let identity = core.devices().identity();
     let connections = core.transport().connections();
-    let nearby = core
-        .discovery()
-        .candidates()
-        .into_iter()
-        .map(|candidate| DeviceItem {
-            id: candidate.id().to_string(),
-            name: candidate.id().to_string(),
-            detail: candidate
-                .endpoints()
-                .first()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            connected: false,
-        })
-        .collect();
+    let mut nearby_by_endpoint = BTreeMap::new();
+    for candidate in core.discovery().candidates() {
+        if let Some(endpoint) = candidate.endpoints().first() {
+            insert_nearby(
+                &mut nearby_by_endpoint,
+                candidate.id().to_string(),
+                endpoint.clone(),
+            );
+        }
+    }
+    let nearby = nearby_by_endpoint.into_values().collect();
     let trusted = core
         .pairing()
         .trusted_devices()
@@ -443,6 +470,19 @@ fn snapshot(core: &ContinueHere) -> DevicesSnapshot {
             continuehere::DiscoveryStatus::Active
         ),
     }
+}
+
+fn insert_nearby(
+    items: &mut BTreeMap<DiscoveryEndpoint, DeviceItem>,
+    id: String,
+    endpoint: DiscoveryEndpoint,
+) {
+    items.entry(endpoint.clone()).or_insert_with(|| DeviceItem {
+        name: id.clone(),
+        id,
+        detail: endpoint.to_string(),
+        connected: false,
+    });
 }
 
 fn apply_snapshot(window: &MainWindow, snapshot: DevicesSnapshot) {
@@ -525,5 +565,27 @@ pub(super) fn platform_name(platform: Platform) -> &'static str {
         Platform::Ios => "iOS",
         Platform::Unknown => "Unknown",
         _ => "Unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use continuehere::DiscoveryEndpoint;
+
+    use super::insert_nearby;
+
+    #[test]
+    fn nearby_candidates_are_coalesced_by_normalized_endpoint() {
+        let mut items = BTreeMap::new();
+        let first: DiscoveryEndpoint = "EXAMPLE.local:4242".parse().expect("valid endpoint");
+        let duplicate: DiscoveryEndpoint = "example.local:4242".parse().expect("valid endpoint");
+
+        insert_nearby(&mut items, "first".to_owned(), first);
+        insert_nearby(&mut items, "duplicate".to_owned(), duplicate);
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items.into_values().next().expect("one item").id, "first");
     }
 }

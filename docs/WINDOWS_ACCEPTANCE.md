@@ -32,9 +32,10 @@ blocked inbound listener can prevent connection despite a shared network name.
 1. On computer B, open Receive. Note its LAN IPv4 address, Pairing listener port,
    and Connection listener port. Multiple adapters may show multiple addresses;
    choose the one on the shared network. Loopback and wildcard addresses are excluded.
-2. Choose Receive pairing on B. On A, open Send and choose Pair on B's nearby
-   endpoint. If discovery is unavailable, enter B's `IP:pairing-port` under Manual
-   endpoint, choose Add, then Pair on that candidate.
+2. Leave ContinueHere open on B. It automatically remains ready for pairing. On A,
+   open Send and choose Pair on B's nearby endpoint. If discovery is unavailable,
+   enter B's `IP:pairing-port` under Manual endpoint, choose Add, then Pair on that
+   candidate. Adding the same normalized endpoint again must not create another row.
 3. Compare the verification codes and approve on both computers. Verify reject,
    cancel, and timeout paths in separate attempts. A candidate is not trusted until
    verification completes.
@@ -48,9 +49,11 @@ blocked inbound listener can prevent connection despite a shared network name.
    it should remain connected. Disconnect intentionally and verify no reconnection
    is attempted automatically.
 
-Addresses refresh every five seconds or through Refresh addresses. The client
-advertises pairing endpoints while running; Receive pairing still explicitly
-enables an approval session. Discovery identifiers remain temporary untrusted hints.
+Addresses refresh every five seconds or through Refresh addresses. While the app is
+running, it keeps a receive session armed and advertises its current pairing listener.
+The session is re-armed after completion, rejection, cancellation, failure, or timeout.
+Discovery identifiers remain temporary untrusted hints; identical visible endpoints
+are coalesced without turning them into trusted identities.
 
 ## Send, receive, and continue playback
 

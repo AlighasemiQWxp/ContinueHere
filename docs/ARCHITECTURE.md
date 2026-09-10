@@ -52,8 +52,13 @@ IDs. Pairing and authenticated transport have separate listeners. Receive shows
 IPv4 interface addresses and both ports; Send owns discovery, manual pairing,
 and trusted connection controls. DiscoveryManager enumerates local interfaces;
 the client refreshes addresses every five seconds and retains advertisement
-Handles for the pairing listener. Interface addresses may include VPN adapters.
-Advertising an endpoint does not approve pairing or establish trust.
+Handles for the current pairing listener. The client also retains one background
+receive Handle, re-arms it after every terminal result, and refreshes advertisements
+if the listener endpoint changes. An idle background receiver does not block an
+outgoing Pair action. Repeated manual endpoints are keyed by their normalized
+`DiscoveryEndpoint`, and presentation coalesces candidates that resolve to the same
+endpoint. Interface addresses may include VPN adapters. Advertising or coalescing
+an endpoint does not approve pairing or establish trust.
 
 TransportManager privately owns a bounded atomic `endpoints.bin` cache. Only a
 successful authenticated outgoing connection records an endpoint, and lookup

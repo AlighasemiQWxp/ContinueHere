@@ -27,6 +27,11 @@ filters. Folder transfers preserve nested content and empty directories. The
 Receive screen shows IPv4 interface addresses and both listener ports. History
 can reuse an editable, previously authenticated connection endpoint.
 
+While the client is open, it automatically keeps one pairing receive operation
+ready and advertises the operation's current listener endpoint. Terminal pairing
+results re-arm receiving. Re-entering the same normalized manual endpoint reuses
+the existing candidate, and nearby presentation coalesces identical endpoints.
+
 The supplied ContinueHere artwork is embedded as the Slint window icon and a
 multi-resolution Windows executable icon. The bundled Material source and small
 accessibility/slider adaptations are documented in [vendor notes](vendor/README.md).

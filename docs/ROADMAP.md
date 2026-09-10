@@ -141,6 +141,8 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
     language/theme radio buttons, persisted appearance and brightness slider
   - Responsive Send/Receive activity and previews; supplied application icon
   - LAN address and port display, pairing advertisements, authenticated History reconnect
+  - Automatic pairing readiness, terminal-state receive re-arming, and normalized
+    manual/visible endpoint deduplication
   - Category-filtered native pickers and bounded folder transfer through FileTransfer
   - YouTube link plus entered position; local-video handoff from the in-app player
   - Formatting, checks, linting, tests, the release build, and GitHub CI passed on

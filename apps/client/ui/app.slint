@@ -275,8 +275,7 @@ export component MainWindow inherits Window {
                     Card {
                         VerticalLayout {
                             padding: 20px; spacing: 12px;
-                            Button { text: root.rtl ? "دریافت درخواست جفت‌سازی" : "Receive pairing"; enabled: (!root.pairing-active) && root.ready && !root.preview-visible; clicked => { root.pairing-action("receive", ""); } }
-                            if root.pairing-status != "": Label { text: root.pairing-status; rtl: root.rtl; }
+                            Label { text: root.pairing-status; rtl: root.rtl; }
                             if root.pairing-code != "": AppTextField { enabled: root.ready && !root.preview-visible; text: root.pairing-code; read-only: true; horizontal-alignment: center; }
                             if root.pairing-active: VerticalLayout {
                                 spacing: 8px;

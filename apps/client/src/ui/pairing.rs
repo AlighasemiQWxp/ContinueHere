@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use continuehere::{
-    ContinueHere, PairingHandle, PairingMode, PairingSessionChangedDelegate,
-    PairingSessionChangedSubscription, PairingState,
+    ContinueHere, PairingHandle, PairingMode, PairingRole, PairingSession,
+    PairingSessionChangedDelegate, PairingSessionChangedSubscription, PairingState,
 };
 use slint::ComponentHandle;
 
@@ -55,28 +55,21 @@ impl PairingUiController {
                 controller.borrow_mut().refresh(&window);
             }
         });
+        let result = controller.borrow_mut().ensure_receive();
+        show_result(window, result);
         controller.borrow_mut().refresh(window);
         controller
     }
 
     fn act(&mut self, action: &str, endpoint: &str) -> UiResult {
         match action {
-            "receive" | "pair" => {
-                self.handle.take();
+            "receive" => self.ensure_receive()?,
+            "pair" => {
+                let previous = self.handle.take();
                 self.last_session = None;
-                self.next_handle += 1;
-                let handle = self
-                    .core
-                    .pairing()
-                    .get_handle(&format!("ui.pairing.{}", self.next_handle))?;
-                let mode = if action == "receive" {
-                    PairingMode::Receive
-                } else {
-                    PairingMode::Initiate(endpoint.parse()?)
-                };
-                handle.configure(mode)?;
-                handle.use_handle()?;
-                self.handle = Some(handle);
+                let result = self.start_operation(PairingMode::Initiate(endpoint.parse()?));
+                drop(previous);
+                result?;
             }
             "approve" => self
                 .handle
@@ -89,24 +82,62 @@ impl PairingUiController {
                 .ok_or("No active pairing session.")?
                 .reject()?,
             "cancel" => {
-                self.handle.take();
+                let previous = self.handle.take();
                 self.last_session = None;
+                let result = self.ensure_receive();
+                drop(previous);
+                result?;
             }
             _ => return Err("Unknown pairing action.".into()),
         }
         Ok(())
     }
 
+    fn ensure_receive(&mut self) -> UiResult {
+        if self.handle.is_some() {
+            return Ok(());
+        }
+        self.start_operation(PairingMode::Receive)
+    }
+
+    fn start_operation(&mut self, mode: PairingMode) -> UiResult {
+        self.next_handle += 1;
+        let handle = self
+            .core
+            .pairing()
+            .get_handle(&format!("ui.pairing.{}", self.next_handle))?;
+        handle.configure(mode)?;
+        handle.use_handle()?;
+        self.handle = Some(handle);
+        Ok(())
+    }
+
     fn refresh(&mut self, window: &MainWindow) {
         let rtl = window.get_rtl();
-        window.set_pairing_active(self.handle.is_some());
         window.set_pairing_verifiable(false);
         window.set_pairing_code("".into());
-        let session = self
+        let current = self.handle.as_ref().and_then(PairingHandle::session);
+        if let Some(session) = current.as_ref().filter(|session| terminal(session.state())) {
+            if session.role() != PairingRole::Receiver || session.peer_device_id().is_some() {
+                self.last_session = Some(session.clone());
+            }
+            let previous = self.handle.take();
+            if let Err(error) = self.ensure_receive() {
+                window.set_error_message(error.to_string().into());
+            }
+            drop(previous);
+        } else if self.handle.is_none()
+            && let Err(error) = self.ensure_receive()
+        {
+            window.set_error_message(error.to_string().into());
+        }
+        let active_session = self
             .handle
             .as_ref()
             .and_then(PairingHandle::session)
-            .or_else(|| self.last_session.clone());
+            .filter(|session| !idle_receiver(session));
+        window.set_pairing_active(active_session.is_some());
+        let session = active_session.or_else(|| self.last_session.clone());
         if let Some(session) = session {
             let state = match session.state() {
                 PairingState::Connecting => text(rtl, "Connecting", "در حال اتصال"),
@@ -136,27 +167,49 @@ impl PairingUiController {
                 window.set_pairing_code(verification.manual_code().into());
                 window.set_pairing_verifiable(true);
             }
-            if matches!(
-                session.state(),
-                PairingState::Trusted
-                    | PairingState::Rejected
-                    | PairingState::Cancelled
-                    | PairingState::Expired
-                    | PairingState::Failed
-            ) {
-                self.last_session = Some(session);
-                self.handle.take();
-                window.set_pairing_active(false);
-            }
         } else if self.handle.is_some() {
-            window.set_pairing_status(
-                text(rtl, "Waiting for another device", "در انتظار دستگاه دیگر").into(),
-            );
+            window.set_pairing_status(text(rtl, "Ready for pairing", "آماده جفت‌سازی").into());
         } else {
             window.set_pairing_status("".into());
         }
-        if let Ok(endpoint) = self.core.pairing().listening_endpoint() {
-            window.set_pairing_endpoint(endpoint.port().to_string().into());
+        match self.core.pairing().listening_endpoint() {
+            Ok(endpoint) => window.set_pairing_endpoint(endpoint.port().to_string().into()),
+            Err(_) => window.set_pairing_endpoint("".into()),
         }
+        window.invoke_refresh_network();
+    }
+}
+
+fn idle_receiver(session: &PairingSession) -> bool {
+    session.role() == PairingRole::Receiver
+        && session.state() == PairingState::Connecting
+        && session.peer_device_id().is_none()
+}
+
+fn terminal(state: PairingState) -> bool {
+    matches!(
+        state,
+        PairingState::Trusted
+            | PairingState::Rejected
+            | PairingState::Cancelled
+            | PairingState::Expired
+            | PairingState::Failed
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal;
+    use continuehere::PairingState;
+
+    #[test]
+    fn terminal_pairing_states_are_rearmed() {
+        assert!(terminal(PairingState::Trusted));
+        assert!(terminal(PairingState::Rejected));
+        assert!(terminal(PairingState::Cancelled));
+        assert!(terminal(PairingState::Expired));
+        assert!(terminal(PairingState::Failed));
+        assert!(!terminal(PairingState::Connecting));
+        assert!(!terminal(PairingState::AwaitingVerification));
     }
 }
