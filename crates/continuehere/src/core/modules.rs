@@ -63,6 +63,7 @@ impl CoreModules {
             devices.capability(),
             security.capability(),
             transport.pairing_capability(),
+            transport.pairing_connection_capability(),
         );
         let file_transfers = FileTransferManager::new(
             transport.transfer_capability(),

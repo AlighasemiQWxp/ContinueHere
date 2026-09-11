@@ -59,7 +59,8 @@ The architectural foundation is complete. It currently provides:
 - Persisted Purple, Red, and Green appearance styles and a native Save Directory picker
 - File, Folder, Media, Image, and Video selection with native category filters
 - Bounded folder transfer preserving nested files and empty directories
-- LAN address display, temporary pairing advertisements, and trusted History reconnect hints
+- LAN address display, automatic pairing readiness, verified connection-endpoint
+  exchange, automatic post-pairing connection, and trusted reconnect hints
 - Device-grouped activity history and manual retry (desktop acceptance pending)
 - Automated tests for the public API, module lifecycle, and handle behavior
 

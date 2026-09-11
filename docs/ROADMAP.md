@@ -143,6 +143,8 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
   - LAN address and port display, pairing advertisements, authenticated History reconnect
   - Automatic pairing readiness, terminal-state receive re-arming, and normalized
     manual/visible endpoint deduplication
+  - Verified connection-endpoint exchange and automatic authenticated connection
+    after pairing, with cached one-click reconnect
   - Category-filtered native pickers and bounded folder transfer through FileTransfer
   - YouTube link plus entered position; local-video handoff from the in-app player
   - Formatting, checks, linting, tests, the release build, and GitHub CI passed on

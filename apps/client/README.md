@@ -31,6 +31,9 @@ While the client is open, it automatically keeps one pairing receive operation
 ready and advertises the operation's current listener endpoint. Terminal pairing
 results re-arm receiving. Re-entering the same normalized manual endpoint reuses
 the existing candidate, and nearby presentation coalesces identical endpoints.
+Pairing also exchanges each application's listener port inside the verified pairing
+channel. Once both devices commit trust, the initiator connects automatically; later
+Connect actions reuse the verified endpoint without a second manual address field.
 
 The supplied ContinueHere artwork is embedded as the Slint window icon and a
 multi-resolution Windows executable icon. The bundled Material source and small

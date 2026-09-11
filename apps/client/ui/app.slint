@@ -10,6 +10,7 @@ export struct DeviceRow {
     id: string,
     name: string,
     detail: string,
+    endpoint: string,
     connected: bool,
 }
 
@@ -85,7 +86,6 @@ export component MainWindow inherits Window {
     in-out property <int> destination-index: -1;
     in property <bool> connection-busy;
     in property <string> transport-endpoint;
-    in-out property <string> connection-endpoint;
     in property <bool> pairing-active;
     in property <bool> pairing-verifiable;
     in property <string> pairing-status;
@@ -131,6 +131,7 @@ export component MainWindow inherits Window {
     callback page-selected(int);
     callback startup-completed();
     callback device-action(string, string, string);
+    callback pairing-connect-requested(string, string);
     callback poll-connection-requested();
     callback pairing-action(string, string);
     callback send-handoff(string, string, string, string);
@@ -327,19 +328,15 @@ export component MainWindow inherits Window {
                     }
                     Title { text: root.trusted-devices-text; rtl: root.rtl; font-size: 20px; }
                     if root.trusted-devices.length == 0: Label { text: root.no-trusted-devices-text; rtl: root.rtl; }
-                    if root.trusted-devices.length > 0: VerticalLayout {
-                        spacing: 8px;
-                        Label { text: root.rtl ? "نشانی و درگاه اتصال دستگاه مقصد" : "Destination connection endpoint"; rtl: root.rtl; }
-                        AppTextField { enabled: root.ready && !root.preview-visible; text <=> root.connection-endpoint; label: "192.168.1.20:5300"; }
-                    }
                     for device in root.trusted-devices: Card {
                         VerticalLayout {
                             padding: 16px; spacing: 8px;
                             Label { text: device.name; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
                             Label { text: device.detail + " · " + (device.connected ? root.connected-text : root.disconnected-text); rtl: root.rtl; }
+                            if !device.connected && device.endpoint == "": Label { text: root.rtl ? "برای تازه‌سازی اطلاعات اتصال، دوباره جفت‌سازی کنید." : "Pair again to refresh connection information."; rtl: root.rtl; }
                             VerticalLayout {
                                 spacing: 8px;
-                                Button { text: device.connected ? (root.rtl ? "قطع اتصال" : "Disconnect") : (root.rtl ? "اتصال" : "Connect"); enabled: (!root.connection-busy) && root.ready && !root.preview-visible; clicked => { root.device-action(device.id, device.connected ? "disconnect" : "connect", root.connection-endpoint); } }
+                                Button { text: device.connected ? (root.rtl ? "قطع اتصال" : "Disconnect") : (root.rtl ? "اتصال" : "Connect"); enabled: (!root.connection-busy) && (device.connected || device.endpoint != "") && root.ready && !root.preview-visible; clicked => { root.device-action(device.id, device.connected ? "disconnect" : "connect", device.endpoint); } }
                                 Button { text: root.rtl ? "فراموش کردن" : "Forget"; enabled: (!root.connection-busy) && root.ready && !root.preview-visible; clicked => { root.device-action(device.id, "forget", ""); } }
                             }
                         }
@@ -361,7 +358,7 @@ export component MainWindow inherits Window {
                         enabled: (root.connected-device-names.length > 0) && root.ready && !root.preview-visible;
                         selected(value) => { root.destination-device = root.connected-device-ids[self.current-index]; }
                     }
-                    if root.connected-device-names.length == 0: Label { text: root.rtl ? "ابتدا یک دستگاه را جفت و متصل کنید." : "Pair and connect a device first."; rtl: root.rtl; }
+                    if root.connected-device-names.length == 0: Label { text: root.rtl ? "برای شروع ارسال، یک دستگاه را جفت‌سازی کنید." : "Pair a device to start sending."; rtl: root.rtl; }
                     url-field := AppTextField { enabled: root.ready && !root.preview-visible; label: root.rtl ? "نشانی اینترنتی" : "Enter URL"; }
                     position-field := AppTextField { enabled: root.ready && !root.preview-visible; label: root.rtl ? "موقعیت پخش (ثانیه، دقیقه:ثانیه یا ساعت:دقیقه:ثانیه)" : "Playback position (seconds, MM:SS, or HH:MM:SS)"; }
                     VerticalLayout {

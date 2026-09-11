@@ -27,7 +27,7 @@ use super::{
 };
 
 pub struct TransportManager {
-    endpoints: Mutex<super::endpoints::EndpointStore>,
+    endpoints: Arc<Mutex<super::endpoints::EndpointStore>>,
     pairing: PairingTransportCapability,
     handoff: HandoffTransportCapability,
     transfer: TransferTransportCapability,
@@ -50,6 +50,12 @@ pub(crate) struct ConnectionCapability {
     access: Arc<TransportAccess>,
 }
 
+#[derive(Clone)]
+pub(crate) struct PairingConnectionCapability {
+    access: Arc<TransportAccess>,
+    endpoints: Arc<Mutex<super::endpoints::EndpointStore>>,
+}
+
 impl ConnectionCapability {
     pub(crate) fn is_connected(&self, device_id: &DeviceId) -> bool {
         lock_or_recover(&self.access.connections).contains_key(device_id)
@@ -63,9 +69,30 @@ impl ConnectionCapability {
     }
 }
 
+impl PairingConnectionCapability {
+    pub(crate) fn listening_port(&self) -> Result<u16, TransportError> {
+        lock(&self.access.endpoint)?
+            .as_ref()
+            .map(DiscoveryEndpoint::port)
+            .ok_or(TransportError::ManagerUnavailable)
+    }
+
+    pub(crate) fn remember_verified_endpoint(
+        &self,
+        device_id: &DeviceId,
+        endpoint: &DiscoveryEndpoint,
+    ) -> Result<(), TransportError> {
+        lock(&self.endpoints)?
+            .remember(device_id, endpoint)
+            .map_err(|_| TransportError::EndpointStorage)
+    }
+}
+
 impl TransportManager {
     pub(crate) fn with_endpoint_store(mut self, directory: std::path::PathBuf) -> Self {
-        self.endpoints = Mutex::new(super::endpoints::EndpointStore::persistent(directory));
+        self.endpoints = Arc::new(Mutex::new(super::endpoints::EndpointStore::persistent(
+            directory,
+        )));
         self
     }
 
@@ -79,13 +106,20 @@ impl TransportManager {
         }
     }
 
+    pub(crate) fn pairing_connection_capability(&self) -> PairingConnectionCapability {
+        PairingConnectionCapability {
+            access: Arc::clone(&self.access),
+            endpoints: Arc::clone(&self.endpoints),
+        }
+    }
+
     pub(crate) fn new(
         device_identity: DeviceIdentityCapability,
         security: SecurityCapability,
         trusted_peers: TrustedPeerLookup,
     ) -> Self {
         Self {
-            endpoints: Mutex::new(super::endpoints::EndpointStore::default()),
+            endpoints: Arc::new(Mutex::new(super::endpoints::EndpointStore::default())),
             pairing: PairingTransportCapability::new(),
             handoff: HandoffTransportCapability::new(),
             transfer: TransferTransportCapability::new(),

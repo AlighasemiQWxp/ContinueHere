@@ -118,6 +118,16 @@ impl PairingUiController {
         window.set_pairing_code("".into());
         let current = self.handle.as_ref().and_then(PairingHandle::session);
         if let Some(session) = current.as_ref().filter(|session| terminal(session.state())) {
+            let connect_request = if session.state() == PairingState::Trusted
+                && session.role() == PairingRole::Initiator
+            {
+                session
+                    .peer_device_id()
+                    .zip(session.connection_endpoint())
+                    .map(|(device_id, endpoint)| (device_id.to_string(), endpoint.to_string()))
+            } else {
+                None
+            };
             if session.role() != PairingRole::Receiver || session.peer_device_id().is_some() {
                 self.last_session = Some(session.clone());
             }
@@ -126,6 +136,9 @@ impl PairingUiController {
                 window.set_error_message(error.to_string().into());
             }
             drop(previous);
+            if let Some((device_id, endpoint)) = connect_request {
+                window.invoke_pairing_connect_requested(device_id.into(), endpoint.into());
+            }
         } else if self.handle.is_none()
             && let Err(error) = self.ensure_receive()
         {

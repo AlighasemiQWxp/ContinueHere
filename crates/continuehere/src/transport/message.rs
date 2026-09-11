@@ -15,6 +15,7 @@ pub(crate) struct PairingHello {
     display_name: String,
     platform: Platform,
     protocol_version: ProtocolVersion,
+    connection_port: u16,
     nonce: [u8; 32],
 }
 
@@ -24,6 +25,7 @@ impl PairingHello {
         display_name: String,
         platform: Platform,
         protocol_version: ProtocolVersion,
+        connection_port: u16,
         nonce: [u8; 32],
     ) -> Result<Self, TransportError> {
         if device_id.as_str().is_empty()
@@ -39,11 +41,15 @@ impl PairingHello {
         {
             return Err(TransportError::InvalidMessage);
         }
+        if connection_port == 0 {
+            return Err(TransportError::InvalidMessage);
+        }
         Ok(Self {
             device_id,
             display_name,
             platform,
             protocol_version,
+            connection_port,
             nonce,
         })
     }
@@ -62,6 +68,10 @@ impl PairingHello {
 
     pub(crate) const fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
+    }
+
+    pub(crate) const fn connection_port(&self) -> u16 {
+        self.connection_port
     }
 
     pub(crate) const fn nonce(&self) -> [u8; 32] {
@@ -87,6 +97,7 @@ impl PairingMessage {
                 bytes.push(encode_platform(hello.platform));
                 bytes.extend_from_slice(&hello.protocol_version.major().to_be_bytes());
                 bytes.extend_from_slice(&hello.protocol_version.minor().to_be_bytes());
+                bytes.extend_from_slice(&hello.connection_port.to_be_bytes());
                 bytes.extend_from_slice(&hello.nonce);
             }
             Self::Approved => bytes.push(APPROVED_KIND),
@@ -122,6 +133,7 @@ impl PairingMessage {
         let platform = decode_platform(read_u8(bytes, &mut cursor)?)?;
         let major = read_u16(bytes, &mut cursor)?;
         let minor = read_u16(bytes, &mut cursor)?;
+        let connection_port = read_u16(bytes, &mut cursor)?;
         let nonce_bytes = take(bytes, &mut cursor, 32)?;
         if cursor != bytes.len() {
             return Err(TransportError::InvalidMessage);
@@ -133,6 +145,7 @@ impl PairingMessage {
             display_name,
             platform,
             ProtocolVersion::new(major, minor),
+            connection_port,
             nonce,
         )?))
     }
@@ -202,5 +215,49 @@ fn decode_platform(value: u8) -> Result<Platform, TransportError> {
         4 => Ok(Platform::Android),
         5 => Ok(Platform::Ios),
         _ => Err(TransportError::InvalidMessage),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{DeviceId, Platform, ProtocolVersion};
+
+    use super::{PairingHello, PairingMessage};
+
+    #[test]
+    fn pairing_hello_round_trips_the_application_listener_port() {
+        let hello = PairingHello::new(
+            DeviceId::new("peer").expect("device ID should be valid"),
+            "Peer".to_owned(),
+            Platform::Windows,
+            ProtocolVersion::CURRENT,
+            5300,
+            [7; 32],
+        )
+        .expect("pairing hello should be valid");
+        let encoded = PairingMessage::Hello(hello)
+            .encode()
+            .expect("pairing hello should encode");
+        let PairingMessage::Hello(decoded) =
+            PairingMessage::decode(&encoded).expect("pairing hello should decode")
+        else {
+            panic!("decoded message should be a pairing hello");
+        };
+
+        assert_eq!(decoded.connection_port(), 5300);
+    }
+
+    #[test]
+    fn pairing_hello_rejects_a_missing_application_listener() {
+        let result = PairingHello::new(
+            DeviceId::new("peer").expect("device ID should be valid"),
+            "Peer".to_owned(),
+            Platform::Windows,
+            ProtocolVersion::CURRENT,
+            0,
+            [7; 32],
+        );
+
+        assert!(result.is_err());
     }
 }

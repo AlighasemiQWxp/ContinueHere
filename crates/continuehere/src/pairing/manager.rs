@@ -9,7 +9,7 @@ use crate::{
     handles::BaseHandleProvider,
     models::DeviceId,
     security::SecurityCapability,
-    transport::PairingTransportCapability,
+    transport::{PairingConnectionCapability, PairingTransportCapability},
 };
 
 use super::{
@@ -33,6 +33,7 @@ impl PairingManager {
         device_identity: DeviceIdentityCapability,
         security: SecurityCapability,
         transport: PairingTransportCapability,
+        connection: PairingConnectionCapability,
     ) -> Self {
         let session_changed = PairingSessionChangedEvent::default();
         let trusted_changed = TrustedDeviceChangedEvent::default();
@@ -41,6 +42,7 @@ impl PairingManager {
             device_identity,
             security,
             transport.clone(),
+            connection,
             session_changed.clone(),
             trusted_changed.clone(),
         );
@@ -199,6 +201,7 @@ mod tests {
                 devices.capability(),
                 security.capability(),
                 transport.pairing_capability(),
+                transport.pairing_connection_capability(),
             );
             devices.start().await.expect("devices should start");
             security.start().await.expect("security should start");
@@ -276,6 +279,32 @@ mod tests {
                 .and_then(|session| session.verification().cloned())
                 .expect("receiver verification should be available");
             assert_eq!(initiator_verification, receiver_verification);
+            let second_connection_port = second
+                .transport
+                .listening_endpoint()
+                .expect("second application listener should be available")
+                .port();
+            let first_connection_port = first
+                .transport
+                .listening_endpoint()
+                .expect("first application listener should be available")
+                .port();
+            assert_eq!(
+                initiator
+                    .session()
+                    .and_then(|session| session.connection_endpoint().cloned())
+                    .expect("initiator should receive the connection endpoint")
+                    .port(),
+                second_connection_port
+            );
+            assert_eq!(
+                receiver
+                    .session()
+                    .and_then(|session| session.connection_endpoint().cloned())
+                    .expect("receiver should receive the connection endpoint")
+                    .port(),
+                first_connection_port
+            );
 
             initiator.approve().expect("initiator should approve");
             receiver.approve().expect("receiver should approve");
@@ -295,6 +324,31 @@ mod tests {
                 second.pairing.trusted_devices().len(),
                 initiator.session(),
                 receiver.session()
+            );
+
+            let second_identity = second.devices.identity();
+            let second_endpoint = first
+                .transport
+                .known_endpoint(second_identity.id())
+                .expect("verified endpoint should be cached");
+            assert!(
+                second
+                    .transport
+                    .known_endpoint(first.devices.identity().id())
+                    .is_some(),
+                "receiver should cache the verified initiator endpoint"
+            );
+            first
+                .transport
+                .connect(second_identity.id(), &second_endpoint)
+                .await
+                .expect("the verified endpoint should establish an authenticated connection");
+            assert!(
+                wait_until(|| {
+                    first.transport.connections().len() == 1
+                        && second.transport.connections().len() == 1
+                }),
+                "both peers should observe the authenticated connection"
             );
 
             initiator.release().expect("initiator should release");

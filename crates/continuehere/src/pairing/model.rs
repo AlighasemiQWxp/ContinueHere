@@ -115,6 +115,7 @@ pub struct PairingSession {
     state: PairingState,
     peer_device_id: Option<DeviceId>,
     peer_display_name: Option<String>,
+    connection_endpoint: Option<DiscoveryEndpoint>,
     verification: Option<PairingVerification>,
     failure: Option<PairingFailure>,
 }
@@ -127,6 +128,7 @@ impl PairingSession {
             state,
             peer_device_id: None,
             peer_display_name: None,
+            connection_endpoint: None,
             verification: None,
             failure: None,
         }
@@ -152,6 +154,10 @@ impl PairingSession {
         self.peer_display_name.as_deref()
     }
 
+    pub fn connection_endpoint(&self) -> Option<&DiscoveryEndpoint> {
+        self.connection_endpoint.as_ref()
+    }
+
     pub fn verification(&self) -> Option<&PairingVerification> {
         self.verification.as_ref()
     }
@@ -167,9 +173,15 @@ impl PairingSession {
         }
     }
 
-    pub(crate) fn set_peer(&mut self, device_id: DeviceId, display_name: String) {
+    pub(crate) fn set_peer(
+        &mut self,
+        device_id: DeviceId,
+        display_name: String,
+        connection_endpoint: DiscoveryEndpoint,
+    ) {
         self.peer_device_id = Some(device_id);
         self.peer_display_name = Some(display_name);
+        self.connection_endpoint = Some(connection_endpoint);
     }
 
     pub(crate) fn set_verification(&mut self, verification: PairingVerification) {

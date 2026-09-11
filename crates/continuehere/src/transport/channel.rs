@@ -24,7 +24,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const IO_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_PAIRING_FRAME_SIZE: usize = 1024;
 const TLS_BUFFER_LIMIT: usize = 16 * 1024;
-const PAIRING_ALPN: &[u8] = b"continuehere-pairing/1";
+const PAIRING_ALPN: &[u8] = b"continuehere-pairing/2";
 
 pub(crate) enum PairingChannel {
     Client(StreamOwned<ClientConnection, TcpStream>),
@@ -128,6 +128,19 @@ impl PairingChannel {
         let mut fingerprint = [0_u8; 32];
         fingerprint.copy_from_slice(&digest);
         Ok(fingerprint)
+    }
+
+    pub(crate) fn peer_endpoint(
+        &self,
+        connection_port: u16,
+    ) -> Result<DiscoveryEndpoint, TransportError> {
+        let address = match self {
+            Self::Client(stream) => stream.sock.peer_addr(),
+            Self::Server(stream) => stream.sock.peer_addr(),
+        }
+        .map_err(|_| TransportError::ConnectionFailed)?;
+        DiscoveryEndpoint::new(address.ip().to_string(), connection_port)
+            .map_err(|_| TransportError::InvalidMessage)
     }
 
     pub(crate) fn export_authentication(&self, context: &[u8]) -> Result<[u8; 32], TransportError> {

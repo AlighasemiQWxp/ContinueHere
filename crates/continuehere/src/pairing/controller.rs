@@ -11,7 +11,10 @@ use crate::{
     devices::DeviceIdentityCapability,
     models::{DeviceId, LocalDeviceIdentity, ProtocolVersion},
     security::SecurityCapability,
-    transport::{PairingHello, PairingMessage, PairingTransportCapability, TransportError},
+    transport::{
+        PairingConnectionCapability, PairingHello, PairingMessage, PairingTransportCapability,
+        TransportError,
+    },
 };
 
 use super::{
@@ -36,6 +39,7 @@ pub(crate) struct PairingController {
     device_identity: DeviceIdentityCapability,
     security: SecurityCapability,
     transport: PairingTransportCapability,
+    connection: PairingConnectionCapability,
     session_changed: PairingSessionChangedEvent,
     trusted_changed: TrustedDeviceChangedEvent,
 }
@@ -64,6 +68,7 @@ enum SessionCommand {
 struct VerifiedPeer {
     hello: PairingHello,
     fingerprint: [u8; 32],
+    connection_endpoint: crate::discovery::DiscoveryEndpoint,
 }
 
 impl PairingController {
@@ -72,6 +77,7 @@ impl PairingController {
         device_identity: DeviceIdentityCapability,
         security: SecurityCapability,
         transport: PairingTransportCapability,
+        connection: PairingConnectionCapability,
         session_changed: PairingSessionChangedEvent,
         trusted_changed: TrustedDeviceChangedEvent,
     ) -> Arc<Self> {
@@ -86,6 +92,7 @@ impl PairingController {
             device_identity,
             security,
             transport,
+            connection,
             session_changed,
             trusted_changed,
         })
@@ -345,6 +352,7 @@ impl PairingController {
             session.set_peer(
                 peer.hello.device_id().clone(),
                 peer.hello.display_name().to_owned(),
+                peer.connection_endpoint.clone(),
             );
             session.set_verification(PairingVerification::new(verification));
         });
@@ -381,6 +389,12 @@ impl PairingController {
             peer.hello.display_name().to_owned(),
             peer.hello.platform(),
         ))
+    }
+
+    fn remember_peer_endpoint(&self, peer: &VerifiedPeer) {
+        let _remember_result = self
+            .connection
+            .remember_verified_endpoint(peer.hello.device_id(), &peer.connection_endpoint);
     }
 
     fn rollback_unconfirmed_trust(&self, persisted: &TrustMutation) {

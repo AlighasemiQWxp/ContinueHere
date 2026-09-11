@@ -36,15 +36,16 @@ blocked inbound listener can prevent connection despite a shared network name.
    open Send and choose Pair on B's nearby endpoint. If discovery is unavailable,
    enter B's `IP:pairing-port` under Manual endpoint, choose Add, then Pair on that
    candidate. Adding the same normalized endpoint again must not create another row.
-3. Compare the verification codes and approve on both computers. Verify reject,
-   cancel, and timeout paths in separate attempts. A candidate is not trusted until
-   verification completes.
-4. On A, enter B's `IP:connection-port` in Destination connection endpoint, then
-   Connect on B's trusted-device card. Select B as the destination for sending.
-5. Disconnect. In History on A, choose Reconnect for B. Verify the saved endpoint
-   is filled in and the authenticated connection can be restored. Restart B and
-   update its port in the dialog if it changed. An incoming-only peer may have no
-   saved endpoint. Forgetting a peer requires pairing it again before reconnecting.
+3. Compare the verification codes and approve on both computers. A automatically
+   establishes the authenticated application connection after both devices commit
+   trust; no second endpoint entry or Connect action is required. Verify reject,
+   cancel, and timeout paths in separate attempts.
+4. Select B as the destination for sending. Disconnect, then choose Connect on B's
+   trusted-device card; the verified pairing endpoint should be reused automatically.
+5. In History on A, choose Reconnect for B. Verify the saved endpoint is filled in
+   and the authenticated connection can be restored. Restart B and update its port
+   in the dialog if it changed. Forgetting a peer requires pairing it again before
+   reconnecting.
 6. Leave a healthy connection idle while previewing a video for over two minutes;
    it should remain connected. Disconnect intentionally and verify no reconnection
    is attempted automatically.

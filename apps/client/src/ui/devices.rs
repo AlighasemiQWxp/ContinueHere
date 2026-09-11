@@ -80,6 +80,7 @@ struct DeviceItem {
     id: String,
     name: String,
     detail: String,
+    endpoint: String,
     connected: bool,
 }
 
@@ -211,6 +212,20 @@ impl DevicesUiController {
                 super::support::show_result(&window, result);
             }
         });
+        let pairing_connect_controller = controller.clone();
+        let pairing_connect_window = window.as_weak();
+        window.on_pairing_connect_requested(move |id, endpoint| {
+            if let (Some(controller), Some(window)) = (
+                pairing_connect_controller.upgrade(),
+                pairing_connect_window.upgrade(),
+            ) {
+                let result =
+                    controller
+                        .borrow_mut()
+                        .act(id.as_str(), "connect", endpoint.as_str(), &window);
+                super::support::show_result(&window, result);
+            }
+        });
         let window_weak = window.as_weak();
         let add_controller = controller.clone();
         window.on_add_manual_endpoint(move |value| {
@@ -282,6 +297,16 @@ impl DevicesUiController {
         let id = continuehere::DeviceId::new(id.to_owned())?;
         if action == "forget" {
             self.core.pairing().remove_trusted_device(&id)?;
+            return Ok(());
+        }
+        if action == "connect"
+            && self
+                .core
+                .transport()
+                .connections()
+                .iter()
+                .any(|connection| connection.device_id() == &id)
+        {
             return Ok(());
         }
         if window.get_connection_busy() {
@@ -454,6 +479,11 @@ fn snapshot(core: &ContinueHere) -> DevicesSnapshot {
             id: device.device_id().to_string(),
             name: device.display_name().to_owned(),
             detail: platform_name(device.platform()).to_owned(),
+            endpoint: core
+                .transport()
+                .known_endpoint(device.device_id())
+                .map(|endpoint| endpoint.to_string())
+                .unwrap_or_default(),
             connected: connections
                 .iter()
                 .any(|connection| connection.device_id() == device.device_id()),
@@ -481,6 +511,7 @@ fn insert_nearby(
         name: id.clone(),
         id,
         detail: endpoint.to_string(),
+        endpoint: String::new(),
         connected: false,
     });
 }
@@ -550,6 +581,7 @@ fn device_model(items: Vec<DeviceItem>) -> ModelRc<DeviceRow> {
             id: item.id.into(),
             name: SharedString::from(item.name),
             detail: SharedString::from(item.detail),
+            endpoint: SharedString::from(item.endpoint),
             connected: item.connected,
         })
         .collect();

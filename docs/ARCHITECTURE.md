@@ -60,13 +60,15 @@ outgoing Pair action. Repeated manual endpoints are keyed by their normalized
 endpoint. Interface addresses may include VPN adapters. Advertising or coalescing
 an endpoint does not approve pairing or establish trust.
 
-TransportManager privately owns a bounded atomic `endpoints.bin` cache. Only a
-successful authenticated outgoing connection records an endpoint, and lookup
-requires that the peer remains trusted. History presents this hint in an editable
-Reconnect dialog and calls the existing Transport connect API. Inbound sessions
-do not reveal the peer's application listener, so their first reconnect requires
-manual entry. Ports can change after restart. Every reconnect still authenticates
-the selected peer; the cache is neither discovery metadata nor trust storage.
+TransportManager privately owns a bounded atomic `endpoints.bin` cache. A verified
+pairing or successful authenticated outgoing connection records an endpoint, and
+lookup requires that the peer remains trusted. During pairing, each side sends only
+its application listener port; the peer host comes from the established pairing TLS
+socket. After both trust commits succeed, the initiator asks the existing Transport
+connect API to establish the authenticated application connection. History presents
+the cached hint in an editable Reconnect dialog. Ports can change after restart.
+Every connection still authenticates the selected peer; the cache is neither
+discovery metadata nor trust storage.
 
 The Slint package keeps `unsafe_code` and production-placeholder Clippy lints
 denied for handwritten Rust. It does not inherit the workspace-level
@@ -423,7 +425,9 @@ every connection authenticated as that peer.
 The temporary Phase 9 pairing channel and the normal Phase 10 application
 channel remain distinct. Pairing temporarily accepts an untrusted Ed25519
 certificate for explicit two-device verification. Application transport accepts
-only an already pinned trusted identity and uses a separate ALPN identifier.
+only an already pinned trusted identity and uses a separate ALPN identifier. The
+pairing channel uses its second wire revision when exchanging the application
+listener port; this does not change the application transport protocol revision.
 
 The application protocol uses protected version negotiation, deterministic
 CBOR control messages, bounded length-prefixed framing, typed request

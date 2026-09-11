@@ -58,11 +58,16 @@ fn perform_session(
     controller.update_state(session_id, PairingState::ExchangingIdentity);
     let mut local_nonce = [0_u8; 32];
     getrandom::fill(&mut local_nonce).map_err(|_| PairingFailure::Internal)?;
+    let connection_port = controller
+        .connection
+        .listening_port()
+        .map_err(map_transport_failure)?;
     let local_hello = PairingHello::new(
         local.id().clone(),
         local.display_name().to_owned(),
         local.platform(),
         ProtocolVersion::CURRENT,
+        connection_port,
         local_nonce,
     )
     .map_err(|_| PairingFailure::Internal)?;
@@ -78,9 +83,13 @@ fn perform_session(
     {
         return Err(PairingFailure::ProtocolMismatch);
     }
+    let peer_endpoint = channel
+        .peer_endpoint(peer_hello.connection_port())
+        .map_err(map_transport_failure)?;
     let peer = VerifiedPeer {
         hello: peer_hello,
         fingerprint: channel.peer_fingerprint().map_err(map_transport_failure)?,
+        connection_endpoint: peer_endpoint,
     };
     let context = authentication_context(
         &local_hello,
@@ -159,7 +168,7 @@ fn perform_session(
             }
             match channel.receive() {
                 Ok(PairingMessage::Committed) => {
-                    finish_trust(controller, session_id, persisted);
+                    finish_trust(controller, session_id, persisted, &peer);
                     Ok(())
                 }
                 Ok(PairingMessage::Rejected) => {
@@ -184,7 +193,7 @@ fn perform_session(
                     controller.rollback_unconfirmed_trust(&persisted);
                     return Err(map_transport_failure(error));
                 }
-                finish_trust(controller, session_id, persisted);
+                finish_trust(controller, session_id, persisted, &peer);
                 Ok(())
             }
             Ok(PairingMessage::Rejected) => {
@@ -213,7 +222,9 @@ fn finish_trust(
     controller: &PairingController,
     session_id: &PairingSessionId,
     persisted: TrustMutation,
+    peer: &VerifiedPeer,
 ) {
+    controller.remember_peer_endpoint(peer);
     if persisted.newly_added() {
         controller
             .trusted_changed
@@ -229,17 +240,28 @@ fn authentication_context(
     peer_fingerprint: [u8; 32],
 ) -> Vec<u8> {
     let mut identities = [
-        (local.device_id().as_str(), local_fingerprint, local.nonce()),
-        (peer.device_id().as_str(), peer_fingerprint, peer.nonce()),
+        (
+            local.device_id().as_str(),
+            local_fingerprint,
+            local.nonce(),
+            local.connection_port(),
+        ),
+        (
+            peer.device_id().as_str(),
+            peer_fingerprint,
+            peer.nonce(),
+            peer.connection_port(),
+        ),
     ];
     identities.sort_by(|left, right| left.0.cmp(right.0).then_with(|| left.1.cmp(&right.1)));
     let mut context = Vec::new();
-    for (device_id, fingerprint, nonce) in identities {
+    for (device_id, fingerprint, nonce, connection_port) in identities {
         let length = u16::try_from(device_id.len()).unwrap_or(0);
         context.extend_from_slice(&length.to_be_bytes());
         context.extend_from_slice(device_id.as_bytes());
         context.extend_from_slice(&fingerprint);
         context.extend_from_slice(&nonce);
+        context.extend_from_slice(&connection_port.to_be_bytes());
     }
     context.extend_from_slice(&ProtocolVersion::CURRENT.major().to_be_bytes());
     context.extend_from_slice(&ProtocolVersion::CURRENT.minor().to_be_bytes());
