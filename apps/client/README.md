@@ -8,18 +8,21 @@ trusted-device connection commands, URL/YouTube/local-video handoffs, file
 transfers, native dialogs, contextual image/video previews, settings, and
 device-grouped history with retry and unread indicators. The current redesign
 uses Send, Receive, History, and Settings. Slint's official Material library
-supplies Navigation Drawer, Navigation Bar, buttons, SnackBar, Floating Action
-Button, Radio Button, Slider, TextField, and DropDownMenu components.
+supplies Navigation Drawer, Navigation Bar, buttons, SnackBar, Radio Button,
+Slider, TextField, and DropDownMenu components.
 
-The drawer is used at widths of at least 960 logical pixels; smaller windows use
+The drawer is used at widths of at least 900 logical pixels; smaller windows use
 bottom navigation. Content and preview controls scroll at a minimum window size
 of 360 by 360 logical pixels. The primary content surface scrolls vertically
 without placing a horizontal scrollbar over compact navigation. Drawer actions
-remain top-aligned, and content-category actions use a responsive two- or
-three-column grid. Purple, Red, and Green themes provide coordinated gradients,
-highlights, cards, and controls; theme selection and application brightness
-(50–100 percent) persist through SettingsManager. Brightness affects application
-rendering, not the physical monitor or Windows file dialogs.
+remain top-aligned. The Send screen follows a task-first sequence: choose a
+connected destination, choose content from a compact responsive grid, use link
+tools only when needed, then manage nearby or trusted devices. Manual endpoint
+entry and listener details remain available as secondary troubleshooting tools.
+Purple, Red, and Green themes provide restrained gradients, highlights, cards,
+and controls; theme selection and application brightness (50–100 percent) persist
+through SettingsManager. Brightness affects application rendering, not the
+physical monitor or Windows file dialogs.
 
 Save Directory displays the saved path and opens a native folder dialog. File,
 Folder, Media, Image, and Video selection uses native dialogs with category
@@ -39,9 +42,10 @@ The supplied ContinueHere artwork is embedded as the Slint window icon and a
 multi-resolution Windows executable icon. The bundled Material source and small
 accessibility/slider adaptations are documented in [vendor notes](vendor/README.md).
 
-The changes described above passed manual formatting, checks, linting, tests,
-release compilation, and GitHub CI on September 9, 2026. Windows interaction and
-two-computer transfer acceptance remain pending.
+The connection workflow and simplified presentation passed manual formatting,
+checks, linting, tests, and release compilation on September 11, 2026. Pairing
+also passed manual two-computer acceptance. Simplified-interface interaction and
+full two-computer transfer acceptance remain pending.
 
 The client owns `ContinueHere` directly. Focused Rust controllers retain core
 handles and delegate subscriptions. Core delegates schedule refresh requests on

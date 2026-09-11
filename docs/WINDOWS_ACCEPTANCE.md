@@ -3,10 +3,10 @@
 ## Status and preparation
 
 The native-client baseline passed local validation and CI on September 9, 2026.
-The current Material redesign, folder protocol, endpoint cache, appearance settings,
-and supplied application icon passed the complete local validation suite and GitHub
-CI on the same date. Every interaction and two-computer item below remains pending;
-automated validation does not establish interaction acceptance.
+The connection workflow and simplified presentation passed the complete local
+validation suite on September 11, 2026, and pairing passed manual two-computer
+acceptance. Simplified-interface interaction and full two-computer transfer items
+below remain pending; automated validation does not establish interaction acceptance.
 
 Install the Windows prerequisites in [client setup](../apps/client/README.md),
 then run manually from the repository root on the development computer:
@@ -114,17 +114,18 @@ directions and more than one transfer while keeping the owning app running.
 
 | Area | Manual acceptance |
 | --- | --- |
-| Navigation | Exactly Send, Receive, History, Settings. At 960 logical pixels and above use the Material Navigation Drawer with its actions aligned directly below the application header; below that use the Navigation Bar. The bottom bar must remain fully visible and unobstructed while content scrolls. No separate Devices/Transfers destinations. |
+| Navigation | Exactly Send, Receive, History, Settings. At 900 logical pixels and above use the compact Material Navigation Drawer with its actions aligned directly below the application header; below that use the Navigation Bar. The bottom bar must remain fully visible and unobstructed while content scrolls. No separate Devices/Transfers destinations. |
 | Application header | The supplied application icon and ContinueHere name are vertically centered, evenly spaced, and remain visually aligned in both left-to-right and right-to-left layouts. |
-| Buttons | Mouse click, Tab/Shift+Tab, Enter, and Space activate actions once. Actions must not stay selected like navigation items. Verify disabled controls cannot act. |
-| Choose Content | File, Folder, Media, Image, and Video appear as a responsive grid: two columns in narrow content and three columns when space permits. Every category opens the correct native picker. |
+| Buttons | Primary actions use standard compact sizing; related secondary actions share horizontal rows when space permits. Mouse click, Tab/Shift+Tab, Enter, and Space activate actions once. Actions must not stay selected like navigation items. Verify disabled controls cannot act. |
+| Send hierarchy | Destination and Choose Content appear first, optional link tools are grouped separately, and Nearby/Trusted devices follow. Manual endpoint entry is clearly secondary and does not dominate the normal discovery flow. |
+| Choose Content | File, Folder, Media, Image, and Video appear as compact tonal tiles in a responsive grid: two columns in narrow content and three columns when space permits. Every category opens the correct native picker. |
 | Device name | Save a valid name; see “Device name saved as X.” in SnackBar. Try an invalid name: no success notice. Restart to confirm the saved value and stable identity. |
-| Save Directory | Title, current path, and Floating Action Button are visible; choose/cancel the native directory dialog and verify persistence. |
+| Save Directory | Title, current path, and compact Choose folder action are visible; choose/cancel the native directory dialog and verify persistence. |
 | Theme Style | Purple, Red, Green radio choices recolor the Material surfaces and controls immediately. Restart to confirm selection. |
 | Language | English/Persian radio choices persist, right-to-left layout and input are usable, and mixed-direction paths remain legible. |
 | Brightness | Slider adjusts app rendering between 50 and 100 percent; mouse and keyboard steps work. Restart to confirm. OS brightness/dialogs remain unchanged. |
-| Resolution | Resize through 360×360, 600×800, 959×600, 960×600, and 1440×900 logical pixels at Windows scaling 100/150/200 percent. All actions remain reachable by vertical scrolling; the primary pages must not create a horizontal scrollbar, and long paths/names plus preview/reconnect controls remain usable. |
-| Visual theme | Purple, Red, and Green each retain readable contrast while applying a cohesive background gradient, subtle color highlights, elevated cards, and consistent control spacing. Decorative styling must never block input or obscure content. |
+| Resolution | Resize through 360×360, 600×800, 899×600, 900×600, and 1440×900 logical pixels at Windows scaling 100/150/200 percent. All actions remain reachable by vertical scrolling; the primary pages must not create a horizontal scrollbar, and long paths/names plus preview/reconnect controls remain usable. |
+| Visual theme | Purple, Red, and Green each retain readable contrast while applying a restrained background gradient, subtle color highlights, low-elevation cards, and consistent compact spacing. Decorative styling must never block input or obscure content. |
 | Preview | Play/pause, seek, volume, zoom, animated images, close/reopen, and sending current position work. Closing stops sound and releases files. Programmatic playback progress does not repeatedly seek. |
 | Icon | Supplied artwork appears in the title bar/window switcher/taskbar and built executable in Explorer. Verify at small/large icon sizes after rebuilding; existing pinned shortcuts may retain cached icons. |
 | Startup/accessibility | Test slow/failed startup, close during startup/connection, keyboard focus, screen reader, and Windows reduced-animation preference. |

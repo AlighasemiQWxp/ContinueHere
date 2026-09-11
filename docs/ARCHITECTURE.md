@@ -148,9 +148,15 @@ confirmation is emitted only after DeviceManager accepts the saved value.
 
 The official MIT Slint Material library is vendored at version 1.17.1. The client
 uses its NavigationDrawer above the compact breakpoint and NavigationBar below
-it. Action buttons retain button semantics; selection belongs to navigation and
-radio controls. Native Windows picker filters live in the platform adapter.
-The Slint window and Windows resource build use the supplied application icon.
+it. Presentation follows a task-first hierarchy: destination and content are the
+primary Send actions, link tools are grouped separately, and discovery, manual
+pairing, connection details, transfers, and activity remain contextual sections.
+Standard actions use compact button metrics; emphasized content choices use tonal
+tiles. Button semantics remain distinct from navigation and radio selection.
+These are presentation decisions only and do not move operation state out of the
+focused Rust controllers. Native Windows picker filters live in the platform
+adapter. The Slint window and Windows resource build use the supplied application
+icon.
 
 ### Folder transfers
 

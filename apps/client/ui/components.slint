@@ -1,4 +1,4 @@
-import { FilledButton, MaterialPalette, Slider, TextField } from "@material";
+import { FilledButton, MaterialPalette, OutlineButton, Slider, TextButton, TextField, TonalButton } from "@material";
 import { AppTheme } from "theme.slint";
 
 export component AppSlider inherits Slider {
@@ -7,12 +7,27 @@ export component AppSlider inherits Slider {
 }
 
 export component AppTextField inherits TextField {
-    min-height: 56px;
+    min-height: 48px;
 }
 
 export component Button inherits FilledButton {
     enabled: true;
-    min-height: 48px;
+    min-height: 40px;
+}
+
+export component SecondaryButton inherits OutlineButton {
+    enabled: true;
+    min-height: 40px;
+}
+
+export component QuietButton inherits TextButton {
+    enabled: true;
+    min-height: 36px;
+}
+
+export component ContentButton inherits TonalButton {
+    enabled: true;
+    min-height: 64px;
 }
 
 export component Title inherits Text {
@@ -38,10 +53,10 @@ export component Card inherits Rectangle {
     background: AppTheme.card;
     border-color: MaterialPalette.outline-variant;
     border-width: 1px;
-    border-radius: 18px;
-    drop-shadow-blur: 18px;
-    drop-shadow-color: #00000028;
-    drop-shadow-offset-y: 5px;
+    border-radius: 14px;
+    drop-shadow-blur: 10px;
+    drop-shadow-color: #00000020;
+    drop-shadow-offset-y: 3px;
 }
 
 export component Badge inherits Rectangle {

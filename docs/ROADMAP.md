@@ -137,7 +137,7 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
     acceptance pending
 
 - [ ] Windows Material redesign and two-computer transfer acceptance
-  - Official Navigation Drawer/Bar, clickable buttons, SnackBar, directory FAB,
+  - Official Navigation Drawer/Bar, clickable buttons, SnackBar, directory action,
     language/theme radio buttons, persisted appearance and brightness slider
   - Responsive Send/Receive activity and previews; supplied application icon
   - LAN address and port display, pairing advertisements, authenticated History reconnect
@@ -145,10 +145,15 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
     manual/visible endpoint deduplication
   - Verified connection-endpoint exchange and automatic authenticated connection
     after pairing, with cached one-click reconnect
+  - Task-first desktop layout with standard-sized actions, compact content tiles,
+    horizontally grouped secondary controls, and troubleshooting details kept
+    visually secondary
   - Category-filtered native pickers and bounded folder transfer through FileTransfer
   - YouTube link plus entered position; local-video handoff from the in-app player
-  - Formatting, checks, linting, tests, the release build, and GitHub CI passed on
-    September 9, 2026; the two-computer checklist remains pending
+  - The current connection workflow and simplified presentation passed formatting,
+    checks, linting, tests, and the release build on September 11, 2026; pairing
+    passed manual two-computer acceptance, while visual and transfer acceptance
+    remain pending
   - Automatic browser playback capture, streaming while downloading, partial resume,
     offline queues, installers, and additional platforms remain future work
 - [ ] 17. Android application

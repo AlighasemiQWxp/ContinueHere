@@ -52,10 +52,10 @@ The architectural foundation is complete. It currently provides:
 - Native Rust/Slint Windows client with Send, Receive, History, and Settings, direct core ownership,
   pairing, handoffs, transfers, media previews, settings, and activity history
   (Windows interaction acceptance pending)
-- Official Slint Material Navigation Drawer and compact Navigation Bar, clickable
-  buttons, unobstructed vertical scrolling, top-aligned drawer actions, responsive
-  content-category grids, save confirmation SnackBar, theme/language radio buttons,
-  and app brightness
+- Task-first Slint interface with a compact Navigation Drawer/Bar, standard-sized
+  actions, unobstructed vertical scrolling, top-aligned navigation, responsive
+  content choices, save confirmation SnackBar, theme/language radio buttons, and
+  app brightness
 - Persisted Purple, Red, and Green appearance styles and a native Save Directory picker
 - File, Folder, Media, Image, and Video selection with native category filters
 - Bounded folder transfer preserving nested files and empty directories
@@ -127,9 +127,9 @@ file metadata, and uses the existing send flows. The receiver accepts a new file
 offer again. See [the architecture guide](docs/ARCHITECTURE.md#activity-history-and-retry)
 for persistence and retry boundaries.
 
-The Material redesign, folder protocol, reconnect persistence, and application icon
-passed the complete local validation suite and GitHub CI on September 9, 2026.
-Windows interaction and two-computer transfer acceptance remain pending.
+The connection workflow and simplified desktop presentation passed the complete
+local validation suite on September 11, 2026. Pairing also passed manual
+two-computer acceptance; visual and full transfer acceptance remain pending.
 Run the complete local validation from the project root:
 
 ```powershell

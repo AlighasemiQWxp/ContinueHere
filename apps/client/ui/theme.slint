@@ -8,10 +8,10 @@ export global AppTheme {
     property <color> low: style == 1 ? #211919 : style == 2 ? #182019 : #1e1826;
     property <color> surface: style == 1 ? #2b2020 : style == 2 ? #1e2920 : #292031;
     out property <color> sidebar: style == 1 ? #1f1517 : style == 2 ? #141d16 : #1c1623;
-    out property <color> glow: style == 1 ? #ff6f6433 : style == 2 ? #67d77c33 : #8c55d933;
-    out property <color> glow-secondary: style == 1 ? #764cdb24 : style == 2 ? #5bd5b124 : #30a8e824;
-    out property <brush> backdrop: @linear-gradient(145deg, root.background 0%, root.low 64%, root.container 100%);
-    out property <brush> card: @linear-gradient(145deg, root.surface.brighter(5%) 0%, root.surface 62%, root.low 100%);
+    out property <color> glow: style == 1 ? #ff6f641c : style == 2 ? #67d77c1c : #8c55d91c;
+    out property <color> glow-secondary: style == 1 ? #764cdb14 : style == 2 ? #5bd5b114 : #30a8e814;
+    out property <brush> backdrop: @linear-gradient(145deg, root.background 0%, root.low 72%, root.container.darker(18%) 100%);
+    out property <brush> card: @linear-gradient(145deg, root.surface.brighter(3%) 0%, root.surface 72%, root.low 100%);
     out property <MaterialScheme> scheme: {
         primary: root.accent,
         surfaceTint: root.accent,
