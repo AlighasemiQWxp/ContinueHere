@@ -42,6 +42,7 @@ export component MainWindow inherits Window {
     in-out property <int> page: 1;
     in property <bool> rtl: false;
     in-out property <string> error-message;
+    in-out property <int> active-transition;
     in property <string> local-device-name;
     in property <string> local-device-detail;
     in property <bool> discovery-active: false;
@@ -174,6 +175,9 @@ export component MainWindow inherits Window {
     ];
     callback open-file(string, string);
     callback preview-action(string, float);
+    callback show-error-requested(string);
+    callback dismiss-error-requested();
+    callback close-reconnect-requested();
     callback next-image-frame();
     callback refresh-pairing-requested();
     callback refresh-handoffs-requested();
@@ -561,6 +565,7 @@ export component MainWindow inherits Window {
         }
     }
     if !root.ready: Rectangle {
+        z: 900;
         x: root.compact || root.rtl ? 0px : root.nav-width;
         width: root.compact ? root.width : root.width - root.nav-width;
         height: root.compact ? root.height - 80px : root.height;
@@ -573,16 +578,23 @@ export component MainWindow inherits Window {
             if root.error-message != "": Label { text: root.rtl ? "پس از رفع خطا، برنامه را دوباره اجرا کنید." : "Resolve the error and restart the application."; rtl: root.rtl; }
         }
     }
-    if root.preview-visible: Rectangle {
+    if root.active-transition != 0: Rectangle {
+        z: 1000;
         width: root.width; height: root.height; background: #b8000000;
-        TouchArea { clicked => { root.preview-action("close", 0); } }
-        FocusScope {
+        forward-focus: modal-focus;
+        TouchArea {}
+        modal-focus := FocusScope {
             width: parent.width; height: parent.height;
             key-pressed(event) => {
-                if event.text == Key.Escape { root.preview-action("close", 0); return accept; }
+                if event.text == Key.Escape {
+                    if root.active-transition == 1 { root.preview-action("close", 0); }
+                    if root.active-transition == 2 { root.close-reconnect-requested(); }
+                    if root.active-transition == 3 { root.dismiss-error-requested(); }
+                    return accept;
+                }
                 return reject;
             }
-            Card {
+            if root.active-transition == 1: Card {
                 x: 24px; y: 24px; width: parent.width - 48px; height: parent.height - 48px;
                 TouchArea {}
                 ScrollView {
@@ -623,35 +635,38 @@ export component MainWindow inherits Window {
                     }
                 }
             }
-        }
-    }
-    if root.reconnect-device != "": Rectangle {
-        width: root.width; height: root.height; background: #b8000000;
-        TouchArea {}
-        Card {
-            x: 16px; y: 24px; width: parent.width - 32px;
-            height: parent.height - 48px;
-            ScrollView {
-                width: 100%; height: 100%; viewport-width: self.width;
-                VerticalLayout {
-                    padding: 16px; spacing: 12px;
-                    Title { text: root.rtl ? "اتصال دوباره" : "Reconnect"; rtl: root.rtl; }
-                    Label { text: root.rtl ? "نشانی و درگاه اتصال دستگاه" : "Device IP address and connection port"; rtl: root.rtl; }
-                    AppTextField { text <=> root.reconnect-endpoint; label: "192.168.1.20:5300"; }
-                    Button { text: root.rtl ? "اتصال" : "Connect"; clicked => { root.device-action(root.reconnect-device, "connect", root.reconnect-endpoint); root.reconnect-device = ""; } }
-                    Button { text: root.cancel-text; clicked => { root.reconnect-device = ""; } }
+            if root.active-transition == 2: Card {
+                x: 16px; y: 24px; width: parent.width - 32px;
+                height: parent.height - 48px;
+                TouchArea {}
+                ScrollView {
+                    width: 100%; height: 100%; viewport-width: self.width;
+                    VerticalLayout {
+                        padding: 16px; spacing: 12px;
+                        Title { text: root.rtl ? "اتصال دوباره" : "Reconnect"; rtl: root.rtl; }
+                        Label { text: root.rtl ? "نشانی و درگاه اتصال دستگاه" : "Device IP address and connection port"; rtl: root.rtl; }
+                        AppTextField { text <=> root.reconnect-endpoint; label: "192.168.1.20:5300"; }
+                        Button { text: root.rtl ? "اتصال" : "Connect"; clicked => { root.device-action(root.reconnect-device, "connect", root.reconnect-endpoint); root.close-reconnect-requested(); } }
+                        SecondaryButton { text: root.rtl ? "بازگشت" : "Back"; clicked => { root.close-reconnect-requested(); } }
+                    }
+                }
+            }
+            if root.active-transition == 3: Card {
+                x: 20px; y: max(20px, (parent.height - self.height) / 2);
+                width: parent.width - 40px;
+                height: min(parent.height - 40px, 280px);
+                TouchArea {}
+                ScrollView {
+                    width: 100%; height: 100%; viewport-width: self.width;
+                    VerticalLayout {
+                        padding: 20px; spacing: 16px;
+                        Title { text: root.rtl ? "مشکلی پیش آمد" : "Something went wrong"; rtl: root.rtl; }
+                        Label { text: root.error-message; rtl: root.rtl; color: MaterialPalette.on-surface; }
+                        Button { text: root.close-text; clicked => { root.dismiss-error-requested(); } }
+                    }
                 }
             }
         }
     }
-    if root.ready && root.error-message != "": Rectangle {
-        x: 20px; y: 16px; width: root.width - 40px;
-        min-height: 88px; background: MaterialPalette.error-container; border-radius: 12px;
-        HorizontalLayout {
-            padding: 14px; spacing: 12px;
-            Label { text: root.error-message; rtl: root.rtl; color: #ffffff; }
-            Button { text: root.dismiss-text; clicked => { root.error-message = ""; } }
-        }
-    }
-    Rectangle { width: root.width; height: root.height; background: #000000; opacity: 1 - clamp(root.brightness, 50, 100) / 100; }
+    Rectangle { z: 2000; width: root.width; height: root.height; background: #000000; opacity: 1 - clamp(root.brightness, 50, 100) / 100; }
 }

@@ -9,6 +9,7 @@ mod settings;
 mod startup;
 mod support;
 mod transfers;
+mod transition;
 
 #[allow(
     clippy::todo,

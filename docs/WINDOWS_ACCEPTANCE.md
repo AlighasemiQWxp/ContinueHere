@@ -5,8 +5,9 @@
 The native-client baseline passed local validation and CI on September 9, 2026.
 The connection workflow and simplified presentation passed the complete local
 validation suite on September 11, 2026, and pairing passed manual two-computer
-acceptance. Simplified-interface interaction and full two-computer transfer items
-below remain pending; automated validation does not establish interaction acceptance.
+acceptance. The simplified interface passed manual visual acceptance on September
+12, 2026. Full two-computer transfer items below remain pending; automated
+validation does not establish interaction acceptance.
 
 Install the Windows prerequisites in [client setup](../apps/client/README.md),
 then run manually from the repository root on the development computer:
@@ -26,6 +27,38 @@ Use two computers on the same reachable Wi-Fi/Ethernet network, with distinct
 Windows profiles/application identities. Allow ContinueHere through Windows Firewall
 for the private network if prompted. Guest-network isolation, VPN routing, or a
 blocked inbound listener can prevent connection despite a shared network name.
+
+## Phase 4 execution groups
+
+Complete each group before starting the next. Record the exact action and visible
+status for any failure so the responsible connection, transfer, preview, or history
+owner can be corrected without changing unrelated behavior.
+
+1. Connection reliability: pairing, automatic authenticated connection, destination
+   selection, disconnect/reconnect, restart recovery, and a two-minute idle check.
+2. Content matrix: File, Folder, Image, Video, Media, URL, YouTube, and local-video
+   continuation in both directions.
+3. Failure handling: rejected offers, picker cancellation, transfer cancellation,
+   disconnection during transfer, duplicate destinations, and invalid inputs.
+4. Persistence and history: restart, retry, Open actions, timestamps, unread state,
+   clearing history, and preservation of received files and trusted devices.
+5. Final polish: repeat the affected checks after fixes, run the complete validation
+   suite, review the final diff, and synchronize the accepted revision.
+
+### Phase 4A transition checks
+
+- Open an image and a video from Send, Receive, Transfers, and History. The modal
+  host must cover page content and navigation without page cards or scrollbars
+  painting above it.
+- While Preview is open, trigger a recoverable error. The error dialog must appear
+  above Preview; dismissing it must reveal the still-active Preview.
+- Open Reconnect and verify its input shield blocks the underlying page. Each
+  surface's Back or Close action, plus Escape, must return to the previous surface
+  exactly once.
+- Closing Preview must stop video sound and animated-image timers. Page navigation
+  must not close an active transition.
+- Resize at 360, 899, 900, and 1440 logical pixels with each surface open. Dialogs
+  must remain reachable without horizontal page content appearing above them.
 
 ## Pair and connect
 

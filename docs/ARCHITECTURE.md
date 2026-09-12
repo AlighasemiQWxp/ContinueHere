@@ -81,6 +81,7 @@ code and deny production placeholders.
 ```text
 Rust/Slint client
 └── UiManager
+    ├── UiTransitionController
     ├── ContinueHere Rust core
     ├── DevicesUiController
     ├── PairingUiController
@@ -110,6 +111,23 @@ pairing, or sending a URL. Controllers perform immediate presentation parsing,
 then call typed core APIs. Post-commit delegates schedule a refresh on Slint's
 event loop. Generic maps, global event buses, and a separate presentation state
 store are not used.
+
+### UI transitions
+
+`UiTransitionController` is an application-only coordinator owned by `UiManager`;
+it is not a core system and does not add Slint concepts to the reusable crate.
+Preview, reconnect, and recoverable error owners acquire a `UiTransitionHandle`,
+configure its typed surface, and use it. Active Handles form a small stack, and
+only the top surface is rendered in the root modal host above content and
+navigation. Closing the top surface releases its Handle and reveals the previous
+surface. Dropping the application invalidates remaining Handles as a shutdown
+safeguard; ordinary navigation does not release them.
+
+The modal host owns the input shield, Back/Escape routing, and topmost z-order.
+Feature controllers continue to own their content and cleanup: closing Preview
+stops media and animation before releasing its transition, while closing Reconnect
+clears its pending endpoint. Recoverable errors use a compact dialog instead of a
+page-level banner.
 
 Known UI modules are explicit typed fields rather than entries in a general
 registry. A new abstraction is added only when more than one real implementation

@@ -306,9 +306,8 @@ fn show_result(result: continuehere::Result<()>, window: &slint::Weak<MainWindow
     let Some(window) = window.upgrade() else {
         return;
     };
-    match result {
-        Ok(()) => window.set_error_message("".into()),
-        Err(error) => window.set_error_message(error.to_string().into()),
+    if let Err(error) = result {
+        window.invoke_show_error_requested(error.to_string().into());
     }
 }
 

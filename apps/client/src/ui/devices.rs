@@ -17,7 +17,10 @@ use continuehere::{
 };
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
-use super::{DeviceRow, MainWindow};
+use super::{
+    DeviceRow, MainWindow,
+    transition::{UiTransition, UiTransitionController, UiTransitionHandle},
+};
 
 type ConnectionFuture = Pin<Box<dyn Future<Output = Result<(), String>>>>;
 
@@ -61,6 +64,8 @@ pub(super) struct DevicesUiController {
     local_discovery: Option<DiscoveryHandle>,
     manual_discoveries: BTreeMap<DiscoveryEndpoint, DiscoveryHandle>,
     next_manual_discovery: u64,
+    transitions: Rc<UiTransitionController>,
+    reconnect_transition: Option<UiTransitionHandle>,
     _identity_changed: DeviceIdentityChangedSubscription,
     _discovery_changed: DiscoveryChangedSubscription,
     _discovery_status_changed: DiscoveryStatusChangedSubscription,
@@ -85,7 +90,11 @@ struct DeviceItem {
 }
 
 impl DevicesUiController {
-    pub(super) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Rc<RefCell<Self>> {
+    pub(super) fn start(
+        core: Rc<ContinueHere>,
+        window: &MainWindow,
+        transitions: Rc<UiTransitionController>,
+    ) -> Rc<RefCell<Self>> {
         let local_discovery = start_local_discovery(&core, window);
 
         let event_target = UiEventTarget::new(window.as_weak());
@@ -125,6 +134,8 @@ impl DevicesUiController {
             local_discovery,
             manual_discoveries: BTreeMap::new(),
             next_manual_discovery: 0,
+            transitions,
+            reconnect_transition: None,
             _identity_changed: identity_changed,
             _discovery_changed: discovery_changed,
             _discovery_status_changed: discovery_status_changed,
@@ -163,29 +174,17 @@ impl DevicesUiController {
             if let (Some(controller), Some(window)) =
                 (reconnect_controller.upgrade(), reconnect_view.upgrade())
             {
-                let controller = controller.borrow();
-                let result = (|| -> super::support::UiResult {
-                    let device = continuehere::DeviceId::new(id.to_string())?;
-                    if !controller
-                        .core
-                        .pairing()
-                        .trusted_devices()
-                        .iter()
-                        .any(|peer| peer.device_id() == &device)
-                    {
-                        return Err("Pair this device again before reconnecting.".into());
-                    }
-                    let endpoint = controller
-                        .core
-                        .transport()
-                        .known_endpoint(&device)
-                        .map(|value| value.to_string())
-                        .unwrap_or_default();
-                    window.set_reconnect_endpoint(endpoint.into());
-                    window.set_reconnect_device(id.clone());
-                    Ok(())
-                })();
+                let result = controller.borrow_mut().open_reconnect(id.as_str(), &window);
                 super::support::show_result(&window, result);
+            }
+        });
+        let close_controller = controller.clone();
+        let close_window = window.as_weak();
+        window.on_close_reconnect_requested(move || {
+            if let (Some(controller), Some(window)) =
+                (close_controller.upgrade(), close_window.upgrade())
+            {
+                controller.borrow_mut().close_reconnect(&window);
             }
         });
         let poll_controller = controller.clone();
@@ -236,9 +235,8 @@ impl DevicesUiController {
                 return;
             };
             match controller.borrow_mut().add_manual_endpoint(value.as_str()) {
-                Ok(true) => window.set_error_message("".into()),
+                Ok(true) => {}
                 Ok(false) => {
-                    window.set_error_message("".into());
                     window.invoke_show_notice(
                         super::support::text(
                             window.get_rtl(),
@@ -248,7 +246,7 @@ impl DevicesUiController {
                         .into(),
                     );
                 }
-                Err(error) => window.set_error_message(error.to_string().into()),
+                Err(error) => window.invoke_show_error_requested(error.to_string().into()),
             }
         });
 
@@ -277,6 +275,39 @@ impl DevicesUiController {
         handle.use_handle()?;
         self.manual_discoveries.insert(endpoint, handle);
         Ok(true)
+    }
+
+    fn open_reconnect(&mut self, id: &str, window: &MainWindow) -> super::support::UiResult {
+        self.close_reconnect(window);
+        let device = continuehere::DeviceId::new(id.to_owned())?;
+        if !self
+            .core
+            .pairing()
+            .trusted_devices()
+            .iter()
+            .any(|peer| peer.device_id() == &device)
+        {
+            return Err("Pair this device again before reconnecting.".into());
+        }
+        let endpoint = self
+            .core
+            .transport()
+            .known_endpoint(&device)
+            .map(|value| value.to_string())
+            .unwrap_or_default();
+        let transition = self.transitions.get_handle("reconnect");
+        transition.configure(UiTransition::Reconnect)?;
+        transition.use_handle()?;
+        window.set_reconnect_endpoint(endpoint.into());
+        window.set_reconnect_device(id.into());
+        self.reconnect_transition = Some(transition);
+        Ok(())
+    }
+
+    fn close_reconnect(&mut self, window: &MainWindow) {
+        window.set_reconnect_device("".into());
+        window.set_reconnect_endpoint("".into());
+        self.reconnect_transition.take();
     }
 
     fn refresh(&self, window: &MainWindow) {
@@ -390,7 +421,7 @@ impl DevicesUiController {
             })();
             match result {
                 Ok(handle) => self.advertisements.push(handle),
-                Err(error) => window.set_error_message(error.to_string().into()),
+                Err(error) => window.invoke_show_error_requested(error.to_string().into()),
             }
         }
     }
@@ -420,6 +451,7 @@ impl DevicesUiController {
 impl Drop for DevicesUiController {
     fn drop(&mut self) {
         self.network_timer.stop();
+        self.reconnect_transition.take();
         for handle in &self.advertisements {
             let _ = handle.release();
         }
@@ -442,7 +474,7 @@ fn start_local_discovery(core: &ContinueHere, window: &MainWindow) -> Option<Dis
     match result {
         Ok(handle) => Some(handle),
         Err(error) => {
-            window.set_error_message(error.to_string().into());
+            window.invoke_show_error_requested(error.to_string().into());
             None
         }
     }

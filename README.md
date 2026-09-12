@@ -129,7 +129,9 @@ for persistence and retry boundaries.
 
 The connection workflow and simplified desktop presentation passed the complete
 local validation suite on September 11, 2026. Pairing also passed manual
-two-computer acceptance; visual and full transfer acceptance remain pending.
+two-computer acceptance, and the simplified interface passed manual visual
+acceptance on September 12, 2026. Full two-computer transfer acceptance remains
+pending.
 Run the complete local validation from the project root:
 
 ```powershell

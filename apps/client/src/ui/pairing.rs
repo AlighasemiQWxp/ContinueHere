@@ -133,7 +133,7 @@ impl PairingUiController {
             }
             let previous = self.handle.take();
             if let Err(error) = self.ensure_receive() {
-                window.set_error_message(error.to_string().into());
+                window.invoke_show_error_requested(error.to_string().into());
             }
             drop(previous);
             if let Some((device_id, endpoint)) = connect_request {
@@ -142,7 +142,7 @@ impl PairingUiController {
         } else if self.handle.is_none()
             && let Err(error) = self.ensure_receive()
         {
-            window.set_error_message(error.to_string().into());
+            window.invoke_show_error_requested(error.to_string().into());
         }
         let active_session = self
             .handle

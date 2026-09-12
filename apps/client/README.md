@@ -24,6 +24,12 @@ and controls; theme selection and application brightness (50–100 percent) pers
 through SettingsManager. Brightness affects application rendering, not the
 physical monitor or Windows file dialogs.
 
+`UiManager` owns a UI-only transition controller. Preview, reconnect, and error
+surfaces acquire transition Handles and render through one modal host above the
+page and navigation layers. A transition stays active until its Back, Escape, or
+Close action releases the Handle; application shutdown remains the final cleanup
+safeguard.
+
 Save Directory displays the saved path and opens a native folder dialog. File,
 Folder, Media, Image, and Video selection uses native dialogs with category
 filters. Folder transfers preserve nested content and empty directories. The
@@ -44,8 +50,9 @@ accessibility/slider adaptations are documented in [vendor notes](vendor/README.
 
 The connection workflow and simplified presentation passed manual formatting,
 checks, linting, tests, and release compilation on September 11, 2026. Pairing
-also passed manual two-computer acceptance. Simplified-interface interaction and
-full two-computer transfer acceptance remain pending.
+also passed manual two-computer acceptance, and the simplified interface passed
+manual visual acceptance on September 12, 2026. Full two-computer transfer
+acceptance remains pending.
 
 The client owns `ContinueHere` directly. Focused Rust controllers retain core
 handles and delegate subscriptions. Core delegates schedule refresh requests on

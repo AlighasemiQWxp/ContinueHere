@@ -148,12 +148,15 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
   - Task-first desktop layout with standard-sized actions, compact content tiles,
     horizontally grouped secondary controls, and troubleshooting details kept
     visually secondary
+  - Handle-owned UI transition stack and one topmost modal host for preview,
+    reconnect, and recoverable errors
   - Category-filtered native pickers and bounded folder transfer through FileTransfer
   - YouTube link plus entered position; local-video handoff from the in-app player
   - The current connection workflow and simplified presentation passed formatting,
     checks, linting, tests, and the release build on September 11, 2026; pairing
-    passed manual two-computer acceptance, while visual and transfer acceptance
-    remain pending
+    passed manual two-computer acceptance, and the simplified interface passed
+    visual acceptance on September 12, 2026; full transfer acceptance remains
+    pending
   - Automatic browser playback capture, streaming while downloading, partial resume,
     offline queues, installers, and additional platforms remain future work
 - [ ] 17. Android application

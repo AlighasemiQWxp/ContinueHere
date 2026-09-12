@@ -29,9 +29,8 @@ pub(super) fn model<T: Clone + 'static>(rows: Vec<T>) -> ModelRc<T> {
 }
 
 pub(super) fn show_result<T, E: std::fmt::Display>(window: &MainWindow, result: Result<T, E>) {
-    match result {
-        Ok(_) => {}
-        Err(error) => window.set_error_message(error.to_string().into()),
+    if let Err(error) = result {
+        window.invoke_show_error_requested(error.to_string().into());
     }
 }
 

@@ -8,6 +8,7 @@ use super::{
     MainWindow, devices::DevicesUiController, handoff::HandoffUiController,
     history::HistoryUiController, pairing::PairingUiController, preview::PreviewUiController,
     settings::SettingsUiController, transfers::TransferUiController,
+    transition::UiTransitionController,
 };
 
 pub(crate) struct UiManager {
@@ -19,23 +20,25 @@ pub(crate) struct UiManager {
     transfers: Rc<RefCell<TransferUiController>>,
     history: Rc<RefCell<HistoryUiController>>,
     preview: Rc<RefCell<PreviewUiController>>,
+    transitions: Rc<UiTransitionController>,
 }
 
 impl UiManager {
     pub(crate) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Self {
-        let preview = PreviewUiController::start(window);
+        let transitions = UiTransitionController::start(window);
+        let preview = PreviewUiController::start(window, Rc::clone(&transitions));
         let history = HistoryUiController::start(Rc::clone(&core), window);
         let pairing = PairingUiController::start(Rc::clone(&core), window);
         let handoff = HandoffUiController::start(Rc::clone(&core), window);
         let transfers = TransferUiController::start(Rc::clone(&core), window);
-        let devices = DevicesUiController::start(Rc::clone(&core), window);
+        let devices = DevicesUiController::start(Rc::clone(&core), window, Rc::clone(&transitions));
         let settings = SettingsUiController::start(Rc::clone(&core), window);
         let view = window.as_weak();
         window.on_page_selected(move |page| {
             let Some(window) = view.upgrade() else {
                 return;
             };
-            if ![0, 1, 3, 4].contains(&page) || window.get_preview_visible() {
+            if ![0, 1, 3, 4].contains(&page) || window.get_active_transition() != 0 {
                 return;
             }
             window.set_reduce_motion(crate::platform::reduce_motion());
@@ -69,6 +72,7 @@ impl UiManager {
             transfers,
             history,
             preview,
+            transitions,
         }
     }
 
@@ -82,6 +86,7 @@ impl UiManager {
             transfers,
             history,
             preview,
+            transitions,
         } = self;
         drop(preview);
         drop(history);
@@ -90,6 +95,7 @@ impl UiManager {
         drop(pairing);
         drop(devices);
         drop(settings);
+        drop(transitions);
         runtime.block_on(async {
             let core = Rc::try_unwrap(core).map_err(|_| "UI core ownership was not released")?;
             core.shutdown().await?;

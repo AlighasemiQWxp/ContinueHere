@@ -10,6 +10,7 @@ use crate::platform::{
 use super::{
     MainWindow,
     support::{UiResult, show_result},
+    transition::{UiTransition, UiTransitionController, UiTransitionHandle},
 };
 
 pub(super) struct PreviewUiController {
@@ -17,15 +18,22 @@ pub(super) struct PreviewUiController {
     generation: i32,
     animation: Option<super::image_preview::ImagePreview>,
     timer: slint::Timer,
+    transitions: Rc<UiTransitionController>,
+    transition: Option<UiTransitionHandle>,
 }
 
 impl PreviewUiController {
-    pub(super) fn start(window: &MainWindow) -> Rc<RefCell<Self>> {
+    pub(super) fn start(
+        window: &MainWindow,
+        transitions: Rc<UiTransitionController>,
+    ) -> Rc<RefCell<Self>> {
         let controller = Rc::new(RefCell::new(Self {
             player: None,
             generation: 0,
             animation: None,
             timer: slint::Timer::default(),
+            transitions,
+            transition: None,
         }));
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
@@ -114,6 +122,10 @@ impl PreviewUiController {
             self.player = Some(MediaPlayer::open(path, position, window, self.generation)?);
             window.set_preview_playing(true);
         }
+        let transition = self.transitions.get_handle("preview");
+        transition.configure(UiTransition::Preview)?;
+        transition.use_handle()?;
+        self.transition = Some(transition);
         window.set_preview_visible(true);
         Ok(())
     }
@@ -141,6 +153,7 @@ impl PreviewUiController {
         self.player.take();
         self.timer.stop();
         self.animation.take();
+        self.transition.take();
         window.set_preview_visible(false);
         window.set_preview_playing(false);
         window.set_preview_image(slint::Image::default());
