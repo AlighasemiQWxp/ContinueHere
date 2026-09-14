@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{models::DeviceId, transfer::FileTransfer};
 
-use super::{LocalVideoHandoff, UrlHandoff, YouTubeHandoff};
+use super::{LocalDocumentHandoff, LocalVideoHandoff, UrlHandoff, YouTubeHandoff};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct HandoffId {
@@ -71,6 +71,7 @@ pub enum HandoffPayload {
     Url(UrlHandoff),
     YouTube(YouTubeHandoff),
     LocalVideo(LocalVideoHandoff),
+    LocalDocument(LocalDocumentHandoff),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,6 +214,13 @@ impl HandoffConfig {
         Self {
             device_id,
             payload: HandoffPayload::LocalVideo(payload),
+        }
+    }
+
+    pub(crate) fn local_document(device_id: DeviceId, payload: LocalDocumentHandoff) -> Self {
+        Self {
+            device_id,
+            payload: HandoffPayload::LocalDocument(payload),
         }
     }
 

@@ -216,7 +216,7 @@ impl ActivityController {
             let unchanged = state.entries.iter().any(|entry| {
                 entry.transfer_id.as_deref() == Some(transfer.id().as_str())
                     && entry.device_id == transfer.peer_device_id().as_str()
-                    && (entry.kind == ActivityKind::LocalVideo
+                    && (is_transfer_backed(entry.kind)
                         || entry.path.as_deref()
                             == transfer.source().or_else(|| transfer.destination()))
             });
@@ -293,7 +293,7 @@ impl ActivityController {
             let time = now();
             if record.kind == ActivityKind::File
                 && let Some(parent) = state.entries.iter_mut().find(|entry| {
-                    entry.kind == ActivityKind::LocalVideo
+                    is_transfer_backed(entry.kind)
                         && entry.transfer_id == record.transfer_id
                         && entry.device_id == record.device_id
                         && entry.direction == record.direction
@@ -364,7 +364,7 @@ impl ActivityController {
                     record.file_completed_at = Some(time);
                 }
             }
-            if record.kind == ActivityKind::LocalVideo && record.transfer_id.is_some() {
+            if is_transfer_backed(record.kind) && record.transfer_id.is_some() {
                 if let Some(child) = state.entries.iter().find(|entry| {
                     entry.kind == ActivityKind::File
                         && entry.transfer_id == record.transfer_id
@@ -520,7 +520,31 @@ fn payload(record: &mut Activity, payload: &HandoffPayload) {
             record.position_millis = video.playback_position().as_millis();
             record.transfer_id = video.transfer_id().map(|id| id.as_str().to_owned());
         }
+        HandoffPayload::LocalDocument(document) => {
+            record.kind = match document.continuation() {
+                crate::handoff::DocumentContinuation::PdfPage(_) => ActivityKind::Pdf,
+                crate::handoff::DocumentContinuation::PowerPointSlide(_) => {
+                    ActivityKind::PowerPoint
+                }
+            };
+            record.path = Some(document.file_path().to_owned());
+            record.title = document
+                .file_path()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            record.position_millis = u64::from(document.continuation().position());
+            record.transfer_id = document.transfer_id().map(|id| id.as_str().to_owned());
+        }
     }
+}
+
+fn is_transfer_backed(kind: ActivityKind) -> bool {
+    matches!(
+        kind,
+        ActivityKind::LocalVideo | ActivityKind::Pdf | ActivityKind::PowerPoint
+    )
 }
 
 fn capture_source(record: &mut Activity) {

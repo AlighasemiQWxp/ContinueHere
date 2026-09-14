@@ -90,6 +90,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Vec<Activity>, ActivityError> {
         .flatten()
         .any(|time| time > 253_402_300_799_999)
             || entry.path.as_ref().is_some_and(|path| !path.is_absolute())
+            || matches!(entry.kind, ActivityKind::Pdf | ActivityKind::PowerPoint)
+                && (entry.path.is_none() || entry.document_continuation().is_none())
         {
             return Err(ActivityError::InvalidData);
         }
@@ -119,6 +121,8 @@ fn encode_entry(write: &mut Writer, value: &Activity) -> Result<(), ActivityErro
         ActivityKind::LocalVideo => 3,
         ActivityKind::Session => 4,
         ActivityKind::Folder => 5,
+        ActivityKind::Pdf => 6,
+        ActivityKind::PowerPoint => 7,
     });
     write.u8(match value.direction {
         ActivityDirection::Outgoing => 0,
@@ -180,6 +184,8 @@ fn decode_entry(read: &mut Reader<'_>) -> Result<Activity, ActivityError> {
             3 => ActivityKind::LocalVideo,
             4 => ActivityKind::Session,
             5 => ActivityKind::Folder,
+            6 => ActivityKind::Pdf,
+            7 => ActivityKind::PowerPoint,
             _ => return Err(ActivityError::InvalidData),
         },
         direction: match read.u8()? {

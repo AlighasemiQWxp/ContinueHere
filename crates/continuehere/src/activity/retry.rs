@@ -3,7 +3,7 @@ use super::{
     controller::{ActivityController, transfer_key},
 };
 use crate::{
-    handoff::{HandoffCapability, HandoffHandle, HandoffState},
+    handoff::{DocumentContinuation, HandoffCapability, HandoffHandle, HandoffState},
     models::DeviceId,
     pairing::TrustedPeerLookup,
     transfer::{FileTransferCapability, FileTransferHandle, FileTransferState},
@@ -211,6 +211,24 @@ impl RetryController {
                 activity.path.clone().unwrap_or_default(),
                 position,
             ),
+            ActivityKind::Pdf => handle.configure_document(
+                peer,
+                activity.path.clone().unwrap_or_default(),
+                DocumentContinuation::pdf_page(
+                    u32::try_from(activity.position_millis)
+                        .map_err(|_| ActivityError::InvalidData)?,
+                )
+                .map_err(|error| ActivityError::Retry(error.to_string()))?,
+            ),
+            ActivityKind::PowerPoint => handle.configure_document(
+                peer,
+                activity.path.clone().unwrap_or_default(),
+                DocumentContinuation::powerpoint_slide(
+                    u32::try_from(activity.position_millis)
+                        .map_err(|_| ActivityError::InvalidData)?,
+                )
+                .map_err(|error| ActivityError::Retry(error.to_string()))?,
+            ),
             _ => {
                 handle
                     .release()
@@ -293,7 +311,13 @@ pub(super) fn validate_source(activity: &Activity) -> Result<(), ActivityError> 
         }
         return Ok(());
     }
-    if !matches!(activity.kind, ActivityKind::File | ActivityKind::LocalVideo) {
+    if !matches!(
+        activity.kind,
+        ActivityKind::File
+            | ActivityKind::LocalVideo
+            | ActivityKind::Pdf
+            | ActivityKind::PowerPoint
+    ) {
         return Ok(());
     }
     let path = activity.path.as_ref().ok_or(ActivityError::SourceChanged)?;

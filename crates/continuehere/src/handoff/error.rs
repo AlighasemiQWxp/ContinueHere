@@ -31,6 +31,10 @@ pub enum HandoffError {
     PlaybackPositionTooLarge,
     #[error("local video must be a supported regular video file")]
     InvalidLocalVideo,
+    #[error("local document must match its supported document type")]
+    InvalidLocalDocument,
+    #[error("document page or slide must be at least one")]
+    InvalidDocumentContinuation,
     #[error("handoff operation limit has been reached")]
     OperationLimit,
     #[error("received handoff was not found")]

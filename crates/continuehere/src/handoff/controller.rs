@@ -9,15 +9,16 @@ use crate::{
     models::DeviceId,
     transfer::{FileTransfer, FileTransferCapability, FileTransferId},
     transport::{
-        HandoffDisposition, HandoffRejection, HandoffTransportCapability, HandoffTransportPayload,
-        InboundHandoff, InboundHandoffHandler, TransportError,
+        DocumentTransportKind, HandoffDisposition, HandoffRejection, HandoffTransportCapability,
+        HandoffTransportPayload, InboundHandoff, InboundHandoffHandler, TransportError,
     },
 };
 
 use super::{
-    Handoff, HandoffChange, HandoffChangedEvent, HandoffConfig, HandoffError, HandoffFailure,
-    HandoffId, HandoffPayload, HandoffState, IncomingHandoff, IncomingHandoffChange,
-    IncomingHandoffChangedEvent, PlaybackPosition, UrlHandoff, YouTubeHandoff,
+    DocumentContinuation, Handoff, HandoffChange, HandoffChangedEvent, HandoffConfig, HandoffError,
+    HandoffFailure, HandoffId, HandoffPayload, HandoffState, IncomingHandoff,
+    IncomingHandoffChange, IncomingHandoffChangedEvent, PlaybackPosition, UrlHandoff,
+    YouTubeHandoff,
 };
 
 const MAX_ACTIVE_OPERATIONS: usize = 32;
@@ -353,6 +354,31 @@ impl InboundHandoffHandler for HandoffController {
                     Err(_) => return HandoffDisposition::Rejected(HandoffRejection::Invalid),
                 }
             }
+            HandoffTransportPayload::LocalDocument {
+                transfer_id,
+                document_kind,
+                position,
+            } => {
+                let Some(transfer) = self.transfers.completed_incoming(
+                    &FileTransferId::from_bytes(transfer_id),
+                    &sender_device_id,
+                ) else {
+                    return HandoffDisposition::Rejected(HandoffRejection::Invalid);
+                };
+                let continuation = match document_kind {
+                    DocumentTransportKind::Pdf => DocumentContinuation::pdf_page(position),
+                    DocumentTransportKind::PowerPoint => {
+                        DocumentContinuation::powerpoint_slide(position)
+                    }
+                };
+                let Ok(continuation) = continuation else {
+                    return HandoffDisposition::Rejected(HandoffRejection::Invalid);
+                };
+                match super::LocalDocumentHandoff::received(&transfer, continuation) {
+                    Ok(document) => HandoffPayload::LocalDocument(document),
+                    Err(_) => return HandoffDisposition::Rejected(HandoffRejection::Invalid),
+                }
+            }
             HandoffTransportPayload::Url(url) => match UrlHandoff::new(&url) {
                 Ok(url) => HandoffPayload::Url(url),
                 Err(_) => {
@@ -433,6 +459,22 @@ fn run_outgoing(
                 &handoff_id,
                 device_id.clone(),
                 video,
+                &commands,
+            ) {
+                Ok((transfer, payload)) => (payload, Some(transfer)),
+                Err(result) => {
+                    controller.finish(&handle_identifier, result);
+                    return;
+                }
+            }
+        }
+        HandoffPayload::LocalDocument(document) => {
+            match super::video_operation::prepare_document(
+                &controller,
+                &handle_identifier,
+                &handoff_id,
+                device_id.clone(),
+                document,
                 &commands,
             ) {
                 Ok((transfer, payload)) => (payload, Some(transfer)),

@@ -36,8 +36,8 @@ owner can be corrected without changing unrelated behavior.
 
 1. Connection reliability: pairing, automatic authenticated connection, destination
    selection, disconnect/reconnect, restart recovery, and a two-minute idle check.
-2. Content matrix: File, Folder, Image, Video, Media, URL, YouTube, and local-video
-   continuation in both directions.
+2. Content matrix: File, Folder, Image, Video, Media, PDF, PowerPoint, URL,
+   YouTube, and local continuation in both directions.
 3. Failure handling: rejected offers, picker cancellation, transfer cancellation,
    disconnection during transfer, duplicate destinations, and invalid inputs.
 4. Persistence and history: restart, retry, Open actions, timestamps, unread state,
@@ -47,7 +47,7 @@ owner can be corrected without changing unrelated behavior.
 
 ### Phase 4A transition checks
 
-- Open an image and a video from Send, Receive, Transfers, and History. The modal
+- Open an image and a video from Send, Receive, and History. The modal
   host must cover page content and navigation without page cards or scrollbars
   painting above it.
 - While Preview is open, trigger a recoverable error. The error dialog must appear
@@ -59,6 +59,37 @@ owner can be corrected without changing unrelated behavior.
   must not close an active transition.
 - Resize at 360, 899, 900, and 1440 logical pixels with each surface open. Dialogs
   must remain reachable without horizontal page content appearing above them.
+
+### Phase 4B resumable-document checks
+
+Complete these checks on two updated Windows computers before treating document
+continuation as accepted:
+
+| Check | Action | Expected result |
+| --- | --- | --- |
+| PDF selection | Choose PDF, select a non-empty local PDF, enter page 17 | A foreground continuation dialog remains above the page until Send, Back, Close, or Escape |
+| PowerPoint selection | Choose PowerPoint, select a PPT or PPTX, enter slide 4 | The dialog labels the value as a slide and rejects zero, empty, or non-numeric input |
+| Transfer and open | Send each document from A, accept on B, then choose Open | The verified file opens at the requested page or slide, or a clear foreground compatibility error appears |
+| History open | Remove the live transfer or handoff entry or restart B, then open the completed History item | The saved local path and page or slide are used again |
+| Retry | Retry a failed, rejected, cancelled, or interrupted outgoing document activity | A new transfer requires fresh acceptance and preserves the original page or slide |
+| Capability mismatch | Connect one updated build to a build without document support | The operation fails as unsupported before offering an ordinary file |
+| Duplicate metadata | Deliver the same handoff identifier and payload twice | It is acknowledged once without a duplicate incoming item; changed metadata under that identifier is rejected |
+| Unsafe launch boundary | Receive a file whose extension does not match its document kind | Handoff rejects it and no viewer is launched |
+
+### Phase 4C Receive acceptance
+
+- Receive shows one `Recent Activity` section and no separate `Incoming Handoffs`
+  or `Transfers` sections.
+- A new incoming file or folder offer appears once inside Recent Activity with
+  Accept, Choose Folder, and Reject actions still available.
+- During transfer, one live card shows status, byte progress, and Cancel. The
+  parallel active Activity record is not rendered on Receive.
+- Completion, rejection, cancellation, or failure replaces the live card with
+  one persistent Activity card. Completed content exposes Open where supported.
+- URL, YouTube, local-video, PDF, and PowerPoint handoffs each appear once after
+  delivery and retain their existing Open behavior.
+- Repeat at narrow and wide widths in English and Persian. No action or status
+  may become unreachable when the single feed grows and scrolls.
 
 ## Pair and connect
 
@@ -93,7 +124,7 @@ are coalesced without turning them into trusted identities.
 
 | Content | Procedure | Expected result |
 | --- | --- | --- |
-| File | Choose File on A, select a safe text/PDF file, accept on B | Progress in Send/Receive; open only after verification; bytes match |
+| File | Choose File on A, select a safe text or archive file, accept on B | Progress in Send/Receive; open only after verification; bytes match |
 | Folder | Select a folder with nested files, a non-ASCII name, and an empty subfolder | One folder offer; all content and empty directories preserved; no archive-opening step |
 | Image | Choose Image and select PNG/JPEG/GIF/WebP | Picker filter shows supported image extensions; received images open with zoom/scroll; animated formats animate |
 | Video | Choose Video and select MP4/MKV | Picker filters supported video extensions; ordinary transfer opens from the start |
@@ -102,6 +133,8 @@ are coalesced without turning them into trusted identities.
 | YouTube | Copy a YouTube URL, enter `1:23` as playback position, choose the YouTube action | Receive opens the canonical video link at approximately 83 seconds; browser/account/player rules may affect playback |
 | Local video continuation | Choose Preview local video, play/seek to a known position, select B, choose Continue on device | B approves the file; after complete delivery its incoming handoff opens the video near the captured position |
 | Entered local position | Set the playback field, then Send video at entered time | Video picker opens; accepted video opens at the entered position on B |
+| PDF continuation | Choose PDF, select a PDF, enter page 17, and send | B approves and verifies the file; Open uses Acrobat or Edge to navigate to page 17 |
+| PowerPoint continuation | Choose PowerPoint, select PPT/PPTX, enter slide 4, and send | B approves and verifies the file; desktop PowerPoint opens the deck at slide 4 |
 
 YouTube sends a URL plus position, not downloaded YouTube bytes. Automatic capture
 of another browser's playback position is deferred. Local continuation captures
@@ -151,7 +184,7 @@ directions and more than one transfer while keeping the owning app running.
 | Application header | The supplied application icon and ContinueHere name are vertically centered, evenly spaced, and remain visually aligned in both left-to-right and right-to-left layouts. |
 | Buttons | Primary actions use standard compact sizing; related secondary actions share horizontal rows when space permits. Mouse click, Tab/Shift+Tab, Enter, and Space activate actions once. Actions must not stay selected like navigation items. Verify disabled controls cannot act. |
 | Send hierarchy | Destination and Choose Content appear first, optional link tools are grouped separately, and Nearby/Trusted devices follow. Manual endpoint entry is clearly secondary and does not dominate the normal discovery flow. |
-| Choose Content | File, Folder, Media, Image, and Video appear as compact tonal tiles in a responsive grid: two columns in narrow content and three columns when space permits. Every category opens the correct native picker. |
+| Choose Content | File, Folder, Media, Image, Video, PDF, and PowerPoint appear as compact tonal tiles in a responsive grid: two columns in narrow content and three columns when space permits. Every category opens the correct native picker. |
 | Device name | Save a valid name; see “Device name saved as X.” in SnackBar. Try an invalid name: no success notice. Restart to confirm the saved value and stable identity. |
 | Save Directory | Title, current path, and compact Choose folder action are visible; choose/cancel the native directory dialog and verify persistence. |
 | Theme Style | Purple, Red, Green radio choices recolor the Material surfaces and controls immediately. Restart to confirm selection. |

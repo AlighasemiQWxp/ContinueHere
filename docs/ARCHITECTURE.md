@@ -32,6 +32,14 @@ History, and Settings. Feature controllers retain their own Handles
 and delegate subscriptions. Settings and history continue to use the existing
 core stores.
 
+Receive presents one recent-activity feed. Pending incoming transfer offers and
+active progress remain actionable inside that feed; completed transfers and
+handoffs are represented by their persistent Activity record. The Handoff and
+FileTransfer controllers still retain their independent state and events, but
+the interface does not render duplicate Incoming Handoffs or Transfers sections.
+After an incoming Handoff has a persistent Activity record, the client consumes
+its transient inbox record; removing that record does not remove the Activity.
+
 Core startup runs on a worker and hands the completed application to the UI
 thread. The core is movable but is not required to be `Sync`. Controllers share
 it locally through `Rc`; the pending connection future remains owned by Devices
@@ -605,6 +613,35 @@ The application supplies playback position and later opens and seeks the file.
 The core neither starts a player nor claims successful playback. Playback while
 downloading, media probing/transcoding, partial resume, and persistent activity
 history remain outside Phase 14.
+
+Phase 4B extends the same Handoff lifecycle with resumable local documents. It
+does not add a document Manager, Controller, transfer engine, or persistence
+store. A `LocalDocumentHandoff` contains one validated absolute PDF, PPT, or
+PPTX path and a typed `DocumentContinuation`: a one-based PDF page or a
+one-based PowerPoint slide. `HandoffHandle::configure_document` is the single
+caller-facing entry point.
+
+Document handoffs use the same transfer-backed operation path as local video.
+The sender first verifies negotiated `LocalDocumentHandoff` and `FileTransfer`
+support, transfers and verifies the complete file with explicit receiver
+acceptance, then sends only the transfer identifier, document kind, and
+continuation number. The receiver resolves the path from the completed incoming
+transfer owned by the authenticated sender. Source paths, destination paths,
+viewer commands, and application arguments never cross the network.
+
+The native client acquires a `UITransitionController` Handle when a PDF or
+PowerPoint file is selected. That Handle owns the foreground continuation
+dialog until Send, Back, Close, or Escape explicitly finishes it. Sending then
+acquires the normal Handoff Handle. Activity stores the typed document kind,
+local path, transfer identifier, and page or slide so Open and Retry remain
+available after the live Handoff record is removed or the application restarts.
+
+Opening is an application-platform responsibility. The core certifies transfer
+and metadata validity but does not claim that an installed external viewer can
+navigate to the requested page or slide. A platform adapter must either open at
+the requested continuation or return a visible error; it must not silently claim
+continuation success after opening at the beginning. Files are never launched
+automatically when received.
 
 Pairing defines two system-owned event streams: immutable pairing-session
 changes and immutable trusted-device changes. Commands such as approve, reject,

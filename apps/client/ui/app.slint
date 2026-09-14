@@ -95,7 +95,6 @@ export component MainWindow inherits Window {
     in-out property <bool> devices-unread;
     in-out property <bool> send-unread;
     in-out property <bool> history-unread;
-    in property <[ContentRow]> incoming-handoffs;
     in property <[ContentRow]> incoming-transfers;
     in property <[ContentRow]> outgoing-transfers;
     in property <[ContentRow]> history-devices;
@@ -119,6 +118,9 @@ export component MainWindow inherits Window {
     in-out property <float> preview-volume: 1;
     in-out property <float> preview-zoom: 1;
     in-out property <string> playback-position-input;
+    in property <string> document-title;
+    in property <string> document-kind;
+    in-out property <string> document-position-input;
     property <bool> compact: root.width < 900px;
     property <length> nav-width: 232px;
     property <string> close-text: rtl ? "بستن" : "Close";
@@ -137,8 +139,9 @@ export component MainWindow inherits Window {
     callback poll-connection-requested();
     callback pairing-action(string, string);
     callback send-handoff(string, string, string, string);
-    callback incoming-action(string, string);
     callback send-file(string, string);
+    callback choose-document(string, string);
+    callback document-action(string, string);
     callback transfer-action(string, string);
     callback cancel-video-transfer(string) -> bool;
     callback history-action(string, string);
@@ -286,20 +289,6 @@ export component MainWindow inherits Window {
                             }
                         }
                     }
-                    Title { text: root.rtl ? "محتوای دریافتی" : "Incoming handoffs"; rtl: root.rtl; font-size: 20px; }
-                    if root.incoming-handoffs.length == 0: Label { text: root.rtl ? "هنوز محتوایی دریافت نشده است." : "No incoming handoffs yet."; rtl: root.rtl; }
-                    for item in root.incoming-handoffs: Card {
-                        VerticalLayout {
-                            padding: 16px; spacing: 10px;
-                            Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; }
-                            Label { text: item.detail; rtl: root.rtl; }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.incoming-action(item.id, "open"); } }
-                                QuietButton { enabled: root.ready && !root.preview-visible; text: root.remove-text; clicked => { root.incoming-action(item.id, "remove"); } }
-                            }
-                        }
-                    }
                     Card {
                         VerticalLayout {
                             padding: 14px; spacing: 6px;
@@ -342,7 +331,11 @@ export component MainWindow inherits Window {
                                     ContentButton { text: root.rtl ? "تصویر" : "Image"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "image"); } }
                                 }
                                 Row {
-                                    ContentButton { colspan: 2; text: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
+                                    ContentButton { text: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
+                                    ContentButton { text: root.rtl ? "پی‌دی‌اف" : "PDF"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "pdf"); } }
+                                }
+                                Row {
+                                    ContentButton { colspan: 2; text: root.rtl ? "پاورپوینت" : "PowerPoint"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "powerpoint"); } }
                                 }
                             }
                             if content.width >= 620px: GridLayout {
@@ -354,7 +347,11 @@ export component MainWindow inherits Window {
                                 }
                                 Row {
                                     ContentButton { text: root.rtl ? "تصویر" : "Image"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "image"); } }
-                                    ContentButton { colspan: 2; text: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
+                                    ContentButton { text: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
+                                    ContentButton { text: root.rtl ? "پی‌دی‌اف" : "PDF"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "pdf"); } }
+                                }
+                                Row {
+                                    ContentButton { colspan: 3; text: root.rtl ? "پاورپوینت" : "PowerPoint"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "powerpoint"); } }
                                 }
                             }
                         }
@@ -429,11 +426,11 @@ export component MainWindow inherits Window {
                         }
                     }
                 }
-                if root.page == 0 || root.page == 1: VerticalLayout {
+                if root.page == 1: VerticalLayout {
                     spacing: 16px;
                     Title { text: root.rtl ? "انتقال‌ها" : "Transfers"; rtl: root.rtl; font-size: 20px; }
-                    if (root.page == 0 ? root.incoming-transfers.length : root.outgoing-transfers.length) == 0: Label { text: root.rtl ? "هنوز انتقالی وجود ندارد." : "No transfers yet."; rtl: root.rtl; }
-                    for item in (root.page == 0 ? root.incoming-transfers : root.outgoing-transfers): Card {
+                    if root.outgoing-transfers.length == 0: Label { text: root.rtl ? "هنوز انتقالی وجود ندارد." : "No transfers yet."; rtl: root.rtl; }
+                    for item in root.outgoing-transfers: Card {
                         VerticalLayout {
                             padding: 20px; spacing: 12px;
                             Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
@@ -460,6 +457,29 @@ export component MainWindow inherits Window {
                 if root.page == 0 || root.page == 1: VerticalLayout {
                     spacing: 12px;
                     Title { text: root.rtl ? "فعالیت‌های اخیر" : "Recent activity"; rtl: root.rtl; font-size: 20px; }
+                    if root.page == 0 && root.incoming-transfers.length == 0 && root.received-activities.length == 0: Label { text: root.rtl ? "هنوز فعالیتی وجود ندارد." : "No recent activity yet."; rtl: root.rtl; }
+                    if root.page == 0: VerticalLayout {
+                        spacing: 12px;
+                        for item in root.incoming-transfers: Card {
+                            VerticalLayout {
+                                padding: 20px; spacing: 12px;
+                                Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                                Label { text: item.status; rtl: root.rtl; color: MaterialPalette.primary; }
+                                Label { text: item.detail; rtl: root.rtl; }
+                                Rectangle {
+                                    height: 5px; background: MaterialPalette.outline-variant; border-radius: 3px;
+                                    Rectangle { x: root.rtl ? parent.width - self.width : 0px; width: parent.width * clamp(item.progress, 0, 1); height: parent.height; background: MaterialPalette.primary; border-radius: 3px; }
+                                }
+                                if item.offered: HorizontalLayout {
+                                    spacing: 8px;
+                                    Button { enabled: root.ready && !root.preview-visible; text: root.accept-text; clicked => { root.transfer-action(item.id, "accept"); } }
+                                    SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.transfer-action(item.id, "folder"); } }
+                                    QuietButton { enabled: root.ready && !root.preview-visible; text: root.reject-text; clicked => { root.transfer-action(item.id, "reject"); } }
+                                }
+                                if !item.offered: QuietButton { enabled: root.ready && !root.preview-visible; text: root.cancel-text; clicked => { root.transfer-action(item.id, "remove"); } }
+                            }
+                        }
+                    }
                     for item in (root.page == 0 ? root.received-activities : root.sent-activities): Card {
                         VerticalLayout {
                             padding: 16px; spacing: 8px;
@@ -590,6 +610,7 @@ export component MainWindow inherits Window {
                     if root.active-transition == 1 { root.preview-action("close", 0); }
                     if root.active-transition == 2 { root.close-reconnect-requested(); }
                     if root.active-transition == 3 { root.dismiss-error-requested(); }
+                    if root.active-transition == 4 { root.document-action("cancel", ""); }
                     return accept;
                 }
                 return reject;
@@ -663,6 +684,39 @@ export component MainWindow inherits Window {
                         Title { text: root.rtl ? "مشکلی پیش آمد" : "Something went wrong"; rtl: root.rtl; }
                         Label { text: root.error-message; rtl: root.rtl; color: MaterialPalette.on-surface; }
                         Button { text: root.close-text; clicked => { root.dismiss-error-requested(); } }
+                    }
+                }
+            }
+            if root.active-transition == 4: Card {
+                x: 20px; y: max(20px, (parent.height - self.height) / 2);
+                width: parent.width - 40px;
+                height: min(parent.height - 40px, 360px);
+                TouchArea {}
+                ScrollView {
+                    width: 100%; height: 100%; viewport-width: self.width;
+                    VerticalLayout {
+                        padding: 20px; spacing: 14px;
+                        HorizontalLayout {
+                            Title { text: root.rtl ? "ادامه سند" : "Resume document"; rtl: root.rtl; }
+                            QuietButton { text: root.close-text; clicked => { root.document-action("cancel", ""); } }
+                        }
+                        Label { text: root.document-title; rtl: root.rtl; color: MaterialPalette.on-surface; }
+                        Label {
+                            text: root.document-kind == "pdf"
+                                ? (root.rtl ? "صفحه‌ای را که به آن رسیده‌اید وارد کنید." : "Enter the page you reached.")
+                                : (root.rtl ? "اسلایدی را که به آن رسیده‌اید وارد کنید." : "Enter the slide you reached.");
+                            rtl: root.rtl;
+                        }
+                        document-position := AppTextField {
+                            text <=> root.document-position-input;
+                            label: root.document-kind == "pdf" ? (root.rtl ? "شماره صفحه" : "Page number") : (root.rtl ? "شماره اسلاید" : "Slide number");
+                            accepted(value) => { root.document-action("send", value); }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Button { text: root.rtl ? "ارسال" : "Send"; clicked => { root.document-action("send", document-position.text); } }
+                            SecondaryButton { text: root.rtl ? "بازگشت" : "Back"; clicked => { root.document-action("cancel", ""); } }
+                        }
                     }
                 }
             }

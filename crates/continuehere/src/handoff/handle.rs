@@ -5,6 +5,7 @@ use crate::{
     models::DeviceId,
 };
 
+use super::{DocumentContinuation, LocalDocumentHandoff};
 use super::{Handoff, HandoffConfig, HandoffController, HandoffError, UrlHandoff, YouTubeHandoff};
 
 const MANAGER_UNAVAILABLE: &str = "handoff manager is not running";
@@ -61,6 +62,19 @@ impl HandoffHandle {
         let config = HandoffConfig::local_video(
             device_id,
             super::LocalVideoHandoff::new(source.into(), playback_position)?,
+        );
+        self.reference.configure(config).map_err(map_handle_error)
+    }
+
+    pub fn configure_document(
+        &self,
+        device_id: DeviceId,
+        source: impl Into<PathBuf>,
+        continuation: DocumentContinuation,
+    ) -> Result<(), HandoffError> {
+        let config = HandoffConfig::local_document(
+            device_id,
+            LocalDocumentHandoff::new(source.into(), continuation)?,
         );
         self.reference.configure(config).map_err(map_handle_error)
     }

@@ -1,6 +1,9 @@
 use minicbor::{Decoder, Encoder};
 
-use crate::models::{Capability, DeviceId, Platform};
+use crate::{
+    models::{Capability, DeviceId, Platform},
+    transport::DocumentTransportKind,
+};
 
 use super::{
     ApplicationHello, HandoffRejection, HandoffTransportPayload, ProtocolEnvelope, ProtocolLimits,
@@ -23,6 +26,7 @@ const TRANSFER_ACCEPTED_KIND: u16 = 13;
 const TRANSFER_REJECTED_KIND: u16 = 14;
 const LOCAL_VIDEO_HANDOFF_KIND: u16 = 15;
 const FOLDER_OFFER_KIND: u16 = 16;
+const LOCAL_DOCUMENT_HANDOFF_KIND: u16 = 17;
 const MAX_IDENTIFIER_SIZE: usize = 64;
 const MAX_DISPLAY_NAME_SIZE: usize = 128;
 const MAX_CAPABILITY_COUNT: usize = 16;
@@ -248,6 +252,27 @@ fn decode_payload(decoder: &mut Decoder<'_>, kind: u16) -> Result<ProtocolMessag
                 },
             })
         }
+        LOCAL_DOCUMENT_HANDOFF_KIND => {
+            require_array(decoder, 4)?;
+            let handoff_id = decode_handoff_id(decoder)?;
+            let transfer_id = decode_identifier(decoder)?;
+            let document_kind = DocumentTransportKind::from_code(
+                decoder.u8().map_err(|_| TransportError::InvalidMessage)?,
+            )
+            .ok_or(TransportError::InvalidMessage)?;
+            let position = decoder.u32().map_err(|_| TransportError::InvalidMessage)?;
+            if position == 0 {
+                return Err(TransportError::InvalidMessage);
+            }
+            Ok(ProtocolMessage::Handoff {
+                handoff_id,
+                payload: HandoffTransportPayload::LocalDocument {
+                    transfer_id,
+                    document_kind,
+                    position,
+                },
+            })
+        }
         HANDOFF_ACCEPTED_KIND => {
             require_array(decoder, 1)?;
             decode_handoff_id(decoder).map(ProtocolMessage::HandoffAccepted)
@@ -453,6 +478,10 @@ fn message_kind(message: &ProtocolMessage) -> u16 {
             payload: HandoffTransportPayload::LocalVideo { .. },
             ..
         } => LOCAL_VIDEO_HANDOFF_KIND,
+        ProtocolMessage::Handoff {
+            payload: HandoffTransportPayload::LocalDocument { .. },
+            ..
+        } => LOCAL_DOCUMENT_HANDOFF_KIND,
         ProtocolMessage::HandoffAccepted(_) => HANDOFF_ACCEPTED_KIND,
         ProtocolMessage::HandoffRejected { .. } => HANDOFF_REJECTED_KIND,
         ProtocolMessage::Transfer {
@@ -502,6 +531,30 @@ fn encode_handoff(
                 .map_err(|_| TransportError::InvalidMessage)?;
             encoder
                 .u64(*playback_position_millis)
+                .map_err(|_| TransportError::InvalidMessage)?;
+        }
+        HandoffTransportPayload::LocalDocument {
+            transfer_id,
+            document_kind,
+            position,
+        } => {
+            if *position == 0 {
+                return Err(TransportError::InvalidMessage);
+            }
+            encoder
+                .array(4)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(handoff_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .bytes(transfer_id)
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u8(document_kind.code())
+                .map_err(|_| TransportError::InvalidMessage)?;
+            encoder
+                .u32(*position)
                 .map_err(|_| TransportError::InvalidMessage)?;
         }
         HandoffTransportPayload::Url(url) => {
@@ -718,6 +771,7 @@ fn encode_capability(capability: Capability) -> u8 {
         Capability::FileTransfer => 3,
         Capability::LocalVideoHandoff => 4,
         Capability::FolderTransfer => 5,
+        Capability::LocalDocumentHandoff => 6,
     }
 }
 
@@ -728,6 +782,7 @@ fn decode_capability(value: u8) -> Result<Capability, TransportError> {
         3 => Ok(Capability::FileTransfer),
         4 => Ok(Capability::LocalVideoHandoff),
         5 => Ok(Capability::FolderTransfer),
+        6 => Ok(Capability::LocalDocumentHandoff),
         _ => Err(TransportError::InvalidMessage),
     }
 }
@@ -737,8 +792,8 @@ mod tests {
     use crate::models::{DeviceId, LocalDeviceIdentity, Platform};
 
     use super::{
-        ApplicationHello, HandoffTransportPayload, ProtocolEnvelope, ProtocolMessage,
-        TransferTransportMessage, decode, encode,
+        ApplicationHello, DocumentTransportKind, HandoffTransportPayload, ProtocolEnvelope,
+        ProtocolMessage, TransferTransportMessage, decode, encode,
     };
 
     #[test]
@@ -885,6 +940,72 @@ mod tests {
             .unwrap()
             .u64(0)
             .unwrap();
+        assert!(decode(&encoder.into_writer()).is_err());
+    }
+
+    #[test]
+    fn document_handoff_round_trip_preserves_kind_and_position() {
+        let envelope = ProtocolEnvelope::handoff(
+            7,
+            [3; 16],
+            HandoffTransportPayload::LocalDocument {
+                transfer_id: [4; 16],
+                document_kind: DocumentTransportKind::Pdf,
+                position: 17,
+            },
+        )
+        .expect("document handoff should be valid");
+        let bytes = encode(&envelope).expect("document handoff should encode");
+        let decoded = decode(&bytes).expect("document handoff should decode");
+
+        assert!(matches!(decoded.message(), ProtocolMessage::Handoff {
+            handoff_id,
+            payload: HandoffTransportPayload::LocalDocument {
+                transfer_id,
+                document_kind: DocumentTransportKind::Pdf,
+                position: 17,
+            },
+        } if handoff_id == &[3; 16] && transfer_id == &[4; 16]));
+        assert_eq!(encode(&decoded).expect("handoff should re-encode"), bytes);
+    }
+
+    #[test]
+    fn document_handoff_rejects_zero_position() {
+        let envelope = ProtocolEnvelope::handoff(
+            8,
+            [3; 16],
+            HandoffTransportPayload::LocalDocument {
+                transfer_id: [4; 16],
+                document_kind: DocumentTransportKind::PowerPoint,
+                position: 0,
+            },
+        )
+        .expect("document handoff envelope should be valid");
+
+        assert!(encode(&envelope).is_err());
+    }
+
+    #[test]
+    fn document_handoff_rejects_an_unknown_kind() {
+        let mut encoder = minicbor::Encoder::new(Vec::new());
+        encoder
+            .array(3)
+            .unwrap()
+            .u16(super::LOCAL_DOCUMENT_HANDOFF_KIND)
+            .unwrap()
+            .u64(1)
+            .unwrap()
+            .array(4)
+            .unwrap()
+            .bytes(&[1; 16])
+            .unwrap()
+            .bytes(&[2; 16])
+            .unwrap()
+            .u8(3)
+            .unwrap()
+            .u32(1)
+            .unwrap();
+
         assert!(decode(&encoder.into_writer()).is_err());
     }
 

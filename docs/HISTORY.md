@@ -16,17 +16,17 @@ are ignored, so receiving a chunk does not write the history file.
 
 An activity keeps the stable peer ID and a display-name/platform snapshot.
 Connection sessions receive their own IDs; operations reference the current
-session when available. A local-video handoff absorbs its related file record
-and preserves the separate file-completion timestamp and playback position.
-A verified incoming file can briefly appear on its own before the associated
-local-video handoff arrives and groups it.
+session when available. A local-video or resumable-document handoff absorbs its
+related file record and preserves the separate file-completion timestamp plus
+its playback, page, or slide position. A verified incoming file can briefly
+appear on its own before the associated transfer-backed handoff groups it.
 
 Timestamps are this installation's observed UTC Unix milliseconds. The client
 renders their full local date, time, milliseconds, and UTC offset. A connection
 end means the local Transport observed removal, whether caused by peer closure,
 a local disconnect, revocation, or shutdown. It is not proof of the exact remote
 socket-close time. File completion and activity completion are distinct: a
-local-video file may finish before its handoff acknowledgement. Delivered means
+a transfer-backed file may finish before its handoff acknowledgement. Delivered means
 the remote Handoff accepted the content, not that someone opened or played it.
 An unfinished record restored after an unexpected exit is Interrupted, with no
 invented end or disconnect time.
@@ -107,7 +107,7 @@ root to repeat the complete local suite. Desktop interaction acceptance remains
 tracked separately.
 
 Desktop acceptance should cover two different installations: create traffic,
-disconnect while viewing Transfers/Receive, observe the History navigation badge,
+disconnect while viewing Receive, observe the History navigation badge,
 open History and confirm the navigation badge clears while the correct device
 remains marked, then open that device and confirm its badge clears. Repeat with
 two peers to verify their unread state stays independent. Check restart history,

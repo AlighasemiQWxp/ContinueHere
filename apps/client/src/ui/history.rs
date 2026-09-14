@@ -81,10 +81,14 @@ impl HistoryUiController {
                     return Err("This activity cannot be opened.".into());
                 }
                 if let Some(path) = item.file_path() {
-                    window.invoke_open_file(
-                        path.to_string_lossy().as_ref().into(),
-                        item.position_millis().to_string().into(),
-                    );
+                    if let Some(continuation) = item.document_continuation() {
+                        crate::platform::open_document(path, continuation)?;
+                    } else {
+                        window.invoke_open_file(
+                            path.to_string_lossy().as_ref().into(),
+                            item.position_millis().to_string().into(),
+                        );
+                    }
                 } else if let Some(url) = item.url() {
                     crate::platform::open_url(url)?;
                 }
@@ -152,6 +156,7 @@ impl HistoryUiController {
                 .filter(|item| {
                     item.direction() == ActivityDirection::Incoming
                         && item.kind() != ActivityKind::Session
+                        && item.status() != ActivityStatus::Active
                 })
                 .take(100)
                 .map(|item| activity_row(item, &self.core, rtl))
@@ -274,6 +279,15 @@ fn activity_row(item: &Activity, core: &ContinueHere, rtl: bool) -> ContentRow {
     }
     if item.retry_of().is_some() {
         detail.push_str(text(rtl, "\nRetry attempt", "\nتلاش دوباره"));
+    }
+    if let Some(continuation) = item.document_continuation() {
+        let (label, position) = match continuation {
+            continuehere::DocumentContinuation::PdfPage(page) => (text(rtl, "Page", "صفحه"), page),
+            continuehere::DocumentContinuation::PowerPointSlide(slide) => {
+                (text(rtl, "Slide", "اسلاید"), slide)
+            }
+        };
+        detail.push_str(&format!("\n{label}: {position}"));
     }
     if let Some(failure) = item.failure() {
         detail.push_str(&format!("\n{failure}"));

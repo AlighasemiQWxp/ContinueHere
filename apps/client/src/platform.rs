@@ -11,6 +11,8 @@ pub(super) enum SelectionKind {
     Media,
     Image,
     Video,
+    Pdf,
+    PowerPoint,
 }
 
 impl SelectionKind {
@@ -21,6 +23,8 @@ impl SelectionKind {
             "media" => Ok(Self::Media),
             "image" => Ok(Self::Image),
             "video" => Ok(Self::Video),
+            "pdf" => Ok(Self::Pdf),
+            "powerpoint" => Ok(Self::PowerPoint),
             _ => Err("Unknown content category.".into()),
         }
     }
@@ -46,6 +50,8 @@ pub(super) fn select_file(kind: SelectionKind) -> PlatformResult<Option<PathBuf>
                     "bmp", "mp3", "wav", "flac", "ogg", "m4a", "aac",
                 ],
             ),
+            SelectionKind::Pdf => dialog.add_filter("PDF", &["pdf"]),
+            SelectionKind::PowerPoint => dialog.add_filter("PowerPoint", &["ppt", "pptx"]),
         };
         Ok(dialog.pick_file())
     }
@@ -82,6 +88,101 @@ pub(super) fn open_file(path: &std::path::Path) -> PlatformResult<()> {
     }
     open::that(path)?;
     Ok(())
+}
+
+pub(super) fn open_document(
+    path: &std::path::Path,
+    continuation: continuehere::DocumentContinuation,
+) -> PlatformResult<()> {
+    if unsafe_file(path) {
+        return Err("Executable and script files cannot be opened here.".into());
+    }
+    let supported = match continuation {
+        continuehere::DocumentContinuation::PdfPage(_) => extension(path) == "pdf",
+        continuehere::DocumentContinuation::PowerPointSlide(_) => {
+            matches!(extension(path).as_str(), "ppt" | "pptx")
+        }
+    };
+    let metadata = path.symlink_metadata()?;
+    if !path.is_absolute() || !supported || !metadata.file_type().is_file() || metadata.len() == 0 {
+        return Err("This document is missing or no longer matches its saved type.".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        open_document_windows(path, continuation)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (path, continuation);
+        Err("Resumable document opening is currently supported on Windows only.".into())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn open_document_windows(
+    path: &std::path::Path,
+    continuation: continuehere::DocumentContinuation,
+) -> PlatformResult<()> {
+    match continuation {
+        continuehere::DocumentContinuation::PdfPage(page) => open_pdf(path, page),
+        continuehere::DocumentContinuation::PowerPointSlide(slide) => open_powerpoint(path, slide),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn open_pdf(path: &std::path::Path, page: u32) -> PlatformResult<()> {
+    const ACROBAT_SCRIPT: &str = "$ErrorActionPreference='Stop';$app=New-Object -ComObject AcroExch.App;$document=New-Object -ComObject AcroExch.AVDoc;if(-not $document.Open($env:CONTINUEHERE_DOCUMENT_PATH,'')){exit 2};$app.Show();$document.BringToFront();$document.GetAVPageView().Goto(([int]$env:CONTINUEHERE_DOCUMENT_POSITION)-1)";
+    if run_document_script(ACROBAT_SCRIPT, path, page)?.success() {
+        return Ok(());
+    }
+    let edge = ["ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"]
+        .into_iter()
+        .filter_map(env::var_os)
+        .map(PathBuf::from)
+        .map(|root| root.join("Microsoft/Edge/Application/msedge.exe"))
+        .find(|candidate| candidate.is_file())
+        .ok_or("Microsoft Edge is required to open a PDF at a specific page.")?;
+    let mut url = url::Url::from_file_path(path)
+        .map_err(|_| "The PDF path cannot be converted to a local file URL.")?;
+    url.set_fragment(Some(&format!("page={page}")));
+    std::process::Command::new(edge)
+        .arg("--new-window")
+        .arg(url.as_str())
+        .spawn()?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn open_powerpoint(path: &std::path::Path, slide: u32) -> PlatformResult<()> {
+    const SCRIPT: &str = "$ErrorActionPreference='Stop';$app=New-Object -ComObject PowerPoint.Application;$app.Visible=$true;$deck=$app.Presentations.Open($env:CONTINUEHERE_DOCUMENT_PATH,$false,$false,$true);$deck.Windows.Item(1).View.GotoSlide([int]$env:CONTINUEHERE_DOCUMENT_POSITION);$deck.Windows.Item(1).Activate()";
+    let status = run_document_script(SCRIPT, path, slide)?;
+    if !status.success() {
+        return Err(
+            "Desktop PowerPoint could not open this presentation at the requested slide.".into(),
+        );
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn run_document_script(
+    script: &str,
+    path: &std::path::Path,
+    position: u32,
+) -> PlatformResult<std::process::ExitStatus> {
+    Ok(std::process::Command::new("powershell.exe")
+        .args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            script,
+        ])
+        .env("CONTINUEHERE_DOCUMENT_PATH", path)
+        .env("CONTINUEHERE_DOCUMENT_POSITION", position.to_string())
+        .status()?)
 }
 
 pub(super) fn unsafe_file(path: &std::path::Path) -> bool {

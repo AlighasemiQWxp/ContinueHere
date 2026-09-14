@@ -49,6 +49,7 @@ The architectural foundation is complete. It currently provides:
 - File-transfer progress, state, cancellation, and cleanup delegate events
 - Local-video handoffs that reuse file transfer and preserve millisecond playback positions
 - Receiver-owned verified video paths with explicit file acceptance and capability checks
+- Resumable PDF and PowerPoint handoffs that preserve a one-based page or slide
 - Native Rust/Slint Windows client with Send, Receive, History, and Settings, direct core ownership,
   pairing, handoffs, transfers, media previews, settings, and activity history
   (Windows interaction acceptance pending)
@@ -57,7 +58,8 @@ The architectural foundation is complete. It currently provides:
   content choices, save confirmation SnackBar, theme/language radio buttons, and
   app brightness
 - Persisted Purple, Red, and Green appearance styles and a native Save Directory picker
-- File, Folder, Media, Image, and Video selection with native category filters
+- File, Folder, Media, Image, Video, PDF, and PowerPoint selection with native category filters
+- Single-feed Receive activity with contextual approval and live transfer progress
 - Bounded folder transfer preserving nested files and empty directories
 - LAN address display, automatic pairing readiness, verified connection-endpoint
   exchange, automatic post-pairing connection, and trusted reconnect hints
@@ -70,7 +72,8 @@ MVP, Phase 12 adds validated YouTube handoffs with playback position, and Phase
 13 provides validated streaming file transfer. Phase 14 provides validated
 local-video handoff with playback position. The native Rust/Slint Windows
 interface provides contextual file opening, image and video previews, responsive
-English/Persian layouts, and direct ownership of the reusable Rust core.
+English/Persian layouts, resumable document handoffs, and direct ownership of
+the reusable Rust core.
 Additional platforms and new features follow separately, one at a time.
 
 Discovery candidates are only untrusted connection hints. Application data must
@@ -106,6 +109,26 @@ Empty files, directories, and symbolic-link sources are rejected. Playback
 starts through the application interface only after the complete file arrives.
 The client does not add playback during download, transcoding, or partial transfer
 resume. Phase 16 adds persistent history and explicit retries from the beginning.
+
+## Resumable documents
+
+PDF and PowerPoint use the same Handoff and FileTransfer lifecycle as local
+video. Configure one typed page or slide and keep the Handoff Handle alive while
+the receiver explicitly accepts and verifies the file:
+
+```rust
+let continuation = DocumentContinuation::pdf_page(17)?;
+let handle = app.handoff().get_handle("continue-document")?;
+handle.configure_document(device_id, document_path, continuation)?;
+handle.use_handle()?;
+```
+
+The receiver publishes `HandoffPayload::LocalDocument` only after resolving the
+verified local file from the authenticated sender's transfer ID. Receipt never
+opens a document automatically. The native client opens supported PDFs at their
+page through Acrobat or Microsoft Edge and PowerPoint files at their slide
+through desktop PowerPoint. Missing or incompatible viewers produce a visible
+error instead of claiming that continuation succeeded.
 
 ## Activity history
 

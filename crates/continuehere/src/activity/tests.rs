@@ -7,8 +7,9 @@ use super::{
 };
 use crate::{
     handoff::{
-        Handoff, HandoffChange, HandoffConfig, HandoffId, HandoffPayload, IncomingHandoff,
-        IncomingHandoffChange, LocalVideoHandoff, UrlHandoff,
+        DocumentContinuation, Handoff, HandoffChange, HandoffConfig, HandoffId, HandoffPayload,
+        IncomingHandoff, IncomingHandoffChange, LocalDocumentHandoff, LocalVideoHandoff,
+        UrlHandoff,
     },
     models::{DeviceId, Platform, ProtocolVersion},
     pairing::TrustedDeviceRegistry,
@@ -143,6 +144,41 @@ fn incoming_video_groups_its_file_and_preserves_file_completion() {
     assert_eq!(video.file_completed_at(), completed);
     assert_eq!(video.position_millis(), 42_000);
     assert!(!video.can_retry());
+}
+
+#[test]
+fn incoming_document_groups_its_file_and_persists_its_page() {
+    let directory = tempdir().expect("directory should exist");
+    let history = controller(directory.path());
+    let path = directory.path().join("guide.pdf");
+    fs::write(&path, b"test").expect("file should exist");
+    let mut file = incoming_file(&path);
+    history.transfer(FileTransferChange::Added(file.clone()));
+    file.set_state(FileTransferState::Completed);
+    history.transfer(FileTransferChange::Updated(file.clone()));
+    let document = LocalDocumentHandoff::received(
+        &file,
+        DocumentContinuation::pdf_page(17).expect("page should be valid"),
+    )
+    .expect("document should be valid");
+    let handoff = IncomingHandoff::new(
+        HandoffId::new(),
+        peer(),
+        HandoffPayload::LocalDocument(document),
+    );
+    history.incoming(IncomingHandoffChange::Added(handoff));
+    history.transfer(FileTransferChange::Removed(file));
+    history.stop().expect("history should stop");
+
+    let restored = controller(directory.path());
+    let snapshot = restored.snapshot().expect("snapshot should exist");
+    assert_eq!(snapshot.entries().len(), 1);
+    let document = &snapshot.entries()[0];
+    assert_eq!(document.kind(), ActivityKind::Pdf);
+    assert_eq!(
+        document.document_continuation(),
+        DocumentContinuation::pdf_page(17).ok()
+    );
 }
 
 #[test]

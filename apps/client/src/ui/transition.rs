@@ -12,6 +12,7 @@ pub(super) enum UiTransition {
     Preview = 1,
     Reconnect = 2,
     Error = 3,
+    Document = 4,
 }
 
 struct UiTransitionOperation {

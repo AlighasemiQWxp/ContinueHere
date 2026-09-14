@@ -1,4 +1,5 @@
 mod controller;
+mod document;
 mod error;
 mod event;
 mod handle;
@@ -13,6 +14,7 @@ mod local_video_tests;
 mod url;
 mod youtube;
 
+pub use document::{DocumentContinuation, LocalDocumentHandoff};
 pub use error::HandoffError;
 pub use event::{
     HandoffChangedDelegate, HandoffChangedSubscription, IncomingHandoffChangedDelegate,

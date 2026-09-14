@@ -349,6 +349,30 @@ fails or cancellation arrives afterwards. File completion and player execution
 are separate facts: acknowledgement certifies only acceptance of the ready
 handoff record. Playback positions and handoff records remain in memory.
 
+## Resumable document handoff
+
+Phase 4B adds `LocalDocumentHandoff` capability code 6 and handoff message kind
+17. The deterministic CBOR payload is an array of exactly four values: a
+16-byte handoff ID, a 16-byte transfer ID, a document-kind code, and an unsigned
+32-bit one-based continuation number. Document kind 1 is PDF and kind 2 is
+PowerPoint. A PDF requires a `.pdf` transfer; PowerPoint requires `.ppt` or
+`.pptx`. Zero and unknown document-kind codes are rejected.
+
+Support is advertised only while both Handoff and FileTransfer handlers are
+available. The sender checks both negotiated capabilities before creating the
+owned transfer. The complete file follows the existing explicit offer,
+acceptance, bounded streaming, digest verification, and no-overwrite commit
+contract. Only after completion does Handoff send the transfer identifier and
+continuation metadata.
+
+The receiver binds the identifier to a completed incoming transfer from the
+authenticated sender, validates the committed extension against the document
+kind, and only then commits the incoming Handoff. The message never contains a
+filesystem path, shell command, viewer executable, or viewer argument. Exact
+duplicate handling, bounded inbox limits, cancellation behavior, and retained
+receiver-file ownership match local-video handoff. Receipt never launches the
+document automatically.
+
 ## Persistence boundaries
 
 ### Folder extension and connection lifetime
@@ -432,6 +456,7 @@ sockets, discover peers, pair devices, or claim that transfers are secure.
 - Phases 11 and 12 implement typed URL and playback-position handoffs.
 - Phase 13 implements explicitly accepted, bounded streaming file transfer.
 - Phase 14 links verified file delivery to a local-video playback position.
+- Phase 4B links verified PDF and PowerPoint delivery to a typed page or slide.
 - Later phases add typed messages and limits without weakening these contracts.
 
 Any later change that weakens authentication, confidentiality, integrity,

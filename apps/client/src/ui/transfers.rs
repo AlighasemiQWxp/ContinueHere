@@ -91,6 +91,16 @@ impl TransferUiController {
         let Some(path) = crate::platform::select_file(kind)? else {
             return Ok(());
         };
+        if kind == crate::platform::SelectionKind::File
+            && matches!(
+                crate::platform::extension(&path).as_str(),
+                "pdf" | "ppt" | "pptx"
+            )
+        {
+            return Err(
+                "Use the PDF or PowerPoint choice to preserve your continuation point.".into(),
+            );
+        }
         self.next_handle += 1;
         let handle = self
             .core
@@ -148,24 +158,36 @@ impl TransferUiController {
                 let path = transfer
                     .destination()
                     .ok_or("The received file is unavailable.")?;
-                let position = self
-                    .core
-                    .handoff()
-                    .incoming()
-                    .iter()
-                    .find_map(|handoff| {
-                        if let continuehere::HandoffPayload::LocalVideo(video) = handoff.payload()
-                            && video.transfer_id() == Some(transfer.id())
+                let continuation = self.core.handoff().incoming().iter().find_map(|handoff| {
+                    match handoff.payload() {
+                        continuehere::HandoffPayload::LocalVideo(video)
+                            if video.transfer_id() == Some(transfer.id()) =>
                         {
-                            return Some(video.playback_position().as_millis());
+                            Some((None, video.playback_position().as_millis()))
                         }
-                        None
-                    })
-                    .unwrap_or(0);
-                window.invoke_open_file(
-                    path.to_string_lossy().as_ref().into(),
-                    position.to_string().into(),
-                );
+                        continuehere::HandoffPayload::LocalDocument(document)
+                            if document.transfer_id() == Some(transfer.id()) =>
+                        {
+                            Some((Some(document.continuation()), 0))
+                        }
+                        _ => None,
+                    }
+                });
+                if let Some((Some(continuation), _)) = continuation {
+                    crate::platform::open_document(path, continuation)?;
+                } else {
+                    if matches!(
+                        crate::platform::extension(path).as_str(),
+                        "pdf" | "ppt" | "pptx"
+                    ) {
+                        return Err("The document is verified, but its continuation metadata is not ready yet.".into());
+                    }
+                    let position = continuation.map_or(0, |(_, position)| position);
+                    window.invoke_open_file(
+                        path.to_string_lossy().as_ref().into(),
+                        position.to_string().into(),
+                    );
+                }
             }
             _ => return Err("Unknown transfer action.".into()),
         }
@@ -243,7 +265,10 @@ impl TransferUiController {
             })
             .collect();
         window.set_incoming_transfers(model(
-            rows.iter().filter(|item| item.incoming).cloned().collect(),
+            rows.iter()
+                .filter(|item| item.incoming && item.active)
+                .cloned()
+                .collect(),
         ));
         window.set_outgoing_transfers(model(
             rows.iter().filter(|item| !item.incoming).cloned().collect(),

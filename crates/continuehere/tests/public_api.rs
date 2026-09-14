@@ -43,6 +43,16 @@ fn shared_models_are_available_through_the_public_api() {
     );
 }
 
+#[test]
+fn document_continuations_are_available_through_the_public_api() {
+    let page = continuehere::DocumentContinuation::pdf_page(17).expect("PDF page should be valid");
+    let slide = continuehere::DocumentContinuation::powerpoint_slide(4)
+        .expect("PowerPoint slide should be valid");
+
+    assert_eq!(page.position(), 17);
+    assert_eq!(slide.position(), 4);
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn builder_exposes_the_core_managers() {
     let project = tempdir().expect("temporary project directory should be available");

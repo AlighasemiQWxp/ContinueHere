@@ -1,23 +1,36 @@
 use std::{
+    path::Path,
     sync::mpsc,
     time::{Duration, Instant},
 };
 
 use crate::{
-    models::DeviceId,
+    models::{Capability, DeviceId},
     transfer::{
         FileTransferChangedDelegate, FileTransferFailure, FileTransferHandle, FileTransferState,
     },
-    transport::HandoffTransportPayload,
+    transport::{DocumentTransportKind, HandoffTransportPayload},
 };
 
 use super::{
-    HandoffController, HandoffFailure, HandoffId, LocalVideoHandoff,
+    DocumentContinuation, HandoffController, HandoffFailure, HandoffId, LocalDocumentHandoff,
+    LocalVideoHandoff,
     controller::{OperationCommand, OperationResult, map_transport_error},
 };
 
 const WAKE_INTERVAL: Duration = Duration::from_millis(25);
 const SUPPORT_TIMEOUT: Duration = Duration::from_secs(15);
+
+struct FilePreparation<'a> {
+    controller: &'a HandoffController,
+    handle_identifier: &'a str,
+    handoff_id: &'a HandoffId,
+    device_id: DeviceId,
+    capability: Capability,
+    handle_prefix: &'a str,
+    source: &'a Path,
+    commands: &'a mpsc::Receiver<OperationCommand>,
+}
 
 pub(super) fn prepare(
     controller: &HandoffController,
@@ -27,13 +40,69 @@ pub(super) fn prepare(
     video: LocalVideoHandoff,
     commands: &mpsc::Receiver<OperationCommand>,
 ) -> Result<(FileTransferHandle, HandoffTransportPayload), OperationResult> {
-    let response = controller
+    let position = video.playback_position().as_millis();
+    prepare_file(
+        FilePreparation {
+            controller,
+            handle_identifier,
+            handoff_id,
+            device_id,
+            capability: Capability::LocalVideoHandoff,
+            handle_prefix: "local-video",
+            source: video.file_path(),
+            commands,
+        },
+        move |transfer_id| HandoffTransportPayload::LocalVideo {
+            transfer_id,
+            playback_position_millis: position,
+        },
+    )
+}
+
+pub(super) fn prepare_document(
+    controller: &HandoffController,
+    handle_identifier: &str,
+    handoff_id: &HandoffId,
+    device_id: DeviceId,
+    document: LocalDocumentHandoff,
+    commands: &mpsc::Receiver<OperationCommand>,
+) -> Result<(FileTransferHandle, HandoffTransportPayload), OperationResult> {
+    let continuation = document.continuation();
+    let document_kind = match continuation {
+        DocumentContinuation::PdfPage(_) => DocumentTransportKind::Pdf,
+        DocumentContinuation::PowerPointSlide(_) => DocumentTransportKind::PowerPoint,
+    };
+    prepare_file(
+        FilePreparation {
+            controller,
+            handle_identifier,
+            handoff_id,
+            device_id,
+            capability: Capability::LocalDocumentHandoff,
+            handle_prefix: "local-document",
+            source: document.file_path(),
+            commands,
+        },
+        move |transfer_id| HandoffTransportPayload::LocalDocument {
+            transfer_id,
+            document_kind,
+            position: continuation.position(),
+        },
+    )
+}
+
+fn prepare_file(
+    preparation: FilePreparation<'_>,
+    payload: impl FnOnce([u8; 16]) -> HandoffTransportPayload,
+) -> Result<(FileTransferHandle, HandoffTransportPayload), OperationResult> {
+    let response = preparation
+        .controller
         .transport_capability()
-        .check_local_video_support(device_id.clone())
+        .check_transfer_backed_support(preparation.device_id.clone(), preparation.capability)
         .map_err(map_transport_error)?;
     let started = Instant::now();
     loop {
-        check_cancelled(commands)?;
+        check_cancelled(preparation.commands)?;
         match response.try_recv() {
             Ok(result) => {
                 result.map_err(map_transport_error)?;
@@ -47,39 +116,39 @@ pub(super) fn prepare(
         if started.elapsed() >= SUPPORT_TIMEOUT {
             return Err(OperationResult::Failed(HandoffFailure::TimedOut));
         }
-        wait_for_cancel(commands)?;
+        wait_for_cancel(preparation.commands)?;
     }
 
-    let transfers = controller.transfer_capability();
+    let transfers = preparation.controller.transfer_capability();
     let (wake, changed) = mpsc::sync_channel(1);
     let _subscription = transfers.on_changed(FileTransferChangedDelegate::new(move |_| {
         let _ = wake.try_send(());
     }));
     let handle = transfers
-        .get_handle(&format!("local-video-{}", handoff_id.as_str()))
+        .get_handle(&format!(
+            "{}-{}",
+            preparation.handle_prefix,
+            preparation.handoff_id.as_str()
+        ))
         .map_err(|_| OperationResult::Failed(HandoffFailure::FileTransfer))?;
     handle
-        .configure(device_id, video.file_path())
+        .configure(preparation.device_id, preparation.source)
         .map_err(|_| OperationResult::Failed(HandoffFailure::Invalid))?;
-    check_cancelled(commands)?;
+    check_cancelled(preparation.commands)?;
     handle
         .use_handle()
         .map_err(|_| OperationResult::Failed(HandoffFailure::FileTransfer))?;
     let mut refresh = true;
     loop {
-        check_cancelled(commands)?;
+        check_cancelled(preparation.commands)?;
         if refresh {
             let transfer = handle.transfer().ok_or(OperationResult::Cancelled)?;
-            controller.update_transfer(handle_identifier, transfer.clone());
+            preparation
+                .controller
+                .update_transfer(preparation.handle_identifier, transfer.clone());
             match transfer.state() {
                 FileTransferState::Completed => {
-                    return Ok((
-                        handle,
-                        HandoffTransportPayload::LocalVideo {
-                            transfer_id: transfer.id().bytes(),
-                            playback_position_millis: video.playback_position().as_millis(),
-                        },
-                    ));
+                    return Ok((handle, payload(transfer.id().bytes())));
                 }
                 FileTransferState::Rejected => {
                     return Err(OperationResult::Rejected(map_failure(transfer.failure())));
@@ -91,7 +160,7 @@ pub(super) fn prepare(
                 _ => {}
             }
         }
-        wait_for_cancel(commands)?;
+        wait_for_cancel(preparation.commands)?;
         refresh = changed.try_recv().is_ok();
     }
 }

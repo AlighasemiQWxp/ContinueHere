@@ -152,13 +152,18 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
     reconnect, and recoverable errors
   - Category-filtered native pickers and bounded folder transfer through FileTransfer
   - YouTube link plus entered position; local-video handoff from the in-app player
+  - Resumable PDF and PowerPoint handoffs with page or slide metadata, a
+    foreground continuation dialog, and history-aware open and retry actions
+  - One Receive recent-activity feed, with pending offers and live progress
+    shown contextually instead of duplicate Handoff and Transfer sections
   - The current connection workflow and simplified presentation passed formatting,
     checks, linting, tests, and the release build on September 11, 2026; pairing
     passed manual two-computer acceptance, and the simplified interface passed
     visual acceptance on September 12, 2026; full transfer acceptance remains
     pending
-  - Automatic browser playback capture, streaming while downloading, partial resume,
-    offline queues, installers, and additional platforms remain future work
+  - Automatic browser playback capture, streaming while downloading, partial file
+    resume, embedded document rendering, offline queues, installers, and additional
+    platforms remain future work
 - [ ] 17. Android application
 - [ ] 18. Linux, macOS, and iOS support, one platform at a time
 - [ ] 19. Advanced application and operating-system integrations

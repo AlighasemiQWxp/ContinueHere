@@ -13,6 +13,11 @@ pub(crate) enum HandoffTransportPayload {
         transfer_id: [u8; 16],
         playback_position_millis: u64,
     },
+    LocalDocument {
+        transfer_id: [u8; 16],
+        document_kind: DocumentTransportKind,
+        position: u32,
+    },
     YouTube {
         video_id: String,
         playback_position_millis: u64,
@@ -24,7 +29,31 @@ impl HandoffTransportPayload {
         match self {
             Self::Url(_) => Capability::UrlHandoff,
             Self::LocalVideo { .. } => Capability::LocalVideoHandoff,
+            Self::LocalDocument { .. } => Capability::LocalDocumentHandoff,
             Self::YouTube { .. } => Capability::PlaybackPositionHandoff,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DocumentTransportKind {
+    Pdf,
+    PowerPoint,
+}
+
+impl DocumentTransportKind {
+    pub(crate) const fn code(self) -> u8 {
+        match self {
+            Self::Pdf => 1,
+            Self::PowerPoint => 2,
+        }
+    }
+
+    pub(crate) const fn from_code(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::Pdf),
+            2 => Some(Self::PowerPoint),
+            _ => None,
         }
     }
 }
@@ -116,17 +145,19 @@ impl HandoffTransportCapability {
             .unwrap_or(false)
     }
 
-    pub(crate) fn check_local_video_support(
+    pub(crate) fn check_transfer_backed_support(
         &self,
         device_id: DeviceId,
+        capability: Capability,
     ) -> Result<standard_mpsc::Receiver<Result<(), TransportError>>, TransportError> {
         let commands = lock(&self.inner.commands)?
             .clone()
             .ok_or(TransportError::ManagerUnavailable)?;
         let (response, result) = standard_mpsc::channel();
         commands
-            .try_send(SupervisorCommand::CheckLocalVideoSupport {
+            .try_send(SupervisorCommand::CheckTransferBackedHandoffSupport {
                 device_id,
+                capability,
                 response,
             })
             .map_err(|_| TransportError::CommandUnavailable)?;

@@ -29,7 +29,7 @@ impl UiManager {
         let preview = PreviewUiController::start(window, Rc::clone(&transitions));
         let history = HistoryUiController::start(Rc::clone(&core), window);
         let pairing = PairingUiController::start(Rc::clone(&core), window);
-        let handoff = HandoffUiController::start(Rc::clone(&core), window);
+        let handoff = HandoffUiController::start(Rc::clone(&core), window, Rc::clone(&transitions));
         let transfers = TransferUiController::start(Rc::clone(&core), window);
         let devices = DevicesUiController::start(Rc::clone(&core), window, Rc::clone(&transitions));
         let settings = SettingsUiController::start(Rc::clone(&core), window);

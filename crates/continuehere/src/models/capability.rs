@@ -6,4 +6,5 @@ pub enum Capability {
     FileTransfer,
     LocalVideoHandoff,
     FolderTransfer,
+    LocalDocumentHandoff,
 }

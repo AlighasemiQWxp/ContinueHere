@@ -23,6 +23,8 @@ pub enum ActivityKind {
     YouTube,
     File,
     LocalVideo,
+    Pdf,
+    PowerPoint,
     Session,
 }
 
@@ -141,6 +143,16 @@ impl Activity {
     }
     pub fn position_millis(&self) -> u64 {
         self.position_millis
+    }
+    pub fn document_continuation(&self) -> Option<crate::handoff::DocumentContinuation> {
+        let position = u32::try_from(self.position_millis).ok()?;
+        match self.kind {
+            ActivityKind::Pdf => crate::handoff::DocumentContinuation::pdf_page(position).ok(),
+            ActivityKind::PowerPoint => {
+                crate::handoff::DocumentContinuation::powerpoint_slide(position).ok()
+            }
+            _ => None,
+        }
     }
     pub fn retry_of(&self) -> Option<&str> {
         self.retry_of.as_deref()

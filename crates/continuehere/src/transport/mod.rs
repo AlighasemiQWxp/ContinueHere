@@ -21,8 +21,8 @@ pub use model::{AuthenticatedConnection, ConnectionChange, ConnectionDirection};
 
 pub(crate) use event::ConnectionChangedEvent;
 pub(crate) use handoff_transport::{
-    HandoffDisposition, HandoffRejection, HandoffTransportCapability, HandoffTransportPayload,
-    InboundHandoff, InboundHandoffHandler,
+    DocumentTransportKind, HandoffDisposition, HandoffRejection, HandoffTransportCapability,
+    HandoffTransportPayload, InboundHandoff, InboundHandoffHandler,
 };
 
 pub(crate) use channel::PairingChannel;
