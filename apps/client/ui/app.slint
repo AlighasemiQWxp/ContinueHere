@@ -138,6 +138,7 @@ export component MainWindow inherits Window {
     callback pairing-connect-requested(string, string);
     callback poll-connection-requested();
     callback pairing-action(string, string);
+    callback content-selection-completed(int);
     callback send-handoff(string, string, string, string);
     callback send-file(string, string);
     callback choose-document(string, string);

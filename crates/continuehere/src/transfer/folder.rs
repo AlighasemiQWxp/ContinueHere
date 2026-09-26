@@ -5,7 +5,10 @@ use std::{
     path::Path,
 };
 
-use super::model::{MAX_FILE_SIZE, TRANSFER_CHUNK_SIZE, validate_file_name};
+use super::{
+    commit::commit_file,
+    model::{MAX_FILE_SIZE, TRANSFER_CHUNK_SIZE, validate_file_name},
+};
 
 const MAGIC: &[u8; 8] = b"CHFOLD01";
 const MAX_ENTRIES: usize = 4096;
@@ -155,7 +158,7 @@ pub(super) fn unpack(
             if entry.directory {
                 fs::create_dir(&path)?;
             } else {
-                fs::hard_link(staging.path().join(&entry.path), path)?;
+                commit_file(&staging.path().join(&entry.path), &path)?;
             }
         }
         check_cancel(&cancelled)

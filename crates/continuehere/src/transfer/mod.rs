@@ -1,4 +1,5 @@
 mod capability;
+mod commit;
 mod controller;
 
 pub(crate) use capability::FileTransferCapability;

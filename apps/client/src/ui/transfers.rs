@@ -8,6 +8,7 @@ use slint::ComponentHandle;
 
 use super::{
     ContentRow, MainWindow,
+    selection::{ContentSelectionUiController, selected_path},
     support::{EventTarget, UiResult, model, notify, show_result, text},
 };
 
@@ -19,7 +20,11 @@ pub(super) struct TransferUiController {
 }
 
 impl TransferUiController {
-    pub(super) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Rc<RefCell<Self>> {
+    pub(super) fn start(
+        core: Rc<ContinueHere>,
+        window: &MainWindow,
+        selection: Rc<RefCell<ContentSelectionUiController>>,
+    ) -> Rc<RefCell<Self>> {
         let target = EventTarget::new(window);
         let changed = core
             .file_transfers()
@@ -48,16 +53,63 @@ impl TransferUiController {
         }));
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
+        let file_selection = Rc::clone(&selection);
         window.on_send_file(move |device, kind| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
-                let result = controller.borrow_mut().send(device.as_str(), kind.as_str());
+                let result = (|| -> UiResult {
+                    let kind = crate::platform::SelectionKind::parse(kind.as_str())?;
+                    let device = controller.borrow().available_device(device.as_str())?;
+                    let selected_controller = Rc::downgrade(&controller);
+                    file_selection
+                        .borrow_mut()
+                        .choose_file(&window, kind, move |window, result| {
+                            let result = selected_path(result).and_then(|path| {
+                                let Some(path) = path else {
+                                    return Ok(());
+                                };
+                                let Some(controller) = selected_controller.upgrade() else {
+                                    return Ok(());
+                                };
+                                controller.borrow_mut().send_selected(device, kind, path)
+                            });
+                            show_result(window, result);
+                        })
+                })();
                 show_result(&window, result);
             }
         });
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
+        let directory_selection = selection;
         window.on_transfer_action(move |id, action| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
+                if action.as_str() == "folder" {
+                    let transfer_id = id.to_string();
+                    let selected_controller = Rc::downgrade(&controller);
+                    let refresh_controller = selected_controller.clone();
+                    let result = directory_selection.borrow_mut().choose_directory(
+                        &window,
+                        move |window, result| {
+                            let result = selected_path(result).and_then(|path| {
+                                let Some(path) = path else {
+                                    return Ok(());
+                                };
+                                let Some(controller) = selected_controller.upgrade() else {
+                                    return Ok(());
+                                };
+                                controller
+                                    .borrow_mut()
+                                    .accept_incoming(transfer_id.as_str(), Some(&path))
+                            });
+                            show_result(window, result);
+                            if let Some(controller) = refresh_controller.upgrade() {
+                                controller.borrow_mut().refresh(window);
+                            }
+                        },
+                    );
+                    show_result(&window, result);
+                    return;
+                }
                 let result = controller
                     .borrow_mut()
                     .act(id.as_str(), action.as_str(), &window);
@@ -76,8 +128,7 @@ impl TransferUiController {
         controller
     }
 
-    fn send(&mut self, device: &str, kind: &str) -> UiResult {
-        let kind = crate::platform::SelectionKind::parse(kind)?;
+    fn available_device(&self, device: &str) -> UiResult<DeviceId> {
         let device = DeviceId::new(device.to_owned())?;
         if !self
             .core
@@ -88,9 +139,15 @@ impl TransferUiController {
         {
             return Err("Connect to the trusted device before sending.".into());
         }
-        let Some(path) = crate::platform::select_file(kind)? else {
-            return Ok(());
-        };
+        Ok(device)
+    }
+
+    fn send_selected(
+        &mut self,
+        device: DeviceId,
+        kind: crate::platform::SelectionKind,
+        path: std::path::PathBuf,
+    ) -> UiResult {
         if kind == crate::platform::SelectionKind::File
             && matches!(
                 crate::platform::extension(&path).as_str(),
@@ -116,6 +173,20 @@ impl TransferUiController {
         Ok(())
     }
 
+    fn accept_incoming(&mut self, id: &str, directory: Option<&std::path::Path>) -> UiResult {
+        let transfer = self
+            .core
+            .file_transfers()
+            .transfers()
+            .into_iter()
+            .find(|item| item.id().as_str() == id)
+            .ok_or("This transfer is unavailable.")?;
+        self.core
+            .file_transfers()
+            .accept_incoming(transfer.id(), directory)?;
+        Ok(())
+    }
+
     fn act(&mut self, id: &str, action: &str, window: &MainWindow) -> UiResult {
         let transfer = self
             .core
@@ -129,14 +200,7 @@ impl TransferUiController {
                 .core
                 .file_transfers()
                 .accept_incoming(transfer.id(), None)?,
-            "folder" => {
-                let Some(path) = crate::platform::select_directory()? else {
-                    return Ok(());
-                };
-                self.core
-                    .file_transfers()
-                    .accept_incoming(transfer.id(), Some(&path))?;
-            }
+            "folder" => return Err("Folder selection did not complete.".into()),
             "reject" => self.core.file_transfers().reject_incoming(transfer.id())?,
             "remove" => {
                 if let Some(index) = self.handles.iter().position(|handle| {

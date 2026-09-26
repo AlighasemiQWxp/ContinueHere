@@ -1,7 +1,9 @@
 # ContinueHere Client
 
-This is the native Rust/Slint application. The current platform is Windows;
-additional platforms and new features follow in separate milestones.
+This is the native Rust/Slint application. Windows is the accepted reference
+platform. The Android port reuses the same Rust core, Slint interface, focused
+controllers, Handles, and application behavior; only operating-system services
+are implemented behind the Android platform boundary.
 
 The implementation includes startup/shutdown, discovery, pairing verification,
 trusted-device connection commands, URL/YouTube/local-video handoffs, file
@@ -30,11 +32,41 @@ page and navigation layers. A transition stays active until its Back, Escape, or
 Close action releases the Handle; application shutdown remains the final cleanup
 safeguard.
 
+Document preparation uses a small internal `PhaseController<P>` composed into
+Handoff's preparation owner. Its phases cover choosing a document and editing
+the page or slide; the core remains responsible for the submitted handoff and
+transfer. Cancelling preparation clears its draft and invalidates late picker
+results. Invalid input or a failed submission leaves the draft available for
+correction. The helper is not applied to Pairing or Transfers in this pilot.
+
+After running the validation script, manually check the document workflow:
+
+- Choose PDF and PowerPoint files, enter a valid page or slide, and send. The
+  dialog should close while the existing handoff continues normally.
+- Enter zero, nonnumeric text, and an overflowing number. Correct the input and
+  retry; the document and dialog should remain available after each error.
+- Cancel the picker, cancel the document dialog with Cancel or Back/Escape, and
+  choose again. No old title, position, or dialog should reappear.
+- Disconnect the destination before submitting. The draft should remain editable
+  after the error. Also check shutdown with a picker or document dialog open,
+  including asynchronous picker completion on Android.
+
+Automated tests cover phase notifications, subscription removal, preparation
+cancellation, stale selection identities, and continuation validation. The pilot
+passed manual Windows formatting, compilation checks, Clippy, tests, and release
+build validation. Android-to-computer connectivity is currently unresolved, so
+manual document workflow acceptance remains pending.
+
 Save Directory displays the saved path and opens a native folder dialog. File,
 Folder, Media, Image, and Video selection uses native dialogs with category
-filters. Folder transfers preserve nested content and empty directories. The
-Receive screen shows IPv4 interface addresses and both listener ports. History
-can reuse an editable, previously authenticated connection endpoint.
+filters. Android selection uses the system document picker and imports granted
+content into session-scoped app-owned staging paths before the existing handoff
+and transfer APIs receive it. Stale imports are cleared at startup and clean
+shutdown. Folder transfers preserve nested content and empty directories.
+Verified incoming files use a no-overwrite commit with a portable copy fallback
+when the destination filesystem does not support hard links. The Receive screen
+shows IPv4 interface addresses and both listener ports. History can reuse an
+editable, previously authenticated connection endpoint.
 
 While the client is open, it automatically keeps one pairing receive operation
 ready and advertises the operation's current listener endpoint. Terminal pairing
@@ -108,3 +140,41 @@ Windows release execution currently requires the installed GStreamer runtime.
 A standalone installer bundling dependencies is not part of this migration.
 Non-Windows builds have explicit unavailable results for native dialogs and
 video playback; they are not supported application platforms yet.
+
+## Android setup
+
+The Android client uses the same Rust/Slint application crate and builds as an
+ARM64 native activity. Install Android SDK Platform 36, Build Tools 36.0.0,
+NDK, platform tools, and Android Studio's bundled JDK. The Android scripts honor
+`ANDROID_HOME`, `ANDROID_NDK_ROOT`, and `JAVA_HOME` when they are set. Otherwise,
+they detect Android Studio's standard Windows SDK and JDK locations and select
+the newest installed NDK for the current process. Android helper sources are
+compiled as Java 17 bytecode so newer bundled JDKs remain compatible with D8.
+Install the Rust target and Cargo APK tooling once:
+
+```powershell
+rustup target add aarch64-linux-android
+cargo install cargo-apk
+```
+
+Build from the repository root with:
+
+```powershell
+.\scripts\build-android.ps1
+```
+
+With an Android device connected through ADB, build, install, and run with:
+
+```powershell
+.\scripts\run-android.ps1
+```
+
+The first Android checkpoint covers native startup and app-private persistence.
+The Android platform boundary also keeps Wi-Fi multicast reception enabled for
+the shared mDNS discovery runtime. Android file and media selection is
+asynchronous: system-granted files are staged as ordinary local paths so the
+reusable Rust core remains independent of Android content URIs. Android folder
+tree selection and external destination folders require a separate Storage
+Access Framework adapter. Android opening, media, lifecycle, and full
+device-to-Windows parity remain part of Phase 17 and must pass physical-device
+acceptance before the phase can be marked complete.

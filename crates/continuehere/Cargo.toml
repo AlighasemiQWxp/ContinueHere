@@ -15,7 +15,6 @@ publish = false
 atomic-write-file.workspace = true
 async-trait.workspace = true
 getrandom.workspace = true
-keyring.workspace = true
 mdns-sd.workspace = true
 if-addrs = "0.15"
 tempfile = "3"
@@ -30,6 +29,13 @@ url.workspace = true
 uuid.workspace = true
 x509-parser.workspace = true
 zeroize.workspace = true
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+keyring.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-native-keyring-store = "1"
+keyring-core = "1"
 
 [lints]
 workspace = true

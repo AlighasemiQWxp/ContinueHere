@@ -7,8 +7,8 @@ use tokio::runtime::Runtime;
 use super::{
     MainWindow, devices::DevicesUiController, handoff::HandoffUiController,
     history::HistoryUiController, pairing::PairingUiController, preview::PreviewUiController,
-    settings::SettingsUiController, transfers::TransferUiController,
-    transition::UiTransitionController,
+    selection::ContentSelectionUiController, settings::SettingsUiController,
+    transfers::TransferUiController, transition::UiTransitionController,
 };
 
 pub(crate) struct UiManager {
@@ -21,18 +21,26 @@ pub(crate) struct UiManager {
     history: Rc<RefCell<HistoryUiController>>,
     preview: Rc<RefCell<PreviewUiController>>,
     transitions: Rc<UiTransitionController>,
+    selection: Rc<RefCell<ContentSelectionUiController>>,
 }
 
 impl UiManager {
     pub(crate) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Self {
         let transitions = UiTransitionController::start(window);
+        let selection = ContentSelectionUiController::start(window);
         let preview = PreviewUiController::start(window, Rc::clone(&transitions));
         let history = HistoryUiController::start(Rc::clone(&core), window);
         let pairing = PairingUiController::start(Rc::clone(&core), window);
-        let handoff = HandoffUiController::start(Rc::clone(&core), window, Rc::clone(&transitions));
-        let transfers = TransferUiController::start(Rc::clone(&core), window);
+        let handoff = HandoffUiController::start(
+            Rc::clone(&core),
+            window,
+            Rc::clone(&transitions),
+            Rc::clone(&selection),
+        );
+        let transfers =
+            TransferUiController::start(Rc::clone(&core), window, Rc::clone(&selection));
         let devices = DevicesUiController::start(Rc::clone(&core), window, Rc::clone(&transitions));
-        let settings = SettingsUiController::start(Rc::clone(&core), window);
+        let settings = SettingsUiController::start(Rc::clone(&core), window, Rc::clone(&selection));
         let view = window.as_weak();
         window.on_page_selected(move |page| {
             let Some(window) = view.upgrade() else {
@@ -73,6 +81,7 @@ impl UiManager {
             history,
             preview,
             transitions,
+            selection,
         }
     }
 
@@ -87,6 +96,7 @@ impl UiManager {
             history,
             preview,
             transitions,
+            selection,
         } = self;
         drop(preview);
         drop(history);
@@ -95,6 +105,7 @@ impl UiManager {
         drop(pairing);
         drop(devices);
         drop(settings);
+        drop(selection);
         drop(transitions);
         runtime.block_on(async {
             let core = Rc::try_unwrap(core).map_err(|_| "UI core ownership was not released")?;

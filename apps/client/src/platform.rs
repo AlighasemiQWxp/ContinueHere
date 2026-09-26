@@ -1,8 +1,12 @@
-use std::{env, io, path::PathBuf};
+#[cfg(not(target_os = "android"))]
+use std::env;
+use std::{io, path::PathBuf};
 
+#[cfg(target_os = "android")]
+mod android;
 pub(super) mod media;
 
-type PlatformResult<T> = Result<T, Box<dyn std::error::Error>>;
+pub(super) type PlatformResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum SelectionKind {
@@ -30,12 +34,20 @@ impl SelectionKind {
     }
 }
 
-pub(super) fn select_file(kind: SelectionKind) -> PlatformResult<Option<PathBuf>> {
+pub(super) type SelectionResult = Result<Option<PathBuf>, String>;
+
+pub(super) fn select_file(
+    kind: SelectionKind,
+    completion: impl FnOnce(SelectionResult) + Send + 'static,
+) -> PlatformResult<()> {
     #[cfg(target_os = "windows")]
     {
         let mut dialog = rfd::FileDialog::new();
         dialog = match kind {
-            SelectionKind::Folder => return select_directory(),
+            SelectionKind::Folder => {
+                completion(Ok(dialog.pick_folder()));
+                return Ok(());
+            }
             SelectionKind::File => dialog,
             SelectionKind::Video => {
                 dialog.add_filter("Video", &["mp4", "m4v", "mkv", "webm", "mov", "avi"])
@@ -53,24 +65,113 @@ pub(super) fn select_file(kind: SelectionKind) -> PlatformResult<Option<PathBuf>
             SelectionKind::Pdf => dialog.add_filter("PDF", &["pdf"]),
             SelectionKind::PowerPoint => dialog.add_filter("PowerPoint", &["ppt", "pptx"]),
         };
-        Ok(dialog.pick_file())
+        completion(Ok(dialog.pick_file()));
+        Ok(())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "android")]
     {
-        let _ = kind;
-        Err("File selection is currently supported on Windows only.".into())
+        select_android_file(kind, completion)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "android")))]
+    {
+        let _ = (kind, completion);
+        Err("File selection is not supported on this platform.".into())
     }
 }
 
-pub(super) fn select_directory() -> PlatformResult<Option<PathBuf>> {
+pub(super) fn select_directory(
+    completion: impl FnOnce(SelectionResult) + Send + 'static,
+) -> PlatformResult<()> {
     #[cfg(target_os = "windows")]
     {
-        Ok(rfd::FileDialog::new().pick_folder())
+        completion(Ok(rfd::FileDialog::new().pick_folder()));
+        Ok(())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "android")]
     {
-        Err("Folder selection is currently supported on Windows only.".into())
+        let _ = completion;
+        Err("Android folder selection is not available yet.".into())
     }
+    #[cfg(not(any(target_os = "windows", target_os = "android")))]
+    {
+        let _ = completion;
+        Err("Folder selection is not supported on this platform.".into())
+    }
+}
+
+#[cfg(target_os = "android")]
+fn select_android_file(
+    kind: SelectionKind,
+    completion: impl FnOnce(SelectionResult) + Send + 'static,
+) -> PlatformResult<()> {
+    let mut dialog = robius_file_picker::FileDialog::new();
+    dialog = match kind {
+        SelectionKind::File => dialog.set_mime_type("*/*"),
+        SelectionKind::Folder => return select_directory(completion),
+        SelectionKind::Video => dialog
+            .set_mime_type("video/*")
+            .add_filter("Video", &["mp4", "m4v", "mkv", "webm", "mov", "avi"]),
+        SelectionKind::Image => dialog
+            .set_mime_type("image/*")
+            .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp", "bmp"]),
+        SelectionKind::Media => dialog.set_mime_type("*/*").add_filter(
+            "Media",
+            &[
+                "mp4", "m4v", "mkv", "webm", "mov", "avi", "png", "jpg", "jpeg", "gif", "webp",
+                "bmp", "mp3", "wav", "flac", "ogg", "m4a", "aac",
+            ],
+        ),
+        SelectionKind::Pdf => dialog
+            .set_mime_type("application/pdf")
+            .add_filter("PDF", &["pdf"]),
+        SelectionKind::PowerPoint => dialog
+            .set_mime_type("application/vnd.ms-powerpoint")
+            .add_filter("PowerPoint", &["ppt", "pptx"]),
+    };
+    let callback =
+        move |result: robius_file_picker::Result<Option<robius_file_picker::PickedFile>>| {
+            let result = result
+                .map_err(|error| error.to_string())
+                .and_then(|picked| picked.map(stage_android_file).transpose());
+            completion(result);
+        };
+    match kind {
+        SelectionKind::Image => dialog.pick_image(callback)?,
+        SelectionKind::Video => dialog.pick_video(callback)?,
+        _ => dialog.pick_file(callback)?,
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn stage_android_file(picked: robius_file_picker::PickedFile) -> Result<PathBuf, String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_IMPORT: AtomicU64 = AtomicU64::new(1);
+    let local = picked
+        .into_local_file()
+        .map_err(|error| error.to_string())?;
+    let file_name = local
+        .display_name()
+        .or_else(|| local.path().file_name().and_then(|value| value.to_str()))
+        .and_then(|value| std::path::Path::new(value).file_name())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| std::ffi::OsStr::new("attachment"));
+    let import = project_directory()
+        .map_err(|error| error.to_string())?
+        .join("imports")
+        .join(format!(
+            "{}-{}",
+            std::process::id(),
+            NEXT_IMPORT.fetch_add(1, Ordering::Relaxed)
+        ));
+    std::fs::create_dir_all(&import).map_err(|error| error.to_string())?;
+    let destination = import.join(file_name);
+    if let Err(error) = std::fs::copy(local.path(), &destination) {
+        let _ = std::fs::remove_dir_all(import);
+        return Err(error.to_string());
+    }
+    Ok(destination)
 }
 
 pub(super) fn open_url(value: &str) -> PlatformResult<()> {
@@ -247,6 +348,18 @@ pub(super) fn project_directory() -> io::Result<PathBuf> {
     Ok(directory)
 }
 
+#[cfg(target_os = "android")]
+pub(super) fn initialize_android(app: slint::android::AndroidApp) -> PlatformResult<()> {
+    android::initialize(app)?;
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+pub(super) fn shutdown_android() -> PlatformResult<()> {
+    android::shutdown()?;
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 fn platform_data_directory() -> io::Result<PathBuf> {
     Ok(environment_directory("APPDATA")?
@@ -261,7 +374,7 @@ fn platform_data_directory() -> io::Result<PathBuf> {
         .join("ContinueHere"))
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
 fn platform_data_directory() -> io::Result<PathBuf> {
     if let Some(directory) = env::var_os("XDG_DATA_HOME") {
         return Ok(PathBuf::from(directory).join("ContinueHere"));
@@ -271,11 +384,17 @@ fn platform_data_directory() -> io::Result<PathBuf> {
         .join("ContinueHere"))
 }
 
+#[cfg(target_os = "android")]
+fn platform_data_directory() -> io::Result<PathBuf> {
+    android::project_directory()
+}
+
 #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
 fn platform_data_directory() -> io::Result<PathBuf> {
     env::current_dir()
 }
 
+#[cfg(not(target_os = "android"))]
 fn environment_directory(name: &str) -> io::Result<PathBuf> {
     env::var_os(name)
         .map(PathBuf::from)

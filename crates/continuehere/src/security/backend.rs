@@ -1,4 +1,7 @@
+#[cfg(not(target_os = "android"))]
 use keyring::{Entry, Error as KeyringError};
+#[cfg(target_os = "android")]
+use keyring_core::{Entry, Error as KeyringError};
 
 use crate::models::DeviceId;
 
@@ -32,6 +35,23 @@ impl CredentialStore for OsCredentialStore {
 }
 
 fn entry(device_id: &DeviceId) -> Result<Entry, SecurityError> {
+    #[cfg(target_os = "android")]
+    initialize_android_store()?;
     Entry::new(SERVICE_NAME, device_id.as_str())
         .map_err(|_| SecurityError::SecureStorageUnavailable)
+}
+
+#[cfg(target_os = "android")]
+fn initialize_android_store() -> Result<(), SecurityError> {
+    use std::sync::OnceLock;
+
+    static INITIALIZED: OnceLock<Result<(), ()>> = OnceLock::new();
+    match INITIALIZED.get_or_init(|| {
+        let store = android_native_keyring_store::Store::new().map_err(|_| ())?;
+        keyring_core::set_default_store(store);
+        Ok(())
+    }) {
+        Ok(()) => Ok(()),
+        Err(()) => Err(SecurityError::SecureStorageUnavailable),
+    }
 }

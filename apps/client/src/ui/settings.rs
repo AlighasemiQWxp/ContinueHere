@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -11,7 +12,10 @@ use continuehere::{
 };
 use slint::ComponentHandle;
 
-use super::MainWindow;
+use super::{
+    MainWindow,
+    selection::{ContentSelectionUiController, selected_path},
+};
 
 #[derive(Clone)]
 struct UiEventTarget(Arc<Mutex<slint::Weak<MainWindow>>>);
@@ -71,7 +75,11 @@ struct UiStrings {
 }
 
 impl SettingsUiController {
-    pub(super) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Rc<Self> {
+    pub(super) fn start(
+        core: Rc<ContinueHere>,
+        window: &MainWindow,
+        selection: Rc<RefCell<ContentSelectionUiController>>,
+    ) -> Rc<Self> {
         let event_target = UiEventTarget::new(window.as_weak());
         let appearance_target = event_target.clone();
         let appearance_changed =
@@ -100,12 +108,16 @@ impl SettingsUiController {
             _directory_changed: directory_changed,
             _language_changed: language_changed,
         });
-        Self::bind_callbacks(Rc::downgrade(&controller), window);
+        Self::bind_callbacks(Rc::downgrade(&controller), window, selection);
         controller.refresh(window);
         controller
     }
 
-    fn bind_callbacks(controller: std::rc::Weak<Self>, window: &MainWindow) {
+    fn bind_callbacks(
+        controller: std::rc::Weak<Self>,
+        window: &MainWindow,
+        selection: Rc<RefCell<ContentSelectionUiController>>,
+    ) {
         let theme_controller = controller.clone();
         let theme_view = window.as_weak();
         window.on_select_theme(move |index| {
@@ -152,16 +164,27 @@ impl SettingsUiController {
             if let (Some(controller), Some(window)) =
                 (folder_controller.upgrade(), folder_window.upgrade())
             {
-                let result = (|| -> super::support::UiResult {
-                    if let Some(path) = crate::platform::select_directory()? {
-                        controller
-                            .core
-                            .settings()
-                            .directories()
-                            .set_default_transfer_directory(path)?;
-                    }
-                    Ok(())
-                })();
+                let selected_controller = Rc::downgrade(&controller);
+                let result =
+                    selection
+                        .borrow_mut()
+                        .choose_directory(&window, move |window, result| {
+                            let result = selected_path(result).and_then(|path| {
+                                let Some(path) = path else {
+                                    return Ok(());
+                                };
+                                let Some(controller) = selected_controller.upgrade() else {
+                                    return Ok(());
+                                };
+                                controller
+                                    .core
+                                    .settings()
+                                    .directories()
+                                    .set_default_transfer_directory(path)?;
+                                Ok(())
+                            });
+                            super::support::show_result(window, result);
+                        });
                 super::support::show_result(&window, result);
             }
         });

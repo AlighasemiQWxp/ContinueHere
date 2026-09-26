@@ -23,6 +23,7 @@ use crate::{
 use super::{
     FileTransfer, FileTransferChange, FileTransferChangedEvent, FileTransferConfig,
     FileTransferError, FileTransferFailure, FileTransferId, FileTransferState,
+    commit::commit_file,
     model::{MAX_FILE_SIZE, TRANSFER_CHUNK_SIZE, validate_file_name},
 };
 
@@ -684,7 +685,7 @@ impl FileTransferController {
                     .unwrap_or(true)
             })
         } else {
-            fs::hard_link(&session.temporary_path, &session.destination_path)
+            commit_file(&session.temporary_path, &session.destination_path)
         };
         if committed.is_err() {
             let failure = if session.destination_path.exists() {

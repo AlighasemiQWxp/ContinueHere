@@ -27,10 +27,12 @@ loop, where the owning controller rebuilds an immutable display snapshot. Slint
 models contain presentation data only; they do not become a second source of
 application state.
 
-The Windows client owns `ContinueHere` directly and provides Send, Receive,
-History, and Settings. Feature controllers retain their own Handles
-and delegate subscriptions. Settings and history continue to use the existing
-core stores.
+The native client owns `ContinueHere` directly and provides Send, Receive,
+History, and Settings on every supported platform. Feature controllers retain
+their own Handles and delegate subscriptions. Settings and history continue to
+use the existing core stores. Platform adapters supply operating-system entry,
+storage, secure credentials, content selection and opening, media, lifecycle,
+and discovery integration without duplicating application features.
 
 Receive presents one recent-activity feed. Pending incoming transfer offers and
 active progress remain actionable inside that feed; completed transfers and
@@ -47,13 +49,26 @@ and is polled only when its waker posts a UI event. Dropping the controller drop
 that future before the manager consumes the core for shutdown. Closing during
 startup also consumes and shuts down any successfully constructed core.
 
-The Windows platform boundary owns native file/folder dialogs and external file
-and HTTP/HTTPS opening. The preview controller owns image animation timers and
-the media player. The Windows GStreamer backend owns decoding, audio, seeking,
-and the playback worker; bounded RGBA frames are delivered into Slint images.
+The platform boundary owns native file/folder dialogs and external file and
+HTTP/HTTPS opening. The preview controller owns image animation timers and the
+media player. The Windows GStreamer backend owns decoding, audio, seeking, and
+the playback worker; bounded RGBA frames are delivered into Slint images.
 A generation number rejects stale media events after close or replacement. The
 player returns its pipeline to Null and joins its worker on close. GIF and
 animated WebP previews decode frames incrementally and stop their timer on close.
+
+Android reuses the same Slint components, Rust UI controllers, Core Managers,
+Handles, protocol, persistence rules, and presentation snapshots. Its private
+platform adapter supplies Android application startup, app-private paths,
+asynchronous file and media selection, and local-network permission support.
+Android file content URIs are imported into owned local staging paths before
+they enter Handoff or FileTransfer APIs;
+Android URI or activity types do not cross into the reusable core. A private UI
+selection coordinator bridges asynchronous system-picker results back to the
+Slint event loop. Verified incoming files retain no-overwrite behavior and fall
+back to a portable copy commit on filesystems that reject hard links.
+The adapter holds Android's Wi-Fi multicast lock while the application discovery
+runtime is active so the operating system does not filter local mDNS traffic.
 
 Discovery identifiers are temporary, so they are not treated as trusted device
 IDs. Pairing and authenticated transport have separate listeners. Receive shows
@@ -140,6 +155,35 @@ page-level banner.
 Known UI modules are explicit typed fields rather than entries in a general
 registry. A new abstraction is added only when more than one real implementation
 or consumer requires it.
+
+### Frontend workflow phases
+
+The client has an internal, Slint-independent `PhaseController<P>` for individual
+frontend workflows. It stores the current phase and publishes typed
+`PhaseChange<P>` notifications through `PhaseChangedDelegate<P>` subscriptions.
+Selecting the same phase is a no-op. The state changes before notification;
+dropping a subscription unregisters its listener. Notifications are synchronous,
+with no listener-list borrow held during callbacks. UI listeners schedule work
+on Slint's event loop rather than reentering the owning controller.
+
+Features decide valid transitions and own their data, resource cleanup, and
+cancellation. The helper does not own timers, tasks, handles, business rules,
+or a separate running flag. It is not a new CoreModules system.
+
+The first consumer is Handoff's document preparation:
+`Idle -> SelectingDocument -> EditingContinuation -> Idle`. Preparation owns its
+draft and selection identity; Handoff owns the document modal handle. Cancellation
+releases the modal and clears the draft and selection identity before returning
+to Idle. Results from cancelled or superseded selections are ignored. Cancelling
+preparation does not dismiss a native picker; the selection coordinator remains
+busy until that platform request finishes.
+
+Invalid continuation input and submission failures preserve the editable draft.
+Successful submission finishes preparation while the existing core handoff and
+transfer continue independently. Their existing state models remain authoritative;
+Pairing and Transfers do not adopt the helper in this pilot. Core progress events
+are not copied into a second frontend state machine.
+
 ### UI Handle ownership
 
 The interface preserves the shared Handle lifecycle:
@@ -199,7 +243,8 @@ The UI exposes completion only after every entry is published. This is not an
 atomic whole-directory rename: another local process can see the reserved directory
 during final publication. Ordinary failure/cancellation cleans the newly created
 directory; an abrupt process or power failure can leave staging/partial content.
-Filesystems must support hard links. Folder packages are bounded to 4096 entries,
+Publication prefers hard links and uses a no-overwrite copy fallback on
+filesystems that reject them. Folder packages are bounded to 4096 entries,
 32 path segments, 1024 UTF-8 bytes per relative path, and 100 GiB total package size.
 No compression, symlinks, reparse points, permissions, or timestamp preservation
 is provided. See the protocol document for the exact envelope and validation rules.

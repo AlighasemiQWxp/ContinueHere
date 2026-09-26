@@ -165,6 +165,17 @@ own implementation and acceptance cycle. Phases 17 and 18 remain deferred.
     resume, embedded document rendering, offline queues, installers, and additional
     platforms remain future work
 - [ ] 17. Android application
+  - Native Rust/Slint Android build of the existing client
+  - Reuse the current Core Managers, Handles, protocol, persistence, UI controllers,
+    and four-screen interface without adding product features
+  - Android application lifecycle, private application data, secure credential
+    storage, local-network permissions, discovery, and system content integration
+  - Feature parity with the accepted Windows state for pairing, trusted connections,
+    URL/YouTube/local-video/document handoffs, file/folder transfer, previews,
+    settings, localization, history, retry, and unread indicators
+  - Physical Android-to-Windows acceptance in both directions, including restart,
+    rejection, cancellation, interruption, permission denial, and integrity checks
+  - Android build, automated validation, Windows regression validation, and CI
 - [ ] 18. Linux, macOS, and iOS support, one platform at a time
 - [ ] 19. Advanced application and operating-system integrations
 
