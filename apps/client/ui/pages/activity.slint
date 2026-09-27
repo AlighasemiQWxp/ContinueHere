@@ -1,4 +1,5 @@
 import { Title, Label, Card, Button, SecondaryButton, QuietButton } from "../components.slint";
+import { TooltipSystem } from "../tooltip.slint";
 import { MaterialPalette } from "@material";
 import { ContentRow } from "../models.slint";
 
@@ -26,7 +27,7 @@ export component RecentActivity inherits VerticalLayout {
         spacing: 12px;
         for item in root.incoming-transfers: Card {
             VerticalLayout {
-                padding: 20px; spacing: 12px;
+                padding: 14px; spacing: 10px;
                 Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
                 Label { text: item.status; rtl: root.rtl; color: MaterialPalette.primary; }
                 Label { text: item.detail; rtl: root.rtl; }
@@ -40,17 +41,20 @@ export component RecentActivity inherits VerticalLayout {
                     SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.transfer-action(item.id, "folder"); } }
                     QuietButton { enabled: root.ready && !root.preview-visible; text: root.reject-text; clicked => { root.transfer-action(item.id, "reject"); } }
                 }
-                if !item.offered: QuietButton { enabled: root.ready && !root.preview-visible; text: root.cancel-text; clicked => { root.transfer-action(item.id, "remove"); } }
+                if !item.offered: TooltipSystem { icon: @image-url("../../assets/remove.svg"); label: root.cancel-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.transfer-action(item.id, "remove"); } }
             }
         }
     }
     for item in (root.page == 0 ? root.received-activities : root.sent-activities): Card {
         VerticalLayout {
-            padding: 16px; spacing: 8px;
+            padding: 14px; spacing: 8px;
             Label { text: item.title; rtl: root.rtl; }
             Label { text: item.status + "\n" + item.detail; rtl: root.rtl; }
-            if item.can-open: Button { text: root.open-text; enabled: root.ready && !root.preview-visible; clicked => { root.history-action(item.id, "open"); } }
-            if item.retryable: Button { text: root.retry-text; enabled: item.can-retry && !root.preview-visible; clicked => { root.history-action(item.id, "retry"); } }
+            HorizontalLayout {
+                spacing: 4px;
+                if item.can-open: TooltipSystem { icon: @image-url("../../assets/open.svg"); label: root.open-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "open"); } }
+                if item.retryable: TooltipSystem { icon: @image-url("../../assets/retry.svg"); label: root.retry-text; enabled: item.can-retry && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "retry"); } }
+            }
         }
     }
 }

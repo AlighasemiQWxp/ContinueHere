@@ -2,16 +2,13 @@ import { MaterialScheme } from "@material";
 
 export global AppTheme {
     in property <int> style;
-    out property <color> accent: style == 1 ? #ffb4ab : style == 2 ? #a2d69a : #d6baff;
-    property <color> container: style == 1 ? #542c2b : style == 2 ? #29432c : #443056;
-    property <color> background: style == 1 ? #181111 : style == 2 ? #101610 : #15111a;
-    property <color> low: style == 1 ? #211919 : style == 2 ? #182019 : #1e1826;
-    property <color> surface: style == 1 ? #2b2020 : style == 2 ? #1e2920 : #292031;
-    out property <color> sidebar: style == 1 ? #1f1517 : style == 2 ? #141d16 : #1c1623;
-    out property <color> glow: style == 1 ? #ff6f641c : style == 2 ? #67d77c1c : #8c55d91c;
-    out property <color> glow-secondary: style == 1 ? #764cdb14 : style == 2 ? #5bd5b114 : #30a8e814;
-    out property <brush> backdrop: @linear-gradient(145deg, root.background 0%, root.low 72%, root.container.darker(18%) 100%);
-    out property <brush> card: @linear-gradient(145deg, root.surface.brighter(3%) 0%, root.surface 72%, root.low 100%);
+    out property <color> accent: style == 1 ? #ff9c92 : style == 2 ? #91d7b4 : #c7a8ff;
+    property <color> container: style == 1 ? #492c30 : style == 2 ? #223b32 : #392d50;
+    property <color> background: #111117;
+    property <color> low: #17171f;
+    property <color> surface: #1e1e28;
+    out property <color> sidebar: #15151d;
+    out property <brush> backdrop: root.background;
     out property <MaterialScheme> scheme: {
         primary: root.accent,
         surfaceTint: root.accent,

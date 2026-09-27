@@ -1,0 +1,56 @@
+import { Icon, MaterialPalette, StateLayerArea, ToolTip } from "@material";
+
+export component TooltipSystem inherits StateLayerArea {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> selected;
+    in property <bool> show-badge;
+    in property <bool> vertical-navigation;
+    in property <bool> rtl;
+    in property <bool> fill-row;
+    property <bool> tooltip-open: false;
+
+    tooltip: "";
+    min-width: 56px;
+    min-height: 56px;
+    horizontal-stretch: root.fill-row ? 1 : 0;
+    border_radius: 16px;
+    color: MaterialPalette.primary;
+    accessible-role: button;
+    accessible-enabled: root.enabled;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+
+    tooltip-timer := Timer {
+        interval: 400ms;
+        running: (root.has_hover || root.has_focus) && root.enabled && !root.pressed && !root.tooltip-open;
+        triggered => { root.tooltip-open = true; }
+    }
+    changed has_hover => { if !root.has_hover { root.tooltip-open = false; } }
+    changed has_focus => { if !root.has_focus { root.tooltip-open = false; } }
+    changed pressed => { if root.pressed { root.tooltip-open = false; } }
+
+    Rectangle {
+        width: 100%; height: 100%; border-radius: root.border_radius;
+        background: root.selected ? MaterialPalette.secondary-container : #ffffff08;
+        opacity: root.enabled ? 100% : 45%;
+    }
+    Icon {
+        source: root.icon;
+        width: 24px; height: 24px;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        colorize: root.selected ? MaterialPalette.on-secondary-container : MaterialPalette.on-surface-variant;
+        opacity: root.enabled ? 100% : 55%;
+    }
+    if root.show-badge: Rectangle {
+        x: root.width / 2 + 9px; y: root.height / 2 - 18px;
+        width: 8px; height: 8px; border-radius: 4px;
+        background: #ffd16a;
+    }
+    if root.label != "" && root.tooltip-open && (root.has_hover || root.has_focus) && !root.pressed: ToolTip {
+        x: root.vertical-navigation ? (root.rtl ? -self.width - 8px : root.width + 8px) : (root.width - self.width) / 2;
+        y: root.vertical-navigation ? (root.height - self.height) / 2 : root.height + 6px;
+        text: root.label;
+    }
+}

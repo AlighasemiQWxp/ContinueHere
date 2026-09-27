@@ -1,7 +1,8 @@
 import { ScrollView, Palette } from "std-widgets.slint";
 import { Title, Label } from "components.slint";
+import { TooltipSystem } from "tooltip.slint";
 
-import { NavigationDrawer, NavigationBar, NavigationItem, SnackBar, MaterialPalette } from "@material";
+import { NavigationBar, NavigationItem, SnackBar, MaterialPalette } from "@material";
 import { AppTheme } from "theme.slint";
 import { MenuItem } from "@material";
 export { MenuItem } from "@material";
@@ -112,7 +113,7 @@ export component MainWindow inherits Window {
     in property <string> document-kind;
     in-out property <string> document-position-input;
     property <bool> compact: root.width < 900px;
-    property <length> nav-width: 232px;
+    property <length> nav-width: 76px;
     property <string> close-text: rtl ? "بستن" : "Close";
     property <string> open-text: rtl ? "باز کردن" : "Open";
     property <string> remove-text: rtl ? "حذف" : "Remove";
@@ -180,53 +181,49 @@ export component MainWindow inherits Window {
         height: root.height;
         background: AppTheme.backdrop;
     }
-    Rectangle {
-        x: root.rtl ? -root.width * 0.12 : root.width * 0.58;
-        y: -root.height * 0.34;
-        width: max(360px, root.width * 0.62);
-        height: self.width;
-        border-radius: self.width / 2;
-        background: AppTheme.glow;
-    }
-    Rectangle {
-        x: root.rtl ? root.width * 0.64 : -root.width * 0.18;
-        y: root.height * 0.68;
-        width: max(280px, root.width * 0.42);
-        height: self.width;
-        border-radius: self.width / 2;
-        background: AppTheme.glow-secondary;
-    }
-
     if !root.compact: Rectangle {
         x: root.rtl ? root.width - root.nav-width : 0px;
         width: root.nav-width; height: root.height;
         background: AppTheme.sidebar;
         border-color: MaterialPalette.outline-variant;
-        border-width: 1px;
+        border-width: 0px;
         VerticalLayout {
-            padding: 16px; spacing: 12px; alignment: start;
-            Rectangle {
-                height: 56px;
-                background: transparent;
-                HorizontalLayout {
-                    padding-left: 8px;
-                    padding-right: 8px;
-                    spacing: 10px;
-                    alignment: center;
-                    Image { source: @image-url("../assets/ContinueHere.png"); width: 32px; height: 32px; image-fit: contain; }
-                    Title { text: "ContinueHere"; font-size: 19px; horizontal-stretch: 1; }
-                }
+            padding-top: 18px; padding-bottom: 18px; spacing: 12px; alignment: center;
+            Image { source: @image-url("../assets/ContinueHere.png"); width: 36px; height: 36px; image-fit: contain; }
+            Rectangle { height: 12px; }
+            TooltipSystem {
+                icon: @image-url("../assets/send.svg");
+                label: root.rtl ? "ارسال" : "Send";
+                selected: root.page == 1; vertical-navigation: true; rtl: root.rtl;
+                show-badge: root.send-unread;
+                fill-row: true;
+                clicked => { if root.ready && !root.preview-visible { root.page-selected(1); } }
             }
-            Rectangle {
-                vertical-stretch: 1;
-                NavigationDrawer {
-                    y: 0px;
-                    min-width: 0px; width: parent.width; height: 232px;
-                    groups: [{ title: "", items: root.navigation-items }];
-                    current-index: root.navigation-index;
-                    selected(group, index) => { if root.ready && !root.preview-visible { root.page-selected(root.navigation-pages[index]); } }
-                }
+            TooltipSystem {
+                icon: @image-url("../assets/receive.svg");
+                label: root.devices-text;
+                selected: root.page == 0; vertical-navigation: true; rtl: root.rtl;
+                show-badge: root.devices-unread;
+                fill-row: true;
+                clicked => { if root.ready && !root.preview-visible { root.page-selected(0); } }
             }
+            TooltipSystem {
+                icon: @image-url("../assets/history.svg");
+                label: root.rtl ? "تاریخچه" : "History";
+                selected: root.page == 3; vertical-navigation: true; rtl: root.rtl;
+                show-badge: root.history-unread;
+                fill-row: true;
+                clicked => { if root.ready && !root.preview-visible { root.page-selected(3); } }
+            }
+            Rectangle { vertical-stretch: 1; }
+            TooltipSystem {
+                icon: @image-url("../assets/settings.svg");
+                label: root.settings-text;
+                selected: root.page == 4; vertical-navigation: true; rtl: root.rtl;
+                fill-row: true;
+                clicked => { if root.ready && !root.preview-visible { root.page-selected(4); } }
+            }
+            Rectangle { height: 8px; }
         }
     }
     if root.compact: NavigationBar {

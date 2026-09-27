@@ -1,4 +1,5 @@
 import { Title, Label, Card, Button, SecondaryButton, QuietButton, AppTextField } from "../components.slint";
+import { TooltipSystem } from "../tooltip.slint";
 import { MaterialPalette } from "@material";
 
 export component ReceivePage inherits VerticalLayout {
@@ -20,19 +21,26 @@ export component ReceivePage inherits VerticalLayout {
     in property <string> transport-endpoint;
     callback refresh-network();
 
-    spacing: 16px;
+    spacing: 12px;
     Title { text: root.devices-text; rtl: root.rtl; }
     Card {
         VerticalLayout {
-            padding: 16px; spacing: 6px;
-            Label { text: root.rtl ? "آماده دریافت" : "Ready to receive"; rtl: root.rtl; color: MaterialPalette.primary; }
-            Title { text: root.local-device-name; rtl: root.rtl; font-size: 19px; }
-            Label { text: root.local-device-detail; rtl: root.rtl; }
+            padding: 18px; spacing: 8px;
+            HorizontalLayout {
+                alignment: center; spacing: 14px;
+                Image { source: @image-url("../../assets/receive.svg"); width: 34px; height: 34px; image-fit: contain; }
+                VerticalLayout {
+                    spacing: 4px; horizontal-stretch: 1;
+                    Label { text: root.rtl ? "آماده دریافت" : "Ready to receive"; rtl: root.rtl; color: MaterialPalette.primary; }
+                    Title { text: root.local-device-name; rtl: root.rtl; font-size: 19px; }
+                    Label { text: root.local-device-detail; rtl: root.rtl; }
+                }
+            }
         }
     }
     Card {
         VerticalLayout {
-            padding: 20px; spacing: 12px;
+            padding: 16px; spacing: 12px;
             Label { text: root.pairing-status; rtl: root.rtl; }
             if root.pairing-code != "": AppTextField { enabled: root.ready && !root.preview-visible; text: root.pairing-code; read-only: true; horizontal-alignment: center; }
             if root.pairing-active: VerticalLayout {
@@ -48,12 +56,12 @@ export component ReceivePage inherits VerticalLayout {
     }
     Card {
         VerticalLayout {
-            padding: 14px; spacing: 6px;
+            padding: 14px; spacing: 8px;
             Label { text: root.rtl ? "جزئیات اتصال" : "Connection details"; rtl: root.rtl; color: MaterialPalette.on-surface; }
             Label { text: root.local-addresses; horizontal-alignment: left; }
             Label { text: (root.rtl ? "درگاه جفت‌سازی: " : "Pairing listener: ") + root.pairing-endpoint; rtl: root.rtl; }
             Label { text: (root.rtl ? "درگاه اتصال: " : "Connection listener: ") + root.transport-endpoint; rtl: root.rtl; }
-            SecondaryButton { text: root.rtl ? "تازه‌سازی نشانی‌ها" : "Refresh addresses"; clicked => { root.refresh-network(); } }
+            TooltipSystem { icon: @image-url("../../assets/refresh.svg"); label: root.rtl ? "تازه‌سازی نشانی‌ها" : "Refresh addresses"; min-width: 48px; min-height: 48px; clicked => { root.refresh-network(); } }
         }
     }
 }
