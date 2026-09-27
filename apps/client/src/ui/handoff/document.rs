@@ -2,15 +2,25 @@ use std::{path::PathBuf, rc::Rc};
 
 use continuehere::{DeviceId, DocumentContinuation};
 
-use super::super::{
+use crate::ui::shared::{
+    UiResult,
     phase::{PhaseChangedDelegate, PhaseChangedSubscription, PhaseController},
-    support::UiResult,
 };
 
 #[derive(Clone, Copy)]
 pub(super) enum DocumentKind {
     Pdf,
     PowerPoint,
+}
+
+impl DocumentKind {
+    pub(super) fn parse(value: &str) -> Option<Self> {
+        match value {
+            "pdf" => Some(Self::Pdf),
+            "powerpoint" => Some(Self::PowerPoint),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

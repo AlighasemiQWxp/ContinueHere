@@ -1,3 +1,5 @@
+pub(super) mod phase;
+
 use std::sync::{Arc, Mutex};
 
 use slint::{ComponentHandle, ModelRc, VecModel};

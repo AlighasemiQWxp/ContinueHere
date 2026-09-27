@@ -1,0 +1,44 @@
+import { Title, Label, Card, Button, SecondaryButton, QuietButton } from "../components.slint";
+import { MaterialPalette } from "@material";
+import { ContentRow } from "../models.slint";
+
+export component OutgoingTransfers inherits VerticalLayout {
+    in property <bool> rtl;
+    in property <[ContentRow]> outgoing-transfers;
+    in property <bool> ready;
+    in property <bool> preview-visible;
+    in property <string> accept-text;
+    callback transfer-action(string, string);
+    in property <string> choose-folder-text;
+    in property <string> reject-text;
+    in property <string> open-text;
+    in property <string> cancel-text;
+    in property <string> remove-text;
+
+    spacing: 16px;
+    Title { text: root.rtl ? "انتقال‌ها" : "Transfers"; rtl: root.rtl; font-size: 20px; }
+    if root.outgoing-transfers.length == 0: Label { text: root.rtl ? "هنوز انتقالی وجود ندارد." : "No transfers yet."; rtl: root.rtl; }
+    for item in root.outgoing-transfers: Card {
+        VerticalLayout {
+            padding: 20px; spacing: 12px;
+            Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            Label { text: item.status; rtl: root.rtl; color: MaterialPalette.primary; }
+            Label { text: item.detail; rtl: root.rtl; }
+            Rectangle {
+                height: 5px; background: MaterialPalette.outline-variant; border-radius: 3px;
+                Rectangle { x: root.rtl ? parent.width - self.width : 0px; width: parent.width * clamp(item.progress, 0, 1); height: parent.height; background: MaterialPalette.primary; border-radius: 3px; }
+            }
+            if item.offered: HorizontalLayout {
+                spacing: 8px;
+                Button { enabled: root.ready && !root.preview-visible; text: root.accept-text; clicked => { root.transfer-action(item.id, "accept"); } }
+                SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.transfer-action(item.id, "folder"); } }
+                QuietButton { enabled: root.ready && !root.preview-visible; text: root.reject-text; clicked => { root.transfer-action(item.id, "reject"); } }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                if item.can-open: Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.transfer-action(item.id, "open"); } }
+                QuietButton { enabled: root.ready && !root.preview-visible; text: item.active ? root.cancel-text : root.remove-text; clicked => { root.transfer-action(item.id, "remove"); } }
+            }
+        }
+    }
+}

@@ -7,7 +7,7 @@ use std::{
 
 use image::AnimationDecoder;
 
-use super::support::UiResult;
+use crate::ui::shared::UiResult;
 
 pub(super) struct ImagePreview {
     path: PathBuf,

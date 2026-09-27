@@ -19,6 +19,15 @@ depend on an application or user-interface implementation.
 
 ## User interface
 
+See [Frontend architecture](FRONTEND.md) for feature ownership, view contracts,
+the staged migration boundary, and manual regression checks. `UiManager` owns
+the shell and feature controllers. The shell owns navigation and application-wide
+language and appearance presentation. Each feature receives a restricted access
+object, and Slint pages and dialogs expose explicit properties and callbacks to
+the window composition. Cross-feature actions use typed capabilities composed
+by `UiManager` rather than invoking one another through the generated window
+interface; UI action strings become feature command types at the Rust boundary.
+
 The target interface is a native Slint client whose application logic is Rust.
 The core remains UI-independent and has no Slint dependency. `UiManager` owns
 focused Rust controllers, and those controllers call the existing typed Manager
@@ -104,6 +113,7 @@ code and deny production placeholders.
 ```text
 Rust/Slint client
 └── UiManager
+    ├── ShellController
     ├── UiTransitionController
     ├── ContinueHere Rust core
     ├── DevicesUiController

@@ -1,28 +1,62 @@
+mod access;
+
+pub(in crate::ui) use access::PairingAccess;
+
 use std::{cell::RefCell, rc::Rc};
 
 use continuehere::{
-    ContinueHere, PairingHandle, PairingMode, PairingRole, PairingSession,
-    PairingSessionChangedDelegate, PairingSessionChangedSubscription, PairingState,
+    LanguageChangedDelegate, LanguageChangedSubscription, PairingHandle, PairingMode, PairingRole,
+    PairingSession, PairingSessionChangedDelegate, PairingSessionChangedSubscription, PairingState,
 };
 use slint::ComponentHandle;
 
 use super::{
     MainWindow,
-    support::{EventTarget, UiResult, notify, show_result, text},
+    devices::PairingDevices,
+    shared::{EventTarget, UiResult, notify, show_result, text},
 };
 
 pub(super) struct PairingUiController {
-    core: Rc<ContinueHere>,
+    access: PairingAccess,
+    devices: PairingDevices,
     handle: Option<PairingHandle>,
     next_handle: u64,
     last_session: Option<continuehere::PairingSession>,
     _changed: PairingSessionChangedSubscription,
+    _language_changed: LanguageChangedSubscription,
+}
+
+#[derive(Clone, Copy)]
+enum PairingAction {
+    Receive,
+    Pair,
+    Approve,
+    Reject,
+    Cancel,
+}
+
+impl PairingAction {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "receive" => Some(Self::Receive),
+            "pair" => Some(Self::Pair),
+            "approve" => Some(Self::Approve),
+            "reject" => Some(Self::Reject),
+            "cancel" => Some(Self::Cancel),
+            _ => None,
+        }
+    }
 }
 
 impl PairingUiController {
-    pub(super) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Rc<RefCell<Self>> {
+    pub(super) fn start(
+        access: PairingAccess,
+        devices: PairingDevices,
+        window: &MainWindow,
+    ) -> Rc<RefCell<Self>> {
         let target = EventTarget::new(window);
-        let changed = core
+        let language_target = target.clone();
+        let changed = access
             .pairing()
             .on_session_changed(PairingSessionChangedDelegate::new(move |_| {
                 target.dispatch(|window| {
@@ -30,20 +64,29 @@ impl PairingUiController {
                     notify(&window, 0);
                 });
             }));
+        let language_changed =
+            access
+                .localization()
+                .on_language_changed(LanguageChangedDelegate::new(move |_| {
+                    language_target.dispatch(|window| window.invoke_refresh_pairing_requested());
+                }));
         let controller = Rc::new(RefCell::new(Self {
-            core,
+            access,
+            devices,
             handle: None,
             next_handle: 0,
             last_session: None,
             _changed: changed,
+            _language_changed: language_changed,
         }));
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
         window.on_pairing_action(move |action, endpoint| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
-                let result = controller
-                    .borrow_mut()
-                    .act(action.as_str(), endpoint.as_str());
+                let result = match PairingAction::parse(action.as_str()) {
+                    Some(action) => controller.borrow_mut().act(action, endpoint.as_str()),
+                    None => Err("Unknown pairing action.".into()),
+                };
                 show_result(&window, result);
                 controller.borrow_mut().refresh(&window);
             }
@@ -61,34 +104,33 @@ impl PairingUiController {
         controller
     }
 
-    fn act(&mut self, action: &str, endpoint: &str) -> UiResult {
+    fn act(&mut self, action: PairingAction, endpoint: &str) -> UiResult {
         match action {
-            "receive" => self.ensure_receive()?,
-            "pair" => {
+            PairingAction::Receive => self.ensure_receive()?,
+            PairingAction::Pair => {
                 let previous = self.handle.take();
                 self.last_session = None;
                 let result = self.start_operation(PairingMode::Initiate(endpoint.parse()?));
                 drop(previous);
                 result?;
             }
-            "approve" => self
+            PairingAction::Approve => self
                 .handle
                 .as_ref()
                 .ok_or("No active pairing session.")?
                 .approve()?,
-            "reject" => self
+            PairingAction::Reject => self
                 .handle
                 .as_ref()
                 .ok_or("No active pairing session.")?
                 .reject()?,
-            "cancel" => {
+            PairingAction::Cancel => {
                 let previous = self.handle.take();
                 self.last_session = None;
                 let result = self.ensure_receive();
                 drop(previous);
                 result?;
             }
-            _ => return Err("Unknown pairing action.".into()),
         }
         Ok(())
     }
@@ -103,7 +145,7 @@ impl PairingUiController {
     fn start_operation(&mut self, mode: PairingMode) -> UiResult {
         self.next_handle += 1;
         let handle = self
-            .core
+            .access
             .pairing()
             .get_handle(&format!("ui.pairing.{}", self.next_handle))?;
         handle.configure(mode)?;
@@ -124,7 +166,7 @@ impl PairingUiController {
                 session
                     .peer_device_id()
                     .zip(session.connection_endpoint())
-                    .map(|(device_id, endpoint)| (device_id.to_string(), endpoint.to_string()))
+                    .map(|(device_id, endpoint)| (device_id.clone(), endpoint.clone()))
             } else {
                 None
             };
@@ -137,7 +179,7 @@ impl PairingUiController {
             }
             drop(previous);
             if let Some((device_id, endpoint)) = connect_request {
-                window.invoke_pairing_connect_requested(device_id.into(), endpoint.into());
+                self.devices.connect(device_id, endpoint);
             }
         } else if self.handle.is_none()
             && let Err(error) = self.ensure_receive()
@@ -185,11 +227,11 @@ impl PairingUiController {
         } else {
             window.set_pairing_status("".into());
         }
-        match self.core.pairing().listening_endpoint() {
+        match self.access.pairing().listening_endpoint() {
             Ok(endpoint) => window.set_pairing_endpoint(endpoint.port().to_string().into()),
             Err(_) => window.set_pairing_endpoint("".into()),
         }
-        window.invoke_refresh_network();
+        self.devices.refresh_network();
     }
 }
 

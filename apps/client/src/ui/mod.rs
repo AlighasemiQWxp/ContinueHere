@@ -1,15 +1,14 @@
 mod devices;
 mod handoff;
 mod history;
-mod image_preview;
 mod manager;
 mod pairing;
-mod phase;
 mod preview;
 mod selection;
 mod settings;
+mod shared;
+mod shell;
 mod startup;
-mod support;
 mod transfers;
 mod transition;
 

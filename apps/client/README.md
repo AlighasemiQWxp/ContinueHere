@@ -1,5 +1,12 @@
 # ContinueHere Client
 
+Frontend ownership and migration checkpoints are documented in
+[Frontend architecture](../../docs/FRONTEND.md). Rust implementation files are
+grouped by feature under `src/ui`; Slint pages and dialogs live under `ui/pages`
+and `ui/dialogs`. Both structural checkpoints have passed user validation. The
+current checkpoint gives each feature restricted core access and uses typed
+commands for UI actions.
+
 This is the native Rust/Slint application. Windows is the accepted reference
 platform. The Android port reuses the same Rust core, Slint interface, focused
 controllers, Handles, and application behavior; only operating-system services

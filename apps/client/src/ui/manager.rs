@@ -1,18 +1,25 @@
-use std::{cell::RefCell, error::Error, rc::Rc, time::Duration};
+use std::{cell::RefCell, error::Error, rc::Rc};
 
 use continuehere::ContinueHere;
-use slint::ComponentHandle;
 use tokio::runtime::Runtime;
 
 use super::{
-    MainWindow, devices::DevicesUiController, handoff::HandoffUiController,
-    history::HistoryUiController, pairing::PairingUiController, preview::PreviewUiController,
-    selection::ContentSelectionUiController, settings::SettingsUiController,
-    transfers::TransferUiController, transition::UiTransitionController,
+    MainWindow,
+    devices::{DevicesAccess, DevicesUiController},
+    handoff::{HandoffAccess, HandoffUiController},
+    history::{HistoryAccess, HistoryUiController},
+    pairing::{PairingAccess, PairingUiController},
+    preview::PreviewUiController,
+    selection::ContentSelectionUiController,
+    settings::{SettingsAccess, SettingsUiController},
+    shell::{ShellAccess, ShellController},
+    transfers::{TransferUiController, TransfersAccess},
+    transition::UiTransitionController,
 };
 
 pub(crate) struct UiManager {
     core: Rc<ContinueHere>,
+    shell: Rc<ShellController>,
     devices: Rc<RefCell<DevicesUiController>>,
     settings: Rc<SettingsUiController>,
     pairing: Rc<RefCell<PairingUiController>>,
@@ -26,53 +33,52 @@ pub(crate) struct UiManager {
 
 impl UiManager {
     pub(crate) fn start(core: Rc<ContinueHere>, window: &MainWindow) -> Self {
+        let shell = ShellController::start(ShellAccess::new(Rc::clone(&core)), window);
         let transitions = UiTransitionController::start(window);
         let selection = ContentSelectionUiController::start(window);
         let preview = PreviewUiController::start(window, Rc::clone(&transitions));
-        let history = HistoryUiController::start(Rc::clone(&core), window);
-        let pairing = PairingUiController::start(Rc::clone(&core), window);
+        let preview_opener = PreviewUiController::opener(&preview, window);
+        let history = HistoryUiController::start(
+            HistoryAccess::new(Rc::clone(&core)),
+            preview_opener.clone(),
+            window,
+        );
+        let devices = DevicesUiController::start(
+            DevicesAccess::new(Rc::clone(&core)),
+            window,
+            Rc::clone(&transitions),
+        );
+        let pairing = PairingUiController::start(
+            PairingAccess::new(Rc::clone(&core)),
+            DevicesUiController::pairing_devices(&devices, window),
+            window,
+        );
         let handoff = HandoffUiController::start(
-            Rc::clone(&core),
+            HandoffAccess::new(Rc::clone(&core)),
             window,
             Rc::clone(&transitions),
             Rc::clone(&selection),
+            preview_opener.clone(),
         );
-        let transfers =
-            TransferUiController::start(Rc::clone(&core), window, Rc::clone(&selection));
-        let devices = DevicesUiController::start(Rc::clone(&core), window, Rc::clone(&transitions));
-        let settings = SettingsUiController::start(Rc::clone(&core), window, Rc::clone(&selection));
-        let view = window.as_weak();
-        window.on_page_selected(move |page| {
-            let Some(window) = view.upgrade() else {
-                return;
-            };
-            if ![0, 1, 3, 4].contains(&page) || window.get_active_transition() != 0 {
-                return;
-            }
-            window.set_reduce_motion(crate::platform::reduce_motion());
-            window.set_page(page);
-            match page {
-                0 => window.set_devices_unread(false),
-                1 => window.set_send_unread(false),
-                3 => {
-                    window.set_history_unread(false);
-                    window.set_history_device("".into());
-                }
-                _ => {}
-            }
-            window.invoke_refresh_history_requested();
-            window.set_content_opacity(0.0);
-            let view = window.as_weak();
-            slint::Timer::single_shot(Duration::from_millis(16), move || {
-                if let Some(window) = view.upgrade() {
-                    window.set_content_opacity(1.0);
-                }
-            });
-        });
+        let handoff_transfers = HandoffUiController::transfers(&handoff);
+        let transfers = TransferUiController::start(
+            TransfersAccess::new(Rc::clone(&core)),
+            handoff_transfers,
+            window,
+            Rc::clone(&selection),
+            preview_opener,
+        );
+        let settings = SettingsUiController::start(
+            SettingsAccess::new(Rc::clone(&core)),
+            window,
+            Rc::clone(&selection),
+        );
+        shell.set_history_navigation(HistoryUiController::navigation(&history, window));
         window.set_ready(true);
         window.set_reduce_motion(crate::platform::reduce_motion());
         Self {
             core,
+            shell,
             devices,
             settings,
             pairing,
@@ -88,6 +94,7 @@ impl UiManager {
     pub(crate) fn shutdown(self, runtime: &Runtime) -> Result<(), Box<dyn Error>> {
         let Self {
             core,
+            shell,
             devices,
             settings,
             pairing,
@@ -98,6 +105,7 @@ impl UiManager {
             transitions,
             selection,
         } = self;
+        drop(shell);
         drop(preview);
         drop(history);
         drop(transfers);

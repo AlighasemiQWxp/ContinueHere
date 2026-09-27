@@ -1,4 +1,12 @@
-use std::{cell::RefCell, path::Path, rc::Rc};
+mod image;
+
+use image::ImagePreview;
+
+use std::{
+    cell::RefCell,
+    path::{Path, PathBuf},
+    rc::{Rc, Weak},
+};
 
 use slint::ComponentHandle;
 
@@ -9,17 +17,60 @@ use crate::platform::{
 
 use super::{
     MainWindow,
-    support::{UiResult, show_result},
+    shared::{UiResult, show_result},
     transition::{UiTransition, UiTransitionController, UiTransitionHandle},
 };
 
 pub(super) struct PreviewUiController {
     player: Option<MediaPlayer>,
     generation: i32,
-    animation: Option<super::image_preview::ImagePreview>,
+    animation: Option<ImagePreview>,
     timer: slint::Timer,
     transitions: Rc<UiTransitionController>,
     transition: Option<UiTransitionHandle>,
+}
+
+#[derive(Clone, Copy)]
+enum PreviewAction {
+    Close,
+    Pause,
+    Seek(f32),
+    Volume(f32),
+}
+
+impl PreviewAction {
+    fn parse(action: &str, value: f32) -> Option<Self> {
+        match action {
+            "close" => Some(Self::Close),
+            "pause" => Some(Self::Pause),
+            "seek" if value.is_finite() && value >= 0.0 => Some(Self::Seek(value)),
+            "volume" if value.is_finite() => Some(Self::Volume(value)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct PreviewOpener {
+    controller: Weak<RefCell<PreviewUiController>>,
+    window: slint::Weak<MainWindow>,
+}
+
+impl PreviewOpener {
+    pub(super) fn open(&self, path: PathBuf, position: u64) -> UiResult {
+        let Some(controller) = self.controller.upgrade() else {
+            return Ok(());
+        };
+        let Some(window) = self.window.upgrade() else {
+            return Ok(());
+        };
+        let result = controller.borrow_mut().open(&path, position, &window);
+        if result.is_err() {
+            controller.borrow_mut().close(&window);
+        }
+        controller.borrow().schedule_frame(&window);
+        result
+    }
 }
 
 impl PreviewUiController {
@@ -37,27 +88,12 @@ impl PreviewUiController {
         }));
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
-        window.on_open_file(move |path, position| {
-            if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
-                let result = (|| -> UiResult {
-                    controller.borrow_mut().open(
-                        Path::new(path.as_str()),
-                        position.parse()?,
-                        &window,
-                    )
-                })();
-                if result.is_err() {
-                    controller.borrow_mut().close(&window);
-                }
-                show_result(&window, result);
-                controller.borrow().schedule_frame(&window);
-            }
-        });
-        let weak = Rc::downgrade(&controller);
-        let view = window.as_weak();
         window.on_preview_action(move |action, value| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
-                let result = controller.borrow_mut().act(action.as_str(), value, &window);
+                let result = match PreviewAction::parse(action.as_str(), value) {
+                    Some(action) => controller.borrow_mut().act(action, &window),
+                    None => Err("Unknown playback action.".into()),
+                };
                 show_result(&window, result);
             }
         });
@@ -69,6 +105,13 @@ impl PreviewUiController {
             }
         });
         controller
+    }
+
+    pub(super) fn opener(controller: &Rc<RefCell<Self>>, window: &MainWindow) -> PreviewOpener {
+        PreviewOpener {
+            controller: Rc::downgrade(controller),
+            window: window.as_weak(),
+        }
     }
 
     fn open(&mut self, path: &Path, position: u64, window: &MainWindow) -> UiResult {
@@ -110,7 +153,7 @@ impl PreviewUiController {
         window.set_preview_volume(1.0);
         window.set_preview_time("".into());
         if image {
-            self.animation = super::image_preview::ImagePreview::open(path)?;
+            self.animation = ImagePreview::open(path)?;
             if let Some(animation) = &mut self.animation {
                 let (image, delay) = animation.next()?;
                 window.set_preview_image(image);
@@ -130,19 +173,17 @@ impl PreviewUiController {
         Ok(())
     }
 
-    fn act(&mut self, action: &str, value: f32, window: &MainWindow) -> UiResult {
-        if action == "close" {
+    fn act(&mut self, action: PreviewAction, window: &MainWindow) -> UiResult {
+        if matches!(action, PreviewAction::Close) {
             self.close(window);
             return Ok(());
         }
         let player = self.player.as_ref().ok_or("No video is open.")?;
         let command = match action {
-            "pause" => MediaCommand::Pause(window.get_preview_playing()),
-            "seek" if value.is_finite() && value >= 0.0 => {
-                MediaCommand::Seek((f64::from(value) * 1000.0) as u64)
-            }
-            "volume" if value.is_finite() => MediaCommand::Volume(f64::from(value)),
-            _ => return Err("Unknown playback action.".into()),
+            PreviewAction::Close => return Ok(()),
+            PreviewAction::Pause => MediaCommand::Pause(window.get_preview_playing()),
+            PreviewAction::Seek(value) => MediaCommand::Seek((f64::from(value) * 1000.0) as u64),
+            PreviewAction::Volume(value) => MediaCommand::Volume(f64::from(value)),
         };
         player.command(command)
     }

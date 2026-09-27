@@ -1,0 +1,70 @@
+import { Title, Label, Card, Button, SecondaryButton, AppSlider, AppTextField } from "../components.slint";
+import { RadioButton, MaterialPalette } from "@material";
+
+export component SettingsPage inherits VerticalLayout {
+    in property <string> settings-text;
+    in property <bool> rtl;
+    in property <string> device-name-text;
+    in property <bool> ready;
+    in property <bool> preview-visible;
+    in-out property <string> display-name;
+    callback save-display-name(string);
+    in property <string> save-text;
+    in-out property <string> default-directory;
+    in property <string> choose-folder-text;
+    callback choose-directory();
+    in-out property <int> theme-style;
+    callback select-theme(int);
+    in property <string> language-text;
+    in property <string> english-text;
+    in property <string> persian-text;
+    in-out property <int> selected-language;
+    callback select-language(int);
+    in-out property <float> brightness;
+    callback save-brightness(float);
+
+    spacing: 14px;
+    Title { text: root.settings-text; rtl: root.rtl; }
+    Card {
+        VerticalLayout {
+            padding: 16px; spacing: 8px;
+            Label { text: root.device-name-text; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            name-field := AppTextField { enabled: root.ready && !root.preview-visible; text <=> root.display-name; horizontal-alignment: root.rtl ? right : left; accepted(value) => { root.save-display-name(value); } }
+            Button { enabled: root.ready && !root.preview-visible; text: root.save-text; clicked => { root.save-display-name(name-field.text); } }
+        }
+    }
+    Card {
+        VerticalLayout {
+            padding: 16px; spacing: 8px;
+            Label { text: root.rtl ? "مسیر ذخیره" : "Save Directory"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            Label { text: root.default-directory; horizontal-alignment: left; }
+            SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.choose-directory(); } }
+        }
+    }
+    Card {
+        VerticalLayout {
+            padding: 16px; spacing: 8px;
+            Label { text: root.rtl ? "رنگ پوسته" : "Theme Style"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            for theme[index] in [root.rtl ? "بنفش" : "Purple", root.rtl ? "قرمز" : "Red", root.rtl ? "سبز" : "Green"]: HorizontalLayout {
+                spacing: 10px;
+                RadioButton { checked: root.theme-style == index; enabled: root.ready && !root.preview-visible; accessible-label: theme; clicked => { root.select-theme(index); } }
+                Label { text: theme; rtl: root.rtl; }
+            }
+            Label { text: root.language-text; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            for language[index] in [root.english-text, root.persian-text]: HorizontalLayout {
+                spacing: 10px;
+                RadioButton { checked: root.selected-language == index; enabled: root.ready && !root.preview-visible; accessible-label: language; clicked => { root.select-language(index); } }
+                Label { text: language; rtl: root.rtl; }
+            }
+        }
+    }
+    Card {
+        VerticalLayout {
+            padding: 16px; spacing: 8px;
+            Label { text: root.rtl ? "روشنایی برنامه" : "Application brightness"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            Label { text: round(root.brightness) + "%"; rtl: root.rtl; }
+            AppSlider { minimum: 50; maximum: 100; step: 1; value <=> root.brightness; enabled: root.ready && !root.preview-visible; changed(value) => { root.save-brightness(value); } }
+        }
+    }
+    Label { text: "Made with Slint · slint.dev"; }
+}

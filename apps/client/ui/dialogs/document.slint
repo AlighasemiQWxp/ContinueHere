@@ -1,0 +1,41 @@
+import { ScrollView } from "std-widgets.slint";
+import { Title, Label, Card, Button, SecondaryButton, QuietButton, AppTextField } from "../components.slint";
+import { MaterialPalette } from "@material";
+
+export component DocumentDialog inherits Card {
+    in property <bool> rtl;
+    in property <string> close-text;
+    callback document-action(string, string);
+    in property <string> document-title;
+    in property <string> document-kind;
+    in-out property <string> document-position-input;
+
+    TouchArea {}
+    ScrollView {
+        width: 100%; height: 100%; viewport-width: self.width;
+        VerticalLayout {
+            padding: 20px; spacing: 14px;
+            HorizontalLayout {
+                Title { text: root.rtl ? "ادامه سند" : "Resume document"; rtl: root.rtl; }
+                QuietButton { text: root.close-text; clicked => { root.document-action("cancel", ""); } }
+            }
+            Label { text: root.document-title; rtl: root.rtl; color: MaterialPalette.on-surface; }
+            Label {
+                text: root.document-kind == "pdf"
+                    ? (root.rtl ? "صفحه‌ای را که به آن رسیده‌اید وارد کنید." : "Enter the page you reached.")
+                    : (root.rtl ? "اسلایدی را که به آن رسیده‌اید وارد کنید." : "Enter the slide you reached.");
+                rtl: root.rtl;
+            }
+            document-position := AppTextField {
+                text <=> root.document-position-input;
+                label: root.document-kind == "pdf" ? (root.rtl ? "شماره صفحه" : "Page number") : (root.rtl ? "شماره اسلاید" : "Slide number");
+                accepted(value) => { root.document-action("send", value); }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Button { text: root.rtl ? "ارسال" : "Send"; clicked => { root.document-action("send", document-position.text); } }
+                SecondaryButton { text: root.rtl ? "بازگشت" : "Back"; clicked => { root.document-action("cancel", ""); } }
+            }
+        }
+    }
+}

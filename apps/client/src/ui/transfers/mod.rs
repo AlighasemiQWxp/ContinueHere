@@ -1,55 +1,99 @@
+mod access;
+
+pub(in crate::ui) use access::TransfersAccess;
+
 use std::{cell::RefCell, rc::Rc};
 
 use continuehere::{
-    ContinueHere, DeviceId, FileTransferChangedDelegate, FileTransferChangedSubscription,
-    FileTransferDirection, FileTransferHandle, FileTransferState,
+    DeviceId, FileTransferChangedDelegate, FileTransferChangedSubscription, FileTransferDirection,
+    FileTransferHandle, FileTransferState, LanguageChangedDelegate, LanguageChangedSubscription,
 };
 use slint::ComponentHandle;
 
 use super::{
     ContentRow, MainWindow,
+    handoff::HandoffTransfers,
+    preview::PreviewOpener,
     selection::{ContentSelectionUiController, selected_path},
-    support::{EventTarget, UiResult, model, notify, show_result, text},
+    shared::{EventTarget, UiResult, model, notify, show_result, text},
 };
 
 pub(super) struct TransferUiController {
-    core: Rc<ContinueHere>,
+    access: TransfersAccess,
+    handoff_transfers: HandoffTransfers,
+    preview: PreviewOpener,
     handles: Vec<FileTransferHandle>,
     next_handle: u64,
     _changed: FileTransferChangedSubscription,
+    _language_changed: LanguageChangedSubscription,
+}
+
+#[derive(Clone, Copy)]
+enum TransferAction {
+    Accept,
+    Folder,
+    Reject,
+    Remove,
+    Open,
+}
+
+impl TransferAction {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "accept" => Some(Self::Accept),
+            "folder" => Some(Self::Folder),
+            "reject" => Some(Self::Reject),
+            "remove" => Some(Self::Remove),
+            "open" => Some(Self::Open),
+            _ => None,
+        }
+    }
 }
 
 impl TransferUiController {
     pub(super) fn start(
-        core: Rc<ContinueHere>,
+        access: TransfersAccess,
+        handoff_transfers: HandoffTransfers,
         window: &MainWindow,
         selection: Rc<RefCell<ContentSelectionUiController>>,
+        preview: PreviewOpener,
     ) -> Rc<RefCell<Self>> {
         let target = EventTarget::new(window);
-        let changed = core
-            .file_transfers()
-            .on_transfer_changed(FileTransferChangedDelegate::new(move |change| {
-                let transfer = match change {
-                    continuehere::FileTransferChange::Added(value)
-                    | continuehere::FileTransferChange::Updated(value)
-                    | continuehere::FileTransferChange::Removed(value) => value,
-                    _ => return,
-                };
-                let page = if transfer.direction() == FileTransferDirection::Incoming {
-                    0
-                } else {
-                    1
-                };
-                target.dispatch(move |window| {
-                    window.invoke_refresh_transfers_requested();
-                    notify(&window, page);
-                });
-            }));
+        let language_target = target.clone();
+        let changed =
+            access
+                .file_transfers()
+                .on_transfer_changed(FileTransferChangedDelegate::new(move |change| {
+                    let transfer = match change {
+                        continuehere::FileTransferChange::Added(value)
+                        | continuehere::FileTransferChange::Updated(value)
+                        | continuehere::FileTransferChange::Removed(value) => value,
+                        _ => return,
+                    };
+                    let page = if transfer.direction() == FileTransferDirection::Incoming {
+                        0
+                    } else {
+                        1
+                    };
+                    target.dispatch(move |window| {
+                        window.invoke_refresh_transfers_requested();
+                        notify(&window, page);
+                    });
+                }));
+        let language_changed =
+            access
+                .localization()
+                .on_language_changed(LanguageChangedDelegate::new(move |_| {
+                    language_target.dispatch(|window| window.invoke_refresh_transfers_requested());
+                }));
         let controller = Rc::new(RefCell::new(Self {
-            core,
+            access,
+            handoff_transfers,
+            preview,
             handles: Vec::new(),
             next_handle: 0,
             _changed: changed,
+            _language_changed: language_changed,
         }));
         let weak = Rc::downgrade(&controller);
         let view = window.as_weak();
@@ -83,7 +127,15 @@ impl TransferUiController {
         let directory_selection = selection;
         window.on_transfer_action(move |id, action| {
             if let (Some(controller), Some(window)) = (weak.upgrade(), view.upgrade()) {
-                if action.as_str() == "folder" {
+                let action = match TransferAction::parse(action.as_str()) {
+                    Some(action) => action,
+                    None => {
+                        let result: UiResult = Err("Unknown transfer action.".into());
+                        show_result(&window, result);
+                        return;
+                    }
+                };
+                if matches!(action, TransferAction::Folder) {
                     let transfer_id = id.to_string();
                     let selected_controller = Rc::downgrade(&controller);
                     let refresh_controller = selected_controller.clone();
@@ -110,9 +162,7 @@ impl TransferUiController {
                     show_result(&window, result);
                     return;
                 }
-                let result = controller
-                    .borrow_mut()
-                    .act(id.as_str(), action.as_str(), &window);
+                let result = controller.borrow_mut().act(id.as_str(), action);
                 show_result(&window, result);
                 controller.borrow_mut().refresh(&window);
             }
@@ -131,7 +181,7 @@ impl TransferUiController {
     fn available_device(&self, device: &str) -> UiResult<DeviceId> {
         let device = DeviceId::new(device.to_owned())?;
         if !self
-            .core
+            .access
             .transport()
             .connections()
             .iter()
@@ -160,7 +210,7 @@ impl TransferUiController {
         }
         self.next_handle += 1;
         let handle = self
-            .core
+            .access
             .file_transfers()
             .get_handle(&format!("ui.transfer.{}", self.next_handle))?;
         if kind == crate::platform::SelectionKind::Folder {
@@ -175,45 +225,51 @@ impl TransferUiController {
 
     fn accept_incoming(&mut self, id: &str, directory: Option<&std::path::Path>) -> UiResult {
         let transfer = self
-            .core
+            .access
             .file_transfers()
             .transfers()
             .into_iter()
             .find(|item| item.id().as_str() == id)
             .ok_or("This transfer is unavailable.")?;
-        self.core
+        self.access
             .file_transfers()
             .accept_incoming(transfer.id(), directory)?;
         Ok(())
     }
 
-    fn act(&mut self, id: &str, action: &str, window: &MainWindow) -> UiResult {
+    fn act(&mut self, id: &str, action: TransferAction) -> UiResult {
         let transfer = self
-            .core
+            .access
             .file_transfers()
             .transfers()
             .into_iter()
             .find(|item| item.id().as_str() == id)
             .ok_or("This transfer is unavailable.")?;
         match action {
-            "accept" => self
-                .core
+            TransferAction::Accept => self
+                .access
                 .file_transfers()
                 .accept_incoming(transfer.id(), None)?,
-            "folder" => return Err("Folder selection did not complete.".into()),
-            "reject" => self.core.file_transfers().reject_incoming(transfer.id())?,
-            "remove" => {
+            TransferAction::Folder => {
+                return Err("Folder selection did not complete.".into());
+            }
+            TransferAction::Reject => {
+                self.access
+                    .file_transfers()
+                    .reject_incoming(transfer.id())?;
+            }
+            TransferAction::Remove => {
                 if let Some(index) = self.handles.iter().position(|handle| {
                     handle
                         .transfer()
                         .is_some_and(|item| item.id().as_str() == id)
                 }) {
                     self.handles.remove(index);
-                } else if !window.invoke_cancel_video_transfer(id.into()) {
-                    self.core.file_transfers().remove(transfer.id())?;
+                } else if !self.handoff_transfers.cancel_video_transfer(transfer.id()) {
+                    self.access.file_transfers().remove(transfer.id())?;
                 }
             }
-            "open" => {
+            TransferAction::Open => {
                 if transfer.direction() != FileTransferDirection::Incoming
                     || transfer.state() != FileTransferState::Completed
                 {
@@ -222,7 +278,7 @@ impl TransferUiController {
                 let path = transfer
                     .destination()
                     .ok_or("The received file is unavailable.")?;
-                let continuation = self.core.handoff().incoming().iter().find_map(|handoff| {
+                let continuation = self.access.handoff().incoming().iter().find_map(|handoff| {
                     match handoff.payload() {
                         continuehere::HandoffPayload::LocalVideo(video)
                             if video.transfer_id() == Some(transfer.id()) =>
@@ -247,13 +303,9 @@ impl TransferUiController {
                         return Err("The document is verified, but its continuation metadata is not ready yet.".into());
                     }
                     let position = continuation.map_or(0, |(_, position)| position);
-                    window.invoke_open_file(
-                        path.to_string_lossy().as_ref().into(),
-                        position.to_string().into(),
-                    );
+                    self.preview.open(path.to_path_buf(), position)?;
                 }
             }
-            _ => return Err("Unknown transfer action.".into()),
         }
         Ok(())
     }
@@ -261,7 +313,7 @@ impl TransferUiController {
     fn refresh(&mut self, window: &MainWindow) {
         let rtl = window.get_rtl();
         let rows: Vec<ContentRow> = self
-            .core
+            .access
             .file_transfers()
             .transfers()
             .into_iter()

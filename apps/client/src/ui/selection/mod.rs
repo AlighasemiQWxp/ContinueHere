@@ -10,7 +10,7 @@ use slint::ComponentHandle;
 
 use super::{
     MainWindow,
-    support::{EventTarget, UiResult},
+    shared::{EventTarget, UiResult},
 };
 
 type SelectionAction = Box<dyn FnOnce(&MainWindow, crate::platform::SelectionResult) + 'static>;

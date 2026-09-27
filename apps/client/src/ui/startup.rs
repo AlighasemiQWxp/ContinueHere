@@ -11,7 +11,7 @@ use tokio::runtime::Runtime;
 
 use super::{
     MainWindow, UiManager,
-    support::{EventTarget, UiResult},
+    shared::{EventTarget, UiResult},
 };
 
 type StartupResult = Arc<Mutex<Option<Result<ContinueHere, String>>>>;

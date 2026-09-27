@@ -1,0 +1,64 @@
+import { Title, Label, Card, Badge, Button } from "../components.slint";
+import { MaterialPalette } from "@material";
+import { ContentRow } from "../models.slint";
+
+export component HistoryPage inherits VerticalLayout {
+    in property <bool> rtl;
+    in property <string> history-error;
+    in-out property <string> history-device;
+    in property <[ContentRow]> history-devices;
+    in property <bool> ready;
+    in property <bool> preview-visible;
+    callback history-action(string, string);
+    in property <string> connected-text;
+    in property <bool> connection-busy;
+    callback reconnect-requested(string);
+    in property <string> history-device-name;
+    in property <[ContentRow]> history-entries;
+    in property <string> retry-text;
+    in property <string> open-text;
+    in property <string> remove-text;
+
+    spacing: 16px;
+    Title { text: root.rtl ? "تاریخچه" : "History"; rtl: root.rtl; }
+    if root.history-error != "": Label { text: root.history-error; rtl: root.rtl; color: MaterialPalette.error; }
+    if root.history-device == "": VerticalLayout {
+        spacing: 12px;
+        Label { text: root.rtl ? "برای دیدن فعالیت‌ها یک دستگاه را انتخاب کنید." : "Choose a device to view its activity timeline."; rtl: root.rtl; }
+        if root.history-devices.length == 0: Label { text: root.rtl ? "هنوز فعالیتی ثبت نشده است." : "No activity yet."; rtl: root.rtl; }
+        for item in root.history-devices: Card {
+            VerticalLayout {
+                padding: 20px; spacing: 12px;
+                HorizontalLayout {
+                    Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                    Badge { shown: item.unread; }
+                }
+                Label { text: item.detail; rtl: root.rtl; }
+                Button { enabled: root.ready && !root.preview-visible; text: root.rtl ? "مشاهده فعالیت‌ها" : "View activity"; clicked => { root.history-action(item.id, "device"); } }
+                Button { text: item.connected ? root.connected-text : (root.rtl ? "اتصال دوباره" : "Reconnect"); enabled: !item.connected && !root.connection-busy && !root.preview-visible; clicked => { root.reconnect-requested(item.id); } }
+            }
+        }
+        Button { text: root.rtl ? "پاک کردن تاریخچه" : "Clear history"; enabled: (root.history-devices.length > 0) && root.ready && !root.preview-visible; clicked => { root.history-action("", "clear"); } }
+    }
+    if root.history-device != "": VerticalLayout {
+        spacing: 12px;
+        Button { enabled: root.ready && !root.preview-visible; text: root.rtl ? "بازگشت به دستگاه‌ها" : "Back to devices"; clicked => { root.history-action("", "back"); } }
+        Title { text: root.history-device-name; rtl: root.rtl; font-size: 20px; }
+        if root.history-entries.length == 0: Label { text: root.rtl ? "فعالیتی وجود ندارد." : "No activity."; rtl: root.rtl; }
+        for item in root.history-entries: Card {
+            VerticalLayout {
+                padding: 20px; spacing: 12px;
+                Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                Label { text: item.status; rtl: root.rtl; color: #ffd16a; }
+                Label { text: item.detail; rtl: root.rtl; }
+                if item.retryable && !item.can-retry: Label { text: root.rtl ? "برای تلاش دوباره ابتدا به دستگاه متصل شوید." : "Reconnect to the device before retrying."; rtl: root.rtl; }
+                VerticalLayout {
+                    spacing: 8px;
+                    if item.retryable: Button { text: root.retry-text; enabled: (item.can-retry) && root.ready && !root.preview-visible; clicked => { root.history-action(item.id, "retry"); } }
+                    if item.can-open: Button { enabled: root.ready && !root.preview-visible; text: root.open-text; clicked => { root.history-action(item.id, "open"); } }
+                    if !item.active: Button { enabled: root.ready && !root.preview-visible; text: root.remove-text; clicked => { root.history-action(item.id, "remove"); } }
+                }
+            }
+        }
+    }
+}
