@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crossbeam_channel::Sender as CrossbeamSender;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{mpsc, oneshot},
@@ -77,7 +78,7 @@ pub(crate) enum SupervisorCommand {
         device_id: DeviceId,
         transfer_id: [u8; 16],
         message: TransferTransportMessage,
-        response: standard_mpsc::Sender<Result<TransferDisposition, TransportError>>,
+        response: CrossbeamSender<Result<TransferDisposition, TransportError>>,
     },
     Shutdown {
         response: oneshot::Sender<()>,
@@ -101,7 +102,7 @@ enum ConnectionCommand {
     SendTransfer {
         transfer_id: [u8; 16],
         message: TransferTransportMessage,
-        response: standard_mpsc::Sender<Result<TransferDisposition, TransportError>>,
+        response: CrossbeamSender<Result<TransferDisposition, TransportError>>,
     },
     Close,
 }
@@ -159,7 +160,7 @@ enum PendingOperation {
     },
     Transfer {
         transfer_id: [u8; 16],
-        response: standard_mpsc::Sender<Result<TransferDisposition, TransportError>>,
+        response: CrossbeamSender<Result<TransferDisposition, TransportError>>,
     },
 }
 

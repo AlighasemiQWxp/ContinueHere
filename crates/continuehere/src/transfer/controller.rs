@@ -5,9 +5,12 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard, mpsc},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+use crossbeam_channel::{
+    Receiver, Sender, TryRecvError as CrossbeamTryRecvError, select, unbounded,
+};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -29,7 +32,7 @@ use super::{
 
 const MAX_ACTIVE_TRANSFERS: usize = 4;
 const MAX_INCOMING_OFFERS: usize = 16;
-const RESULT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+const PROGRESS_PUBLISH_INTERVAL: Duration = Duration::from_millis(100);
 const OFFER_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub(crate) struct FileTransferController {
@@ -49,7 +52,7 @@ struct ControllerState {
 
 struct OutgoingOperation {
     transfer_id: FileTransferId,
-    commands: mpsc::Sender<OperationCommand>,
+    commands: Sender<OperationCommand>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -57,6 +60,7 @@ struct IncomingOperation {
     sender_device_id: DeviceId,
     decision: Option<mpsc::Sender<TransferDisposition>>,
     session: Option<ReceiveSession>,
+    last_progress_published: Instant,
 }
 
 struct ReceiveSession {
@@ -162,7 +166,7 @@ impl FileTransferController {
         validate_source(&config)?;
         let transfer_id = FileTransferId::new();
         let transfer = FileTransfer::outgoing(transfer_id.clone(), &config);
-        let (commands, receiver) = mpsc::channel();
+        let (commands, receiver) = unbounded();
         {
             let mut state = lock(&self.state)?;
             if !state.running {
@@ -537,6 +541,7 @@ impl FileTransferController {
                     sender_device_id,
                     decision: Some(decision),
                     session: None,
+                    last_progress_published: Instant::now(),
                 },
             );
             transfer
@@ -605,14 +610,20 @@ impl FileTransferController {
                     .get_mut(transfer_id)
                     .expect("validated transfer should remain available");
                 transfer.set_progress(new_size);
-                Ok(transfer.clone())
+                if operation.last_progress_published.elapsed() >= PROGRESS_PUBLISH_INTERVAL {
+                    operation.last_progress_published = Instant::now();
+                    Ok(Some(transfer.clone()))
+                } else {
+                    Ok(None)
+                }
             }
         };
         match result {
-            Ok(changed) => {
+            Ok(Some(changed)) => {
                 self.changed.publish(FileTransferChange::Updated(changed));
                 TransferDisposition::Accepted
             }
+            Ok(None) => TransferDisposition::Accepted,
             Err(failure) => {
                 self.fail_incoming(transfer_id, failure);
                 TransferDisposition::Rejected(TransferRejection::FileSystem)
@@ -862,11 +873,11 @@ fn run_outgoing(
     handle_identifier: String,
     transfer_id: FileTransferId,
     mut config: FileTransferConfig,
-    commands: mpsc::Receiver<OperationCommand>,
+    commands: Receiver<OperationCommand>,
 ) {
     let packed = if config.folder {
         match super::folder::pack(&config.source, || {
-            !matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty))
+            !matches!(commands.try_recv(), Err(CrossbeamTryRecvError::Empty))
         }) {
             Ok(file) => Some(file),
             Err(_) => {
@@ -950,6 +961,7 @@ fn run_outgoing(
     };
     let mut hasher = Sha256::new();
     let mut transferred = 0_u64;
+    let mut last_progress_published = Instant::now();
     let mut buffer = vec![0_u8; TRANSFER_CHUNK_SIZE];
     loop {
         let read = match file.read(&mut buffer) {
@@ -999,7 +1011,12 @@ fn run_outgoing(
         }
         hasher.update(chunk);
         transferred += read as u64;
-        controller.update_outgoing_progress(&handle_identifier, transferred);
+        if last_progress_published.elapsed() >= PROGRESS_PUBLISH_INTERVAL
+            || transferred == config.file_size
+        {
+            controller.update_outgoing_progress(&handle_identifier, transferred);
+            last_progress_published = Instant::now();
+        }
     }
     if transferred != config.file_size {
         controller.finish_outgoing(
@@ -1043,7 +1060,7 @@ fn send_and_wait(
     device_id: &DeviceId,
     transfer_id: &FileTransferId,
     message: TransferTransportMessage,
-    commands: &mpsc::Receiver<OperationCommand>,
+    commands: &Receiver<OperationCommand>,
 ) -> WaitResult {
     let response = match controller
         .transport
@@ -1052,23 +1069,15 @@ fn send_and_wait(
         Ok(response) => response,
         Err(error) => return WaitResult::Failed(error),
     };
-    loop {
-        match response.try_recv() {
-            Ok(Ok(TransferDisposition::Accepted)) => return WaitResult::Accepted,
-            Ok(Ok(TransferDisposition::Rejected(reason))) => {
-                return WaitResult::Rejected(reason);
-            }
-            Ok(Err(error)) => return WaitResult::Failed(error),
-            Err(mpsc::TryRecvError::Disconnected) => {
-                return WaitResult::Failed(TransportError::ConnectionFailed);
-            }
-            Err(mpsc::TryRecvError::Empty) => {}
-        }
-        match commands.recv_timeout(RESULT_POLL_INTERVAL) {
-            Ok(OperationCommand::Cancel) | Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return WaitResult::Cancelled;
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
+    select! {
+        recv(response) -> result => match result {
+            Ok(Ok(TransferDisposition::Accepted)) => WaitResult::Accepted,
+            Ok(Ok(TransferDisposition::Rejected(reason))) => WaitResult::Rejected(reason),
+            Ok(Err(error)) => WaitResult::Failed(error),
+            Err(_) => WaitResult::Failed(TransportError::ConnectionFailed),
+        },
+        recv(commands) -> command => match command {
+            Ok(OperationCommand::Cancel) | Err(_) => WaitResult::Cancelled,
         }
     }
 }

@@ -1,5 +1,6 @@
-use std::sync::{Arc, Mutex, MutexGuard, Weak, mpsc as standard_mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
+use crossbeam_channel::{Receiver, bounded};
 use tokio::sync::mpsc;
 
 use crate::models::DeviceId;
@@ -120,12 +121,11 @@ impl TransferTransportCapability {
         device_id: DeviceId,
         transfer_id: [u8; 16],
         message: TransferTransportMessage,
-    ) -> Result<standard_mpsc::Receiver<Result<TransferDisposition, TransportError>>, TransportError>
-    {
+    ) -> Result<Receiver<Result<TransferDisposition, TransportError>>, TransportError> {
         let commands = lock(&self.inner.commands)?
             .clone()
             .ok_or(TransportError::ManagerUnavailable)?;
-        let (response, result) = standard_mpsc::channel();
+        let (response, result) = bounded(1);
         commands
             .blocking_send(SupervisorCommand::SendTransfer {
                 device_id,
