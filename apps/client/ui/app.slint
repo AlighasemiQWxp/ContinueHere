@@ -135,7 +135,7 @@ export component MainWindow inherits Window {
     callback document-action(string, string);
     callback transfer-action(string, string);
     callback history-action(string, string);
-    in-out property <int> theme-style;
+    in-out property <int> theme-style: 3;
     in-out property <float> brightness: 100;
     in property <string> local-addresses;
     in-out property <string> reconnect-device;
@@ -189,8 +189,6 @@ export component MainWindow inherits Window {
         border-width: 0px;
         VerticalLayout {
             padding-top: 18px; padding-bottom: 18px; spacing: 12px; alignment: center;
-            Image { source: @image-url("../assets/ContinueHere.png"); width: 36px; height: 36px; image-fit: contain; }
-            Rectangle { height: 12px; }
             TooltipSystem {
                 icon: @image-url("../assets/send.svg");
                 label: root.rtl ? "ارسال" : "Send";

@@ -26,6 +26,7 @@ impl SettingsUiController {
                     0 => ThemeStyle::Purple,
                     1 => ThemeStyle::Red,
                     2 => ThemeStyle::Green,
+                    3 => ThemeStyle::Blue,
                     _ => return,
                 };
                 crate::ui::shared::show_result(

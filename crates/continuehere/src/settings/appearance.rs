@@ -5,10 +5,11 @@ use crate::{AppearanceChangedDelegate, AppearanceChangedSubscription, Error};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ThemeStyle {
-    #[default]
     Purple,
     Red,
     Green,
+    #[default]
+    Blue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +21,7 @@ pub struct Appearance {
 impl Default for Appearance {
     fn default() -> Self {
         Self {
-            theme: ThemeStyle::Purple,
+            theme: ThemeStyle::Blue,
             brightness: 100,
         }
     }
@@ -88,6 +89,7 @@ impl AppearanceSettings {
             ThemeStyle::Purple => 0,
             ThemeStyle::Red => 1,
             ThemeStyle::Green => 2,
+            ThemeStyle::Blue => 3,
         };
         store
             .write_section("appearance", 1, vec![theme, next.brightness])
@@ -120,6 +122,7 @@ impl AppearanceSettings {
             0 => ThemeStyle::Purple,
             1 => ThemeStyle::Red,
             2 => ThemeStyle::Green,
+            3 => ThemeStyle::Blue,
             _ => return Err(SettingsError::InvalidSectionData { name: "appearance" }),
         };
         if !(50..=100).contains(brightness) {

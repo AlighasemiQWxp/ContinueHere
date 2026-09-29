@@ -218,7 +218,7 @@ unread indicators, while the shell owns navigation unread properties.
 ### Appearance and native components
 
 SettingsManager owns typed AppearanceSettings, ThemeStyle, and brightness inside
-the existing versioned settings store. Missing appearance data uses Purple and
+the existing versioned settings store. Missing appearance data uses Blue and
 100 percent brightness. Updates commit before publishing the custom appearance
 delegate. Slint's MaterialPalette receives a full color scheme, and application
 brightness dims the client without changing monitor settings. Device-name save

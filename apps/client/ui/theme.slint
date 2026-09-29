@@ -2,8 +2,8 @@ import { MaterialScheme } from "@material";
 
 export global AppTheme {
     in property <int> style;
-    out property <color> accent: style == 1 ? #ff9c92 : style == 2 ? #91d7b4 : #c7a8ff;
-    property <color> container: style == 1 ? #492c30 : style == 2 ? #223b32 : #392d50;
+    out property <color> accent: style == 1 ? #ff9c92 : style == 2 ? #91d7b4 : style == 3 ? #8ab4f8 : #c7a8ff;
+    property <color> container: style == 1 ? #492c30 : style == 2 ? #223b32 : style == 3 ? #253a5b : #392d50;
     property <color> background: #111117;
     property <color> low: #17171f;
     property <color> surface: #1e1e28;

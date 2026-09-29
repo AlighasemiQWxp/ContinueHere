@@ -32,6 +32,7 @@ pub(super) fn apply(access: &ShellAccess, window: &MainWindow) {
         ThemeStyle::Purple => 0,
         ThemeStyle::Red => 1,
         ThemeStyle::Green => 2,
+        ThemeStyle::Blue => 3,
     });
     window.set_brightness(f32::from(appearance.brightness()));
     window.set_rtl(language == Language::Persian);

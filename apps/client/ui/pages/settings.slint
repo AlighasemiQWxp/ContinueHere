@@ -46,7 +46,7 @@ export component SettingsPage inherits VerticalLayout {
         VerticalLayout {
             padding: 14px; spacing: 10px;
             Label { text: root.rtl ? "رنگ پوسته" : "Theme Style"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
-            for theme[index] in [root.rtl ? "بنفش" : "Purple", root.rtl ? "قرمز" : "Red", root.rtl ? "سبز" : "Green"]: HorizontalLayout {
+            for theme[index] in [root.rtl ? "بنفش" : "Purple", root.rtl ? "قرمز" : "Red", root.rtl ? "سبز" : "Green", root.rtl ? "آبی" : "Blue"]: HorizontalLayout {
                 spacing: 10px;
                 RadioButton { checked: root.theme-style == index; enabled: root.ready && !root.preview-visible; accessible-label: theme; clicked => { root.select-theme(index); } }
                 Label { text: theme; rtl: root.rtl; }
