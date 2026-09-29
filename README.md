@@ -1,5 +1,7 @@
 # ContinueHere
 
+[![CI](https://github.com/AlighasemiQWxp/ContinueHere/actions/workflows/ci.yml/badge.svg)](https://github.com/AlighasemiQWxp/ContinueHere/actions/workflows/ci.yml)
+
 Continue your activity on another trusted device. Share links and files, then pick up supported videos and documents where you left off.
 
 Built with Rust and Slint. Windows is the current desktop platform, with Android support in progress.
