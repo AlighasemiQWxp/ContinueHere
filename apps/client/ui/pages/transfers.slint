@@ -1,5 +1,4 @@
 import { Title, Label, Card, Button, SecondaryButton, QuietButton } from "../components.slint";
-import { TooltipSystem } from "../tooltip.slint";
 import { MaterialPalette } from "@material";
 import { ContentRow } from "../models.slint";
 
@@ -37,8 +36,8 @@ export component OutgoingTransfers inherits VerticalLayout {
             }
             HorizontalLayout {
                 spacing: 8px;
-                if item.can-open: TooltipSystem { icon: @image-url("../../assets/open.svg"); label: root.open-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.transfer-action(item.id, "open"); } }
-                TooltipSystem { icon: @image-url("../../assets/remove.svg"); label: item.active ? root.cancel-text : root.remove-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.transfer-action(item.id, "remove"); } }
+                if item.can-open: Button { text: root.open-text; enabled: root.ready && !root.preview-visible; clicked => { root.transfer-action(item.id, "open"); } }
+                QuietButton { text: item.active ? root.cancel-text : root.remove-text; enabled: root.ready && !root.preview-visible; clicked => { root.transfer-action(item.id, "remove"); } }
             }
         }
     }

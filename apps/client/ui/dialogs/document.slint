@@ -7,6 +7,7 @@ export component DocumentDialog inherits Card {
     in property <string> close-text;
     callback document-action(string, string);
     in property <string> document-title;
+    in property <string> document-device-name;
     in property <string> document-kind;
     in-out property <string> document-position-input;
 
@@ -20,6 +21,7 @@ export component DocumentDialog inherits Card {
                 QuietButton { text: root.close-text; clicked => { root.document-action("cancel", ""); } }
             }
             Label { text: root.document-title; rtl: root.rtl; color: MaterialPalette.on-surface; }
+            Label { text: (root.rtl ? "ادامه در: " : "Continue on: ") + root.document-device-name; rtl: root.rtl; }
             Label {
                 text: root.document-kind == "pdf"
                     ? (root.rtl ? "صفحه‌ای را که به آن رسیده‌اید وارد کنید." : "Enter the page you reached.")
@@ -33,7 +35,7 @@ export component DocumentDialog inherits Card {
             }
             HorizontalLayout {
                 spacing: 8px;
-                Button { text: root.rtl ? "ارسال" : "Send"; clicked => { root.document-action("send", document-position.text); } }
+                Button { text: root.document-kind == "pdf" ? (root.rtl ? "ارسال با شماره صفحه" : "Send with page") : (root.rtl ? "ارسال با شماره اسلاید" : "Send with slide"); clicked => { root.document-action("send", document-position.text); } }
                 SecondaryButton { text: root.rtl ? "بازگشت" : "Back"; clicked => { root.document-action("cancel", ""); } }
             }
         }

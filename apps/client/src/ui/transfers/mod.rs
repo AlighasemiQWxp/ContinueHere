@@ -198,16 +198,6 @@ impl TransferUiController {
         kind: crate::platform::SelectionKind,
         path: std::path::PathBuf,
     ) -> UiResult {
-        if kind == crate::platform::SelectionKind::File
-            && matches!(
-                crate::platform::extension(&path).as_str(),
-                "pdf" | "ppt" | "pptx"
-            )
-        {
-            return Err(
-                "Use the PDF or PowerPoint choice to preserve your continuation point.".into(),
-            );
-        }
         self.next_handle += 1;
         let handle = self
             .access
@@ -312,6 +302,7 @@ impl TransferUiController {
 
     fn refresh(&mut self, window: &MainWindow) {
         let rtl = window.get_rtl();
+        let connections = self.access.transport().connections();
         let rows: Vec<ContentRow> = self
             .access
             .file_transfers()
@@ -338,10 +329,15 @@ impl TransferUiController {
                 } else {
                     text(rtl, "Outgoing", "ارسالی")
                 };
+                let device_name = connections
+                    .iter()
+                    .find(|connection| connection.device_id() == transfer.peer_device_id())
+                    .map(|connection| connection.display_name().to_owned())
+                    .unwrap_or_else(|| transfer.peer_device_id().to_string());
                 let mut detail = format!(
                     "{} · {}\n{} / {} bytes",
                     direction,
-                    transfer.peer_device_id(),
+                    device_name,
                     transfer.transferred_bytes(),
                     transfer.file_size()
                 );
@@ -357,6 +353,8 @@ impl TransferUiController {
                     transfer.transferred_bytes() as f32 / transfer.file_size() as f32
                 };
                 ContentRow {
+                    device_id: transfer.peer_device_id().to_string().into(),
+                    device_name: device_name.into(),
                     incoming: transfer.direction() == FileTransferDirection::Incoming,
                     id: transfer.id().to_string().into(),
                     title: transfer.file_name().into(),
@@ -387,7 +385,10 @@ impl TransferUiController {
                 .collect(),
         ));
         window.set_outgoing_transfers(model(
-            rows.iter().filter(|item| !item.incoming).cloned().collect(),
+            rows.iter()
+                .filter(|item| !item.incoming && item.active)
+                .cloned()
+                .collect(),
         ));
         self.handles.retain(|handle| {
             handle.transfer().is_some_and(|transfer| {

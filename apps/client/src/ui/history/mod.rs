@@ -223,14 +223,27 @@ impl HistoryUiController {
         groups.sort_by_key(|group| std::cmp::Reverse(activity_time(group[0])));
         let rtl = window.get_rtl();
         let entries = snapshot.entries();
+        let mut recent: Vec<_> = entries
+            .iter()
+            .filter(|item| item.kind() != ActivityKind::Session)
+            .collect();
+        recent.sort_by_key(|item| std::cmp::Reverse((activity_time(item), item.revision())));
+        window.set_recent_history(model(
+            recent
+                .into_iter()
+                .take(50)
+                .map(|item| activity_row(item, &self.access, rtl))
+                .collect(),
+        ));
         window.set_sent_activities(model(
             entries
                 .iter()
                 .filter(|item| {
                     item.direction() == ActivityDirection::Outgoing
                         && item.kind() != ActivityKind::Session
+                        && item.status() != ActivityStatus::Active
                 })
-                .take(100)
+                .take(5)
                 .map(|item| activity_row(item, &self.access, rtl))
                 .collect(),
         ));
@@ -242,7 +255,7 @@ impl HistoryUiController {
                         && item.kind() != ActivityKind::Session
                         && item.status() != ActivityStatus::Active
                 })
-                .take(100)
+                .take(5)
                 .map(|item| activity_row(item, &self.access, rtl))
                 .collect(),
         ));

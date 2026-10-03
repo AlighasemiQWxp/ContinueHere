@@ -1,5 +1,5 @@
 import { Title, Label, Card, Button, SecondaryButton, QuietButton, AppTextField } from "../components.slint";
-import { TooltipSystem } from "../tooltip.slint";
+import { ActionTile } from "../tooltip.slint";
 import { MaterialPalette, DropDownMenu, MenuItem } from "@material";
 import { DeviceRow } from "../models.slint";
 
@@ -12,7 +12,6 @@ export component SendPage inherits VerticalLayout {
     in property <bool> preview-visible;
     in-out property <string> destination-device;
     in property <[string]> connected-device-ids;
-    in property <length> available-width;
     callback send-file(string, string);
     callback choose-document(string, string);
     in-out property <string> playback-position-input;
@@ -20,191 +19,174 @@ export component SendPage inherits VerticalLayout {
     in property <bool> pairing-active;
     in property <string> pairing-status;
     in property <string> pairing-code;
-    in property <string> accept-text;
     in property <bool> pairing-verifiable;
     callback pairing-action(string, string);
     in property <string> reject-text;
     in property <string> cancel-text;
     in property <string> nearby-devices-text;
     in property <bool> discovery-active;
-    in property <string> active-text;
-    in property <string> inactive-text;
     in property <[DeviceRow]> nearby-devices;
-    in property <string> no-nearby-devices-text;
-    in property <string> trusted-devices-text;
     in property <[DeviceRow]> trusted-devices;
-    in property <string> no-trusted-devices-text;
     in property <string> connected-text;
     in property <string> disconnected-text;
     in property <bool> connection-busy;
     callback device-action(string, string, string);
-    in property <string> manual-endpoint-text;
+    callback reconnect-requested(string);
     callback add-manual-endpoint(string);
-    in property <string> add-text;
 
     property <bool> devices-expanded: false;
-    property <bool> link-expanded: false;
+    property <bool> manual-expanded: false;
+    property <int> content-choice: 0;
+    property <string> pending-forget;
+    property <string> link-input;
+    property <string> youtube-input;
+    property <bool> can-send: root.destination-device != "" && root.ready && !root.preview-visible;
+    property <bool> interactive: root.ready && !root.preview-visible;
 
     spacing: 14px;
     Title { text: root.rtl ? "ارسال" : "Send"; rtl: root.rtl; }
-    Label { text: root.rtl ? "یک مقصد انتخاب کنید، سپس محتوای موردنظر را بفرستید." : "Choose a destination, then pick what you want to send."; rtl: root.rtl; }
-    Card {
+    if root.trusted-devices.length == 0: Card {
         VerticalLayout {
-            padding: 12px; spacing: 10px;
-            HorizontalLayout {
-                spacing: 8px; alignment: center;
-                Label { text: root.rtl ? "ارسال به" : "Send to"; rtl: root.rtl; color: MaterialPalette.on-surface; horizontal-stretch: 1; }
-                TooltipSystem {
-                    icon: @image-url("../../assets/device.svg");
-                    label: root.rtl ? "دستگاه‌های نزدیک" : "Nearby Devices";
-                    selected: root.devices-expanded;
-                    clicked => { root.devices-expanded = !root.devices-expanded; }
-                    min-width: 44px; min-height: 44px;
-                }
-            }
-            DropDownMenu {
-                min-height: 48px; items: root.connected-device-menu; current-index <=> root.destination-index;
-                enabled: (root.connected-device-names.length > 0) && root.ready && !root.preview-visible;
-                selected(value) => { root.destination-device = root.connected-device-ids[self.current-index]; }
-            }
-            if root.connected-device-names.length == 0: Label { text: root.rtl ? "برای شروع، یک دستگاه نزدیک را جفت‌سازی کنید." : "Pair a nearby device to get started."; rtl: root.rtl; }
+            padding: 16px; spacing: 10px;
+            Title { text: root.rtl ? "در دستگاه دیگر ادامه دهید" : "Pick up on another device"; rtl: root.rtl; font-size: 20px; }
+            Label { text: root.rtl ? "فایل‌ها و پیوندها را بین دستگاه‌ها بفرستید و ویدیوها و اسناد پشتیبانی‌شده را از جایی که متوقف شدید ادامه دهید." : "Send files and links between your devices, and continue supported videos and documents where you stopped."; rtl: root.rtl; }
+            Label { text: root.rtl ? "ContinueHere را در هر دو دستگاه باز کنید و به یک شبکه محلی مشترک متصل شوید." : "Open ContinueHere on both devices and connect them to the same local network."; rtl: root.rtl; }
+            Button { text: root.rtl ? "افزودن دستگاه" : "Add a device"; enabled: root.interactive; clicked => { root.devices-expanded = true; } }
         }
     }
-    if root.devices-expanded: VerticalLayout {
+    if root.trusted-devices.length > 0: Card {
+        VerticalLayout {
+            padding: 14px; spacing: 10px;
+            Label { text: root.rtl ? "ارسال به" : "Send to"; rtl: root.rtl; color: MaterialPalette.on-surface; }
+            if root.connected-device-names.length > 0: DropDownMenu {
+                min-height: 48px; items: root.connected-device-menu; current-index <=> root.destination-index;
+                enabled: root.interactive;
+                selected(value) => { if self.current-index >= 0 && self.current-index < root.connected-device-ids.length { root.destination-device = root.connected-device-ids[self.current-index]; } }
+            }
+            if root.connected-device-names.length == 0: Label { text: root.rtl ? "هنوز دستگاهی متصل نیست. برای ارسال به یکی از دستگاه‌های خود متصل شوید." : "No device is connected. Connect to one of your devices to send."; rtl: root.rtl; }
+            if root.connection-busy: Label { text: root.rtl ? "در حال به‌روزرسانی اتصال…" : "Updating connection…"; rtl: root.rtl; }
+            QuietButton { text: root.rtl ? "مدیریت دستگاه‌ها" : "Manage devices"; enabled: root.interactive; clicked => { root.devices-expanded = !root.devices-expanded; root.pending-forget = ""; } }
+        }
+    }
+    if root.devices-expanded || (root.trusted-devices.length > 0 && root.connected-device-names.length == 0): VerticalLayout {
         spacing: 10px;
+        if root.trusted-devices.length > 0: Card {
+            VerticalLayout {
+                padding: 14px; spacing: 10px;
+                Label { text: root.rtl ? "دستگاه‌های شما" : "Your devices"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                for device in root.trusted-devices: VerticalLayout {
+                    spacing: 6px;
+                    Label { text: device.name + " · " + device.detail; rtl: root.rtl; color: MaterialPalette.on-surface; }
+                    Label { text: device.connected ? root.connected-text : root.disconnected-text; rtl: root.rtl; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        SecondaryButton {
+                            text: device.connected ? (root.rtl ? "قطع اتصال" : "Disconnect") : (root.rtl ? "اتصال" : "Connect");
+                            enabled: !root.connection-busy && root.interactive;
+                            clicked => {
+                                if !device.connected && device.endpoint == "" { root.reconnect-requested(device.id); }
+                                else { root.device-action(device.id, device.connected ? "disconnect" : "connect", device.endpoint); }
+                            }
+                        }
+                        QuietButton { text: root.rtl ? "فراموش کردن" : "Forget"; enabled: !root.connection-busy && root.interactive; clicked => { root.pending-forget = device.id; } }
+                    }
+                    if !device.connected: QuietButton { text: root.rtl ? "تغییر نشانی اتصال" : "Change connection address"; enabled: !root.connection-busy && root.interactive; clicked => { root.reconnect-requested(device.id); } }
+                    if root.pending-forget == device.id: VerticalLayout {
+                        spacing: 8px;
+                        Label { text: root.rtl ? "این دستگاه فراموش شود؟ برای اتصال دوباره باید آن را جفت‌سازی کنید." : "Forget this device? You will need to pair it again before connecting."; rtl: root.rtl; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            SecondaryButton { text: root.rtl ? "فراموش کردن دستگاه" : "Forget device"; enabled: !root.connection-busy && root.interactive; clicked => { root.device-action(device.id, "forget", ""); root.pending-forget = ""; } }
+                            QuietButton { text: root.cancel-text; clicked => { root.pending-forget = ""; } }
+                        }
+                    }
+                }
+            }
+        }
         Card {
             VerticalLayout {
                 padding: 14px; spacing: 10px;
-                Label { text: root.nearby-devices-text; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 17px; }
-                Label { text: root.discovery-active ? root.active-text : root.inactive-text; rtl: root.rtl; }
-                if root.nearby-devices.length == 0: Label { text: root.no-nearby-devices-text; rtl: root.rtl; }
-                for device in root.nearby-devices: HorizontalLayout {
-                    spacing: 10px; alignment: center;
-                    VerticalLayout {
-                        spacing: 3px; horizontal-stretch: 1;
-                        Label { text: device.name; rtl: root.rtl; color: MaterialPalette.on-surface; }
-                        Label { text: device.detail; rtl: root.rtl; }
-                    }
-                    Button { text: root.rtl ? "جفت‌سازی" : "Pair"; enabled: (!root.pairing-active) && root.ready && !root.preview-visible; clicked => { root.pairing-action("pair", device.detail); } }
+                Title { text: root.nearby-devices-text; rtl: root.rtl; font-size: 18px; }
+                Label { text: root.rtl ? "۱. دستگاه را انتخاب کنید. ۲. کدها را مقایسه کنید. ۳. در هر دو دستگاه تأیید کنید." : "1. Choose a device. 2. Compare the codes. 3. Approve on both devices."; rtl: root.rtl; }
+                Label { text: root.discovery-active ? (root.rtl ? "در حال جست‌وجوی دستگاه‌های نزدیک…" : "Looking for nearby devices…") : (root.rtl ? "جست‌وجوی خودکار در دسترس نیست. از نشانی دستی استفاده کنید." : "Automatic discovery is unavailable. Use a manual address."); rtl: root.rtl; }
+                if root.nearby-devices.length == 0: Label { text: root.rtl ? "هنوز دستگاهی پیدا نشده است. برنامه را در دستگاه دیگر باز نگه دارید و اتصال هر دو به یک شبکه را بررسی کنید." : "No devices found yet. Keep the app open on your other device and check that both are on the same network."; rtl: root.rtl; }
+                for device in root.nearby-devices: VerticalLayout {
+                    spacing: 6px;
+                    Label { text: root.rtl ? "دستگاه نزدیک" : "Nearby device"; rtl: root.rtl; color: MaterialPalette.on-surface; }
+                    Label { text: device.detail; }
+                    SecondaryButton { text: root.rtl ? "جفت‌سازی" : "Pair"; enabled: !root.pairing-active && !root.connection-busy && root.interactive; clicked => { root.pairing-action("pair", device.detail); } }
                 }
-                endpoint := AppTextField { enabled: root.ready && !root.preview-visible; label: root.manual-endpoint-text; accepted(value) => { root.add-manual-endpoint(value); } }
-                SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.add-text; clicked => { root.add-manual-endpoint(endpoint.text); } }
-            }
-        }
-        if root.trusted-devices.length > 0: Card {
-            VerticalLayout {
-                padding: 14px; spacing: 8px;
-                Label { text: root.trusted-devices-text; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 17px; }
-                for device in root.trusted-devices: HorizontalLayout {
-                    spacing: 10px; alignment: center;
-                    VerticalLayout {
-                        spacing: 3px; horizontal-stretch: 1;
-                        Label { text: device.name; rtl: root.rtl; color: MaterialPalette.on-surface; }
-                        Label { text: device.detail + " · " + (device.connected ? root.connected-text : root.disconnected-text); rtl: root.rtl; }
-                    }
-                    TooltipSystem {
-                        icon: @image-url("../../assets/connect.svg");
-                        label: device.connected ? (root.rtl ? "قطع اتصال" : "Disconnect") : (root.rtl ? "اتصال" : "Connect");
-                        enabled: (!root.connection-busy) && (device.connected || device.endpoint != "") && root.ready && !root.preview-visible;
-                        min-width: 44px; min-height: 44px;
-                        clicked => { root.device-action(device.id, device.connected ? "disconnect" : "connect", device.endpoint); }
-                    }
-                    TooltipSystem {
-                        icon: @image-url("../../assets/remove.svg");
-                        label: root.rtl ? "فراموش کردن" : "Forget device";
-                        enabled: (!root.connection-busy) && root.ready && !root.preview-visible;
-                        min-width: 44px; min-height: 44px;
-                        clicked => { root.device-action(device.id, "forget", ""); }
-                    }
+                QuietButton { text: root.rtl ? "دستگاه را پیدا نمی‌کنید؟" : "Can't find your device?"; enabled: root.interactive; clicked => { root.manual-expanded = !root.manual-expanded; } }
+                if root.manual-expanded: VerticalLayout {
+                    spacing: 8px;
+                    Label { text: root.rtl ? "در دستگاه دیگر، دریافت ← جزئیات اتصال را باز کنید. یک نشانی را با درگاه جفت‌سازی وارد کنید؛ مانند 192.168.1.20:5200." : "On the other device, open Receive → Connection details. Enter an address and its pairing port, such as 192.168.1.20:5200."; rtl: root.rtl; }
+                    endpoint := AppTextField { enabled: root.interactive; label: root.rtl ? "نشانی دستگاه (host:port)" : "Device address (host:port)"; accepted(value) => { root.add-manual-endpoint(value); } }
+                    SecondaryButton { text: root.rtl ? "افزودن نشانی" : "Add address"; enabled: root.interactive && endpoint.text != ""; clicked => { root.add-manual-endpoint(endpoint.text); } }
                 }
             }
         }
-    }
-    Card {
-        VerticalLayout {
-            padding: 14px; spacing: 12px;
-            HorizontalLayout {
-                alignment: center;
-                Title { text: root.rtl ? "انتخاب محتوا" : "Choose Content"; rtl: root.rtl; font-size: 18px; horizontal-stretch: 1; }
-                Label { text: root.rtl ? "برای نمایش برچسب، اشاره کنید یا تمرکز دهید" : "Hover or focus for labels"; rtl: root.rtl; font-size: 12px; }
-            }
-            if root.available-width < 440px: VerticalLayout {
-                spacing: 8px;
-                HorizontalLayout {
-                    spacing: 8px;
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/file.svg"); label: root.rtl ? "فایل" : "File"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "file"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/folder.svg"); label: root.rtl ? "پوشه" : "Folder"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "folder"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/media.svg"); label: root.rtl ? "رسانه" : "Media"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "media"); } }
-                }
-                HorizontalLayout {
-                    spacing: 8px;
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/image.svg"); label: root.rtl ? "تصویر" : "Image"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "image"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/video.svg"); label: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/pdf.svg"); label: "PDF"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "pdf"); } }
-                }
-                HorizontalLayout {
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/presentation.svg"); label: root.rtl ? "پاورپوینت" : "PowerPoint"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "powerpoint"); } }
-                }
-            }
-            if root.available-width >= 440px: VerticalLayout {
-                spacing: 8px;
-                HorizontalLayout {
-                    spacing: 8px;
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/file.svg"); label: root.rtl ? "فایل" : "File"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "file"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/folder.svg"); label: root.rtl ? "پوشه" : "Folder"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "folder"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/media.svg"); label: root.rtl ? "رسانه" : "Media"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "media"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/image.svg"); label: root.rtl ? "تصویر" : "Image"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "image"); } }
-                }
-                HorizontalLayout {
-                    spacing: 8px;
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/video.svg"); label: root.rtl ? "ویدیو" : "Video"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.send-file(root.destination-device, "video"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/pdf.svg"); label: "PDF"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "pdf"); } }
-                    TooltipSystem { fill-row: true; icon: @image-url("../../assets/presentation.svg"); label: root.rtl ? "پاورپوینت" : "PowerPoint"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; clicked => { root.choose-document(root.destination-device, "powerpoint"); } }
-                }
-            }
-        }
-    }
-    Card {
-        VerticalLayout {
-            padding: 10px; spacing: 8px;
-            HorizontalLayout {
-                alignment: center;
-                Label { text: root.rtl ? "اشتراک‌گذاری پیوند" : "Share a link"; rtl: root.rtl; color: MaterialPalette.on-surface; horizontal-stretch: 1; }
-                TooltipSystem {
-                    icon: @image-url("../../assets/link.svg");
-                    label: root.rtl ? "اشتراک‌گذاری پیوند" : "Share a link";
-                    selected: root.link-expanded;
-                    clicked => { root.link-expanded = !root.link-expanded; }
-                    min-width: 44px; min-height: 44px;
-                }
-            }
-            if root.link-expanded: VerticalLayout {
-                spacing: 8px;
-                url-field := AppTextField { enabled: root.ready && !root.preview-visible; label: root.rtl ? "نشانی اینترنتی" : "Enter URL"; }
-                position-field := AppTextField { enabled: root.ready && !root.preview-visible; text <=> root.playback-position-input; label: root.rtl ? "موقعیت پخش (اختیاری)" : "Playback position (optional)"; }
-                HorizontalLayout {
-                    spacing: 8px;
-                    TooltipSystem { icon: @image-url("../../assets/send.svg"); label: root.rtl ? "ارسال پیوند" : "Send URL"; enabled: (root.destination-device != "") && root.ready && !root.preview-visible; min-width: 48px; min-height: 48px; clicked => { root.send-handoff("url", root.destination-device, url-field.text, position-field.text); } }
-                    TooltipSystem { icon: @image-url("../../assets/youtube.svg"); label: "YouTube"; enabled: (root.destination-device != "") && root.ready && !root.preview-visible; min-width: 48px; min-height: 48px; clicked => { root.send-handoff("youtube", root.destination-device, url-field.text, position-field.text); } }
-                }
-            }
-        }
-    }
-    HorizontalLayout {
-        spacing: 8px;
-        TooltipSystem { icon: @image-url("../../assets/preview.svg"); label: root.rtl ? "پیش‌نمایش ویدیو" : "Preview video"; enabled: root.ready && !root.preview-visible; min-width: 48px; min-height: 48px; clicked => { root.send-handoff("preview", "", "", ""); } }
-        TooltipSystem { icon: @image-url("../../assets/send.svg"); label: root.rtl ? "ارسال از زمان واردشده" : "Send at entered time"; enabled: root.destination-device != "" && root.ready && !root.preview-visible; min-width: 48px; min-height: 48px; clicked => { root.send-handoff("video", root.destination-device, "", root.playback-position-input); } }
     }
     if root.pairing-active: Card {
         VerticalLayout {
-            padding: 16px; spacing: 8px;
+            padding: 16px; spacing: 10px;
+            Title { text: root.rtl ? "تأیید دستگاه" : "Verify your device"; rtl: root.rtl; font-size: 18px; }
             Label { text: root.pairing-status; rtl: root.rtl; }
-            Label { text: root.pairing-code; horizontal-alignment: center; font-size: 24px; }
+            if root.pairing-code != "": Label { text: root.pairing-code; horizontal-alignment: center; font-size: 24px; }
+            if root.pairing-verifiable: Label { text: root.rtl ? "فقط اگر کدها در هر دو دستگاه یکسان هستند تأیید کنید." : "Approve only if both devices show the same code."; rtl: root.rtl; }
+            VerticalLayout {
+                spacing: 8px;
+                Button { text: root.rtl ? "کدها یکسان‌اند" : "Codes match"; enabled: root.pairing-verifiable && root.interactive; clicked => { root.pairing-action("approve", ""); } }
+                HorizontalLayout {
+                    spacing: 8px;
+                    SecondaryButton { text: root.reject-text; enabled: root.pairing-verifiable && root.interactive; clicked => { root.pairing-action("reject", ""); } }
+                    QuietButton { text: root.cancel-text; enabled: root.interactive; clicked => { root.pairing-action("cancel", ""); } }
+                }
+            }
+        }
+    }
+    if root.connected-device-names.length > 0: Card {
+        VerticalLayout {
+            padding: 14px; spacing: 12px;
+            Title { text: root.rtl ? "چه چیزی می‌فرستید؟" : "What would you like to send?"; rtl: root.rtl; font-size: 18px; }
             HorizontalLayout {
                 spacing: 8px;
-                Button { text: root.accept-text; enabled: root.pairing-verifiable; clicked => { root.pairing-action("approve", ""); } }
-                SecondaryButton { text: root.reject-text; enabled: root.pairing-verifiable; clicked => { root.pairing-action("reject", ""); } }
-                QuietButton { text: root.cancel-text; clicked => { root.pairing-action("cancel", ""); } }
+                ActionTile { icon: @image-url("../../assets/file.svg"); label: root.rtl ? "فایل" : "File"; selected: root.content-choice == 1; enabled: root.can-send; clicked => { root.content-choice = 1; root.send-file(root.destination-device, "file"); } }
+                ActionTile { icon: @image-url("../../assets/folder.svg"); label: root.rtl ? "پوشه" : "Folder"; selected: root.content-choice == 2; enabled: root.can-send; clicked => { root.content-choice = 2; root.send-file(root.destination-device, "folder"); } }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                ActionTile { icon: @image-url("../../assets/link.svg"); label: root.rtl ? "پیوند" : "Link"; selected: root.content-choice == 3; enabled: root.can-send; clicked => { root.content-choice = 3; } }
+                ActionTile { icon: @image-url("../../assets/preview.svg"); label: root.rtl ? "ادامه فعالیت" : "Continue activity"; selected: root.content-choice == 4; enabled: root.can-send; clicked => { root.content-choice = 4; } }
+            }
+            if root.content-choice == 1: VerticalLayout {
+                spacing: 8px;
+                Label { text: root.rtl ? "هر فایلی را بفرستید، یا از فیلترهای زیر استفاده کنید. برای حفظ زمان، صفحه یا اسلاید، «ادامه فعالیت» را انتخاب کنید." : "Send any file, or use a filter below. To keep a time, page, or slide, choose Continue activity."; rtl: root.rtl; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    QuietButton { text: root.rtl ? "تصویر" : "Image"; enabled: root.can-send; clicked => { root.send-file(root.destination-device, "image"); } }
+                    QuietButton { text: root.rtl ? "رسانه" : "Media"; enabled: root.can-send; clicked => { root.send-file(root.destination-device, "media"); } }
+                    QuietButton { text: root.rtl ? "ویدیو" : "Video"; enabled: root.can-send; clicked => { root.send-file(root.destination-device, "video"); } }
+                }
+            }
+            if root.content-choice == 3: VerticalLayout {
+                spacing: 8px;
+                url-field := AppTextField { enabled: root.can-send; text <=> root.link-input; label: root.rtl ? "پیوند را وارد کنید" : "Paste a link"; }
+                Button { text: root.rtl ? "ارسال پیوند" : "Send link"; enabled: root.can-send && url-field.text != ""; clicked => { root.send-handoff("url", root.destination-device, url-field.text, ""); } }
+            }
+            if root.content-choice == 4: VerticalLayout {
+                spacing: 10px;
+                Label { text: root.rtl ? "یک ویدیو یا سند انتخاب کنید، سپس محل ادامه را تعیین کنید. پیشرفت برنامه‌های دیگر به‌طور خودکار خوانده نمی‌شود." : "Choose a video or document, then set where to continue. Progress in other apps is not read automatically."; rtl: root.rtl; }
+                Button { text: root.rtl ? "انتخاب و پیش‌نمایش ویدیو" : "Choose and preview video"; enabled: root.can-send; clicked => { root.send-handoff("preview", "", "", ""); } }
+                HorizontalLayout {
+                    spacing: 8px;
+                    SecondaryButton { text: "PDF"; enabled: root.can-send; clicked => { root.choose-document(root.destination-device, "pdf"); } }
+                    SecondaryButton { text: "PowerPoint"; enabled: root.can-send; clicked => { root.choose-document(root.destination-device, "powerpoint"); } }
+                }
+                Label { text: root.rtl ? "یا زمان را دستی وارد کنید؛ مانند 12:34. خالی یعنی از ابتدا." : "Or enter a time manually, such as 12:34. Leave it empty to start from the beginning."; rtl: root.rtl; }
+                time-field := AppTextField { enabled: root.can-send; text <=> root.playback-position-input; label: root.rtl ? "زمان ادامه (MM:SS)" : "Continue at (MM:SS)"; }
+                SecondaryButton { text: root.rtl ? "انتخاب و ارسال ویدیو" : "Choose and send video"; enabled: root.can-send; clicked => { root.send-handoff("video", root.destination-device, "", time-field.text); } }
+                youtube-field := AppTextField { enabled: root.can-send; text <=> root.youtube-input; label: root.rtl ? "پیوند ویدیوی YouTube" : "YouTube video link"; }
+                SecondaryButton { text: root.rtl ? "ادامه YouTube" : "Continue YouTube"; enabled: root.can-send && youtube-field.text != ""; clicked => { root.send-handoff("youtube", root.destination-device, youtube-field.text, time-field.text); } }
             }
         }
     }

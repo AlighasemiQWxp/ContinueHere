@@ -78,6 +78,7 @@ export component MainWindow inherits Window {
     in-out property <int> destination-index: -1;
     in property <bool> connection-busy;
     in property <string> transport-endpoint;
+    in property <bool> network-available;
     in property <bool> pairing-active;
     in property <bool> pairing-verifiable;
     in property <string> pairing-status;
@@ -90,6 +91,7 @@ export component MainWindow inherits Window {
     in property <[ContentRow]> outgoing-transfers;
     in property <[ContentRow]> history-devices;
     in property <[ContentRow]> history-entries;
+    in property <[ContentRow]> recent-history;
     in-out property <string> history-device;
     in property <string> history-device-name;
     in property <string> history-error;
@@ -110,10 +112,11 @@ export component MainWindow inherits Window {
     in-out property <float> preview-zoom: 1;
     in-out property <string> playback-position-input;
     in property <string> document-title;
+    in property <string> document-device-name;
     in property <string> document-kind;
     in-out property <string> document-position-input;
     property <bool> compact: root.width < 900px;
-    property <length> nav-width: 76px;
+    property <length> nav-width: 104px;
     property <string> close-text: rtl ? "بستن" : "Close";
     property <string> open-text: rtl ? "باز کردن" : "Open";
     property <string> remove-text: rtl ? "حذف" : "Remove";
@@ -188,11 +191,12 @@ export component MainWindow inherits Window {
         border-color: MaterialPalette.outline-variant;
         border-width: 0px;
         VerticalLayout {
-            padding-top: 18px; padding-bottom: 18px; spacing: 12px; alignment: center;
+            padding-top: 12px; padding-bottom: 12px; spacing: 8px; alignment: center;
             TooltipSystem {
                 icon: @image-url("../assets/send.svg");
                 label: root.rtl ? "ارسال" : "Send";
                 selected: root.page == 1; vertical-navigation: true; rtl: root.rtl;
+                show-label: true; min-height: 64px;
                 show-badge: root.send-unread;
                 fill-row: true;
                 clicked => { if root.ready && !root.preview-visible { root.page-selected(1); } }
@@ -201,6 +205,7 @@ export component MainWindow inherits Window {
                 icon: @image-url("../assets/receive.svg");
                 label: root.devices-text;
                 selected: root.page == 0; vertical-navigation: true; rtl: root.rtl;
+                show-label: true; min-height: 64px;
                 show-badge: root.devices-unread;
                 fill-row: true;
                 clicked => { if root.ready && !root.preview-visible { root.page-selected(0); } }
@@ -209,6 +214,7 @@ export component MainWindow inherits Window {
                 icon: @image-url("../assets/history.svg");
                 label: root.rtl ? "تاریخچه" : "History";
                 selected: root.page == 3; vertical-navigation: true; rtl: root.rtl;
+                show-label: true; min-height: 64px;
                 show-badge: root.history-unread;
                 fill-row: true;
                 clicked => { if root.ready && !root.preview-visible { root.page-selected(3); } }
@@ -218,6 +224,7 @@ export component MainWindow inherits Window {
                 icon: @image-url("../assets/settings.svg");
                 label: root.settings-text;
                 selected: root.page == 4; vertical-navigation: true; rtl: root.rtl;
+                show-label: true; min-height: 64px;
                 fill-row: true;
                 clicked => { if root.ready && !root.preview-visible { root.page-selected(4); } }
             }
@@ -262,6 +269,8 @@ export component MainWindow inherits Window {
                     local-addresses: root.local-addresses;
                     pairing-endpoint: root.pairing-endpoint;
                     transport-endpoint: root.transport-endpoint;
+                    network-available: root.network-available;
+                    default-directory: root.default-directory;
                     refresh-network() => { root.refresh-network(); }
                 }
                 if root.page == 1: SendPage {
@@ -273,7 +282,6 @@ export component MainWindow inherits Window {
                     preview-visible: root.preview-visible;
                     destination-device <=> root.destination-device;
                     connected-device-ids: root.connected-device-ids;
-                    available-width: content.width;
                     send-file(value0, value1) => { root.send-file(value0, value1); }
                     choose-document(value0, value1) => { root.choose-document(value0, value1); }
                     playback-position-input <=> root.playback-position-input;
@@ -281,29 +289,22 @@ export component MainWindow inherits Window {
                     pairing-active: root.pairing-active;
                     pairing-status: root.pairing-status;
                     pairing-code: root.pairing-code;
-                    accept-text: root.accept-text;
                     pairing-verifiable: root.pairing-verifiable;
                     pairing-action(value0, value1) => { root.pairing-action(value0, value1); }
                     reject-text: root.reject-text;
                     cancel-text: root.cancel-text;
                     nearby-devices-text: root.nearby-devices-text;
                     discovery-active: root.discovery-active;
-                    active-text: root.active-text;
-                    inactive-text: root.inactive-text;
                     nearby-devices: root.nearby-devices;
-                    no-nearby-devices-text: root.no-nearby-devices-text;
-                    trusted-devices-text: root.trusted-devices-text;
                     trusted-devices: root.trusted-devices;
-                    no-trusted-devices-text: root.no-trusted-devices-text;
                     connected-text: root.connected-text;
                     disconnected-text: root.disconnected-text;
                     connection-busy: root.connection-busy;
                     device-action(value0, value1, value2) => { root.device-action(value0, value1, value2); }
-                    manual-endpoint-text: root.manual-endpoint-text;
+                    reconnect-requested(value) => { root.reconnect-requested(value); }
                     add-manual-endpoint(value0) => { root.add-manual-endpoint(value0); }
-                    add-text: root.add-text;
                 }
-                if root.page == 1: OutgoingTransfers {
+                if root.page == 1 && root.outgoing-transfers.length > 0: OutgoingTransfers {
                     rtl: root.rtl;
                     outgoing-transfers: root.outgoing-transfers;
                     ready: root.ready;
@@ -316,7 +317,7 @@ export component MainWindow inherits Window {
                     cancel-text: root.cancel-text;
                     remove-text: root.remove-text;
                 }
-                if root.page == 0 || root.page == 1: RecentActivity {
+                if root.page == 0 || (root.page == 1 && root.sent-activities.length > 0): RecentActivity {
                     rtl: root.rtl;
                     page <=> root.page;
                     incoming-transfers: root.incoming-transfers;
@@ -329,26 +330,25 @@ export component MainWindow inherits Window {
                     reject-text: root.reject-text;
                     cancel-text: root.cancel-text;
                     sent-activities: root.sent-activities;
-                    open-text: root.open-text;
+                    default-directory: root.default-directory;
+                    connection-busy: root.connection-busy;
+                    reconnect-requested(value) => { root.reconnect-requested(value); }
+                    show-history() => { root.page-selected(3); }
                     history-action(value0, value1) => { root.history-action(value0, value1); }
-                    retry-text: root.retry-text;
                 }
                 if root.page == 3: HistoryPage {
                     rtl: root.rtl;
                     history-error: root.history-error;
                     history-device <=> root.history-device;
                     history-devices: root.history-devices;
+                    recent-history: root.recent-history;
                     ready: root.ready;
                     preview-visible: root.preview-visible;
                     history-action(value0, value1) => { root.history-action(value0, value1); }
-                    connected-text: root.connected-text;
                     connection-busy: root.connection-busy;
                     reconnect-requested(value0) => { root.reconnect-requested(value0); }
                     history-device-name: root.history-device-name;
                     history-entries: root.history-entries;
-                    retry-text: root.retry-text;
-                    open-text: root.open-text;
-                    remove-text: root.remove-text;
                 }
                 if root.page == 4: SettingsPage {
                     settings-text: root.settings-text;
@@ -455,6 +455,7 @@ export component MainWindow inherits Window {
                 close-text: root.close-text;
                 document-action(value0, value1) => { root.document-action(value0, value1); }
                 document-title: root.document-title;
+                document-device-name: root.document-device-name;
                 document-kind: root.document-kind;
                 document-position-input <=> root.document-position-input;
             }

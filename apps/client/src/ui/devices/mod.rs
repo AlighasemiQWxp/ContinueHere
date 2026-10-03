@@ -241,9 +241,17 @@ impl DevicesUiController {
 
     fn refresh(&self, window: &MainWindow) {
         apply_snapshot(window, snapshot(&self.access));
-        if let Ok(endpoint) = self.access.transport().listening_endpoint() {
-            window.set_transport_endpoint(endpoint.port().to_string().into());
-        }
+        self.refresh_listener(window);
+    }
+
+    fn refresh_listener(&self, window: &MainWindow) {
+        let endpoint = self
+            .access
+            .transport()
+            .listening_endpoint()
+            .map(|endpoint| endpoint.port().to_string())
+            .unwrap_or_default();
+        window.set_transport_endpoint(endpoint.into());
     }
 
     fn act(
@@ -318,15 +326,18 @@ impl DevicesUiController {
     }
 
     fn refresh_network(&mut self, window: &MainWindow) {
+        self.refresh_listener(window);
         let addresses = match self.access.discovery().local_addresses() {
             Ok(value) => value,
             Err(error) => {
+                window.set_network_available(false);
                 window.set_local_addresses(
                     format!("Unable to read network addresses: {error}").into(),
                 );
                 return;
             }
         };
+        window.set_network_available(!addresses.is_empty());
         let label = if addresses.is_empty() {
             super::shared::text(
                 window.get_rtl(),

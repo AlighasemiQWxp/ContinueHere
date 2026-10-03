@@ -8,6 +8,7 @@ export component TooltipSystem inherits StateLayerArea {
     in property <bool> vertical-navigation;
     in property <bool> rtl;
     in property <bool> fill-row;
+    in property <bool> show-label;
     property <bool> tooltip-open: false;
 
     tooltip: "";
@@ -23,7 +24,7 @@ export component TooltipSystem inherits StateLayerArea {
 
     tooltip-timer := Timer {
         interval: 400ms;
-        running: (root.has_hover || root.has_focus) && root.enabled && !root.pressed && !root.tooltip-open;
+        running: !root.show-label && (root.has_hover || root.has_focus) && root.enabled && !root.pressed && !root.tooltip-open;
         triggered => { root.tooltip-open = true; }
     }
     changed has_hover => { if !root.has_hover { root.tooltip-open = false; } }
@@ -39,18 +40,35 @@ export component TooltipSystem inherits StateLayerArea {
         source: root.icon;
         width: 24px; height: 24px;
         x: (root.width - self.width) / 2;
-        y: (root.height - self.height) / 2;
+        y: root.show-label ? 12px : (root.height - self.height) / 2;
         colorize: root.selected ? MaterialPalette.on-secondary-container : MaterialPalette.on-surface-variant;
         opacity: root.enabled ? 100% : 55%;
     }
+    if root.show-label: Text {
+        x: 4px; y: 40px;
+        width: root.width - 8px; height: root.height - 44px;
+        text: root.label;
+        font-size: 13px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        wrap: word-wrap;
+        color: root.selected ? MaterialPalette.on-secondary-container : MaterialPalette.on-surface;
+        opacity: root.enabled ? 100% : 55%;
+    }
     if root.show-badge: Rectangle {
-        x: root.width / 2 + 9px; y: root.height / 2 - 18px;
+        x: root.width / 2 + 9px; y: root.show-label ? 6px : root.height / 2 - 18px;
         width: 8px; height: 8px; border-radius: 4px;
         background: #ffd16a;
     }
-    if root.label != "" && root.tooltip-open && (root.has_hover || root.has_focus) && !root.pressed: ToolTip {
+    if !root.show-label && root.label != "" && root.tooltip-open && (root.has_hover || root.has_focus) && !root.pressed: ToolTip {
         x: root.vertical-navigation ? (root.rtl ? -self.width - 8px : root.width + 8px) : (root.width - self.width) / 2;
         y: root.vertical-navigation ? (root.height - self.height) / 2 : root.height + 6px;
         text: root.label;
     }
+}
+
+export component ActionTile inherits TooltipSystem {
+    show-label: true;
+    fill-row: true;
+    min-height: 88px;
 }

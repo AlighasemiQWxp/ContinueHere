@@ -7,6 +7,8 @@ export struct DeviceRow {
 }
 
 export struct ContentRow {
+    device-id: string,
+    device-name: string,
     connected: bool,
     incoming: bool,
     id: string,
@@ -15,6 +17,8 @@ export struct ContentRow {
     status: string,
     progress: float,
     active: bool,
+    failed: bool,
+    completed: bool,
     offered: bool,
     can-open: bool,
     retryable: bool,

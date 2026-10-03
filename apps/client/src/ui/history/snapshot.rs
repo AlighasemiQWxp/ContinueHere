@@ -24,7 +24,7 @@ pub(super) fn timestamp(value: u64) -> String {
         .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|time| {
             time.with_timezone(&chrono::Local)
-                .format("%Y-%m-%d  %H:%M:%S%.3f UTC%:z")
+                .format("%Y-%m-%d  %H:%M")
                 .to_string()
         })
         .unwrap_or_else(|| value.to_string())
@@ -98,6 +98,8 @@ pub(super) fn activity_row(item: &Activity, access: &HistoryAccess, rtl: bool) -
         ActivityStatus::Interrupted => text(rtl, "Interrupted", "متوقف شده"),
     };
     ContentRow {
+        device_id: item.device_id().into(),
+        device_name: item.device_name().into(),
         id: item.id().into(),
         title: if session {
             text(rtl, "Connection session", "نشست اتصال").into()
@@ -115,6 +117,14 @@ pub(super) fn activity_row(item: &Activity, access: &HistoryAccess, rtl: bool) -
                 .iter()
                 .any(|connection| connection.device_id().as_str() == item.device_id()),
         active: item.status() == ActivityStatus::Active,
+        failed: matches!(
+            item.status(),
+            ActivityStatus::Failed | ActivityStatus::Interrupted
+        ),
+        completed: matches!(
+            item.status(),
+            ActivityStatus::Completed | ActivityStatus::Delivered
+        ),
         ..Default::default()
     }
 }

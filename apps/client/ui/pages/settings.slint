@@ -1,5 +1,4 @@
 import { Title, Label, Card, Button, SecondaryButton, AppSlider, AppTextField } from "../components.slint";
-import { TooltipSystem } from "../tooltip.slint";
 import { RadioButton, MaterialPalette } from "@material";
 
 export component SettingsPage inherits VerticalLayout {
@@ -37,25 +36,30 @@ export component SettingsPage inherits VerticalLayout {
     Card {
         VerticalLayout {
             padding: 14px; spacing: 8px;
-            Label { text: root.rtl ? "مسیر ذخیره" : "Save Directory"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            Label { text: root.rtl ? "فایل‌های دریافتی" : "Received files"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
             Label { text: root.default-directory; horizontal-alignment: left; }
-            TooltipSystem { icon: @image-url("../../assets/folder.svg"); label: root.choose-folder-text; enabled: root.ready && !root.preview-visible; min-width: 48px; min-height: 48px; clicked => { root.choose-directory(); } }
+            SecondaryButton { text: root.choose-folder-text; enabled: root.ready && !root.preview-visible; clicked => { root.choose-directory(); } }
         }
     }
     Card {
         VerticalLayout {
             padding: 14px; spacing: 10px;
-            Label { text: root.rtl ? "رنگ پوسته" : "Theme Style"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
-            for theme[index] in [root.rtl ? "بنفش" : "Purple", root.rtl ? "قرمز" : "Red", root.rtl ? "سبز" : "Green", root.rtl ? "آبی" : "Blue"]: HorizontalLayout {
-                spacing: 10px;
-                RadioButton { checked: root.theme-style == index; enabled: root.ready && !root.preview-visible; accessible-label: theme; clicked => { root.select-theme(index); } }
-                Label { text: theme; rtl: root.rtl; }
-            }
             Label { text: root.language-text; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
             for language[index] in [root.english-text, root.persian-text]: HorizontalLayout {
                 spacing: 10px;
                 RadioButton { checked: root.selected-language == index; enabled: root.ready && !root.preview-visible; accessible-label: language; clicked => { root.select-language(index); } }
                 Label { text: language; rtl: root.rtl; }
+            }
+        }
+    }
+    Card {
+        VerticalLayout {
+            padding: 14px; spacing: 10px;
+            Label { text: root.rtl ? "رنگ پوسته" : "Theme color"; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+            for theme[index] in [root.rtl ? "بنفش" : "Purple", root.rtl ? "قرمز" : "Red", root.rtl ? "سبز" : "Green", root.rtl ? "آبی" : "Blue"]: HorizontalLayout {
+                spacing: 10px;
+                RadioButton { checked: root.theme-style == index; enabled: root.ready && !root.preview-visible; accessible-label: theme; clicked => { root.select-theme(index); } }
+                Label { text: theme; rtl: root.rtl; }
             }
         }
     }

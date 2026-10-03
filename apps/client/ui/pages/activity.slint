@@ -1,7 +1,35 @@
 import { Title, Label, Card, Button, SecondaryButton, QuietButton } from "../components.slint";
-import { TooltipSystem } from "../tooltip.slint";
 import { MaterialPalette } from "@material";
 import { ContentRow } from "../models.slint";
+
+export component ActivityCard inherits Card {
+    in property <bool> rtl;
+    in property <ContentRow> item;
+    in property <bool> interactive;
+    in property <bool> connection-busy;
+    in property <bool> allow-remove;
+    in property <bool> show-details;
+    callback history-action(string, string);
+    callback reconnect-requested(string);
+    property <bool> details-expanded: root.show-details || root.item.failed;
+
+    VerticalLayout {
+        padding: 14px; spacing: 8px;
+        Label { text: root.item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+        Label { text: root.item.device-name; rtl: root.rtl; }
+        Label { text: root.item.status; rtl: root.rtl; color: root.item.failed ? MaterialPalette.error : root.item.completed ? MaterialPalette.primary : MaterialPalette.on-surface-variant; }
+        if root.details-expanded: Label { text: root.item.detail; rtl: root.rtl; }
+        if root.item.retryable && !root.item.can-retry: Label { text: root.rtl ? "پیش از تلاش دوباره به دستگاه متصل شوید." : "Connect to the device before retrying."; rtl: root.rtl; }
+        if root.item.retryable && !root.item.can-retry: SecondaryButton { text: root.rtl ? "اتصال دوباره" : "Reconnect"; enabled: root.interactive && !root.connection-busy; clicked => { root.reconnect-requested(root.item.device-id); } }
+        HorizontalLayout {
+            spacing: 8px;
+            if root.item.can-open: Button { text: root.rtl ? "باز کردن" : "Open"; enabled: root.interactive; clicked => { root.history-action(root.item.id, "open"); } }
+            if root.item.retryable: SecondaryButton { text: root.rtl ? "تلاش دوباره" : "Retry"; enabled: root.item.can-retry && root.interactive; clicked => { root.history-action(root.item.id, "retry"); } }
+            QuietButton { text: root.rtl ? "جزئیات" : "Details"; enabled: root.interactive; clicked => { root.details-expanded = !root.details-expanded; } }
+        }
+        if root.allow-remove && !root.item.active: QuietButton { text: root.rtl ? "حذف از تاریخچه" : "Remove from history"; enabled: root.interactive; clicked => { root.history-action(root.item.id, "remove"); } }
+    }
+}
 
 export component RecentActivity inherits VerticalLayout {
     in property <bool> rtl;
@@ -16,13 +44,15 @@ export component RecentActivity inherits VerticalLayout {
     in property <string> reject-text;
     in property <string> cancel-text;
     in property <[ContentRow]> sent-activities;
-    in property <string> open-text;
     callback history-action(string, string);
-    in property <string> retry-text;
+    callback reconnect-requested(string);
+    callback show-history();
+    in property <bool> connection-busy;
+    in property <string> default-directory;
 
     spacing: 12px;
     Title { text: root.rtl ? "فعالیت‌های اخیر" : "Recent activity"; rtl: root.rtl; font-size: 20px; }
-    if root.page == 0 && root.incoming-transfers.length == 0 && root.received-activities.length == 0: Label { text: root.rtl ? "هنوز فعالیتی وجود ندارد." : "No recent activity yet."; rtl: root.rtl; }
+    if root.page == 0 && root.incoming-transfers.length == 0 && root.received-activities.length == 0: Label { text: root.rtl ? "هنوز چیزی دریافت نکرده‌اید. یک فایل یا پیوند از دستگاه متصل خود بفرستید." : "Nothing received yet. Send a file or link from your connected device."; rtl: root.rtl; }
     if root.page == 0: VerticalLayout {
         spacing: 12px;
         for item in root.incoming-transfers: Card {
@@ -31,30 +61,36 @@ export component RecentActivity inherits VerticalLayout {
                 Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
                 Label { text: item.status; rtl: root.rtl; color: MaterialPalette.primary; }
                 Label { text: item.detail; rtl: root.rtl; }
-                Rectangle {
+                if !item.offered: Rectangle {
                     height: 5px; background: MaterialPalette.outline-variant; border-radius: 3px;
                     Rectangle { x: root.rtl ? parent.width - self.width : 0px; width: parent.width * clamp(item.progress, 0, 1); height: parent.height; background: MaterialPalette.primary; border-radius: 3px; }
                 }
-                if item.offered: HorizontalLayout {
+                if item.offered: VerticalLayout {
                     spacing: 8px;
+                    Label { text: root.rtl ? "ذخیره در:" : "Save to:"; rtl: root.rtl; }
+                    Label { text: root.default-directory; }
                     Button { enabled: root.ready && !root.preview-visible; text: root.accept-text; clicked => { root.transfer-action(item.id, "accept"); } }
-                    SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.transfer-action(item.id, "folder"); } }
-                    QuietButton { enabled: root.ready && !root.preview-visible; text: root.reject-text; clicked => { root.transfer-action(item.id, "reject"); } }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        SecondaryButton { enabled: root.ready && !root.preview-visible; text: root.choose-folder-text; clicked => { root.transfer-action(item.id, "folder"); } }
+                        QuietButton { enabled: root.ready && !root.preview-visible; text: root.reject-text; clicked => { root.transfer-action(item.id, "reject"); } }
+                    }
                 }
-                if !item.offered: TooltipSystem { icon: @image-url("../../assets/remove.svg"); label: root.cancel-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.transfer-action(item.id, "remove"); } }
+                if !item.offered: QuietButton { text: root.cancel-text; enabled: root.ready && !root.preview-visible; clicked => { root.transfer-action(item.id, "remove"); } }
             }
         }
     }
-    for item in (root.page == 0 ? root.received-activities : root.sent-activities): Card {
-        VerticalLayout {
-            padding: 14px; spacing: 8px;
-            Label { text: item.title; rtl: root.rtl; }
-            Label { text: item.status + "\n" + item.detail; rtl: root.rtl; }
-            HorizontalLayout {
-                spacing: 4px;
-                if item.can-open: TooltipSystem { icon: @image-url("../../assets/open.svg"); label: root.open-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "open"); } }
-                if item.retryable: TooltipSystem { icon: @image-url("../../assets/retry.svg"); label: root.retry-text; enabled: item.can-retry && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "retry"); } }
-            }
-        }
+    for item in (root.page == 0 ? root.received-activities : root.sent-activities): ActivityCard {
+        rtl: root.rtl;
+        item: item;
+        interactive: root.ready && !root.preview-visible;
+        connection-busy: root.connection-busy;
+        history-action(id, action) => { root.history-action(id, action); }
+        reconnect-requested(id) => { root.reconnect-requested(id); }
+    }
+    if (root.page == 0 ? root.received-activities.length : root.sent-activities.length) > 0: QuietButton {
+        text: root.rtl ? "مشاهده تاریخچه" : "View history";
+        enabled: root.ready && !root.preview-visible;
+        clicked => { root.show-history(); }
     }
 }

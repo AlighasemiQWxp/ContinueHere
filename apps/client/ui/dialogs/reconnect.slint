@@ -14,9 +14,9 @@ export component ReconnectDialog inherits Card {
         VerticalLayout {
             padding: 16px; spacing: 12px;
             Title { text: root.rtl ? "اتصال دوباره" : "Reconnect"; rtl: root.rtl; }
-            Label { text: root.rtl ? "نشانی و درگاه اتصال دستگاه" : "Device IP address and connection port"; rtl: root.rtl; }
+            Label { text: root.rtl ? "در دستگاه دیگر، دریافت ← جزئیات اتصال را باز کنید. نشانی و درگاه اتصال فعلی را وارد کنید؛ درگاه‌ها ممکن است پس از اجرای دوباره تغییر کنند." : "On the other device, open Receive → Connection details. Enter its current address and connection port; ports can change after restart."; rtl: root.rtl; }
             AppTextField { text <=> root.reconnect-endpoint; label: "192.168.1.20:5300"; }
-            Button { text: root.rtl ? "اتصال" : "Connect"; clicked => { root.device-action(root.reconnect-device, "connect", root.reconnect-endpoint); root.close-reconnect-requested(); } }
+            Button { text: root.rtl ? "اتصال" : "Connect"; enabled: root.reconnect-endpoint != ""; clicked => { root.device-action(root.reconnect-device, "connect", root.reconnect-endpoint); root.close-reconnect-requested(); } }
             SecondaryButton { text: root.rtl ? "بازگشت" : "Back"; clicked => { root.close-reconnect-requested(); } }
         }
     }

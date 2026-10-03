@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { Label, Card, AppSlider } from "../components.slint";
+import { Label, Card, Button, AppSlider } from "../components.slint";
 import { TooltipSystem } from "../tooltip.slint";
 import { MaterialPalette, DropDownMenu, MenuItem } from "@material";
 
@@ -48,8 +48,10 @@ export component PreviewDialog inherits Card {
                 TooltipSystem { icon: @image-url("../../assets/zoom.svg"); label: "1:1"; min-width: 48px; min-height: 48px; clicked => { root.preview-zoom = 1; } }
             }
             if root.preview-video: VerticalLayout {
-                DropDownMenu { min-height: 48px; items: root.connected-device-menu; current-index <=> root.destination-index; selected(value) => { root.destination-device = root.connected-device-ids[self.current-index]; } }
-                TooltipSystem { icon: @image-url("../../assets/send.svg"); label: root.rtl ? "ادامه در دستگاه مقصد" : "Continue on device"; enabled: root.destination-device != "" && root.preview-duration > 0; min-width: 48px; min-height: 48px; clicked => { root.send-handoff("current-video", root.destination-device, root.preview-path, ""); } }
+                Label { text: root.rtl ? "محل ادامه را انتخاب کنید، سپس دستگاه مقصد را انتخاب کنید." : "Seek to where you want to continue, then choose a destination."; rtl: root.rtl; }
+                if root.connected-device-menu.length == 0: Label { text: root.rtl ? "برای ادامه در دستگاه دیگر، پیش‌نمایش را ببندید و از صفحه ارسال متصل شوید." : "To continue on another device, close the preview and connect from Send."; rtl: root.rtl; }
+                DropDownMenu { min-height: 48px; items: root.connected-device-menu; current-index <=> root.destination-index; enabled: root.connected-device-menu.length > 0; selected(value) => { if self.current-index >= 0 && self.current-index < root.connected-device-ids.length { root.destination-device = root.connected-device-ids[self.current-index]; } } }
+                Button { text: root.rtl ? "ادامه از زمان فعلی" : "Continue from current time"; enabled: root.destination-device != "" && root.preview-duration > 0 && root.preview-error == ""; clicked => { root.send-handoff("current-video", root.destination-device, root.preview-path, ""); } }
 
                 spacing: 8px;
                 AppSlider { minimum: 0; maximum: max(1, root.preview-duration); value: root.preview-position; enabled: root.preview-duration > 0; changed(value) => { root.preview-action("seek", value); } }

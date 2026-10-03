@@ -241,8 +241,17 @@ impl HandoffUiController {
         let transition = transitions.get_handle("document-continuation");
         transition.configure(UiTransition::Document)?;
         transition.use_handle()?;
+        let device_name = self
+            .access
+            .transport()
+            .connections()
+            .into_iter()
+            .find(|connection| connection.device_id() == &draft.device)
+            .map(|connection| connection.display_name().to_owned())
+            .unwrap_or_default();
         if self.document.edit(request, draft) {
             self.document_transition = Some(transition);
+            window.set_document_device_name(device_name.into());
             window.set_document_position_input("1".into());
         } else {
             transition.release();
@@ -288,6 +297,7 @@ impl HandoffUiController {
             transition.release();
         }
         window.set_document_title("".into());
+        window.set_document_device_name("".into());
         window.set_document_kind("".into());
         window.set_document_position_input("".into());
         self.document.cancel();

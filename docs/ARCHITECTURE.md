@@ -45,7 +45,12 @@ and discovery integration without duplicating application features.
 
 Receive presents one recent-activity feed. Pending incoming transfer offers and
 active progress remain actionable inside that feed; completed transfers and
-handoffs are represented by their persistent Activity record. The Handoff and
+handoffs are represented by their persistent Activity record. Send likewise
+shows active outgoing transfers separately from finished Activity records.
+The receive heading reflects the current application listener and availability
+of a local IPv4 address; it does not promise that a firewall permits peer access.
+Addresses, identifiers, and listener ports remain in expandable connection details.
+The Handoff and
 FileTransfer controllers still retain their independent state and events, but
 the interface does not render duplicate Incoming Handoffs or Transfers sections.
 After an incoming Handoff has a persistent Activity record, the client consumes
@@ -81,8 +86,11 @@ runtime is active so the operating system does not filter local mDNS traffic.
 
 Discovery identifiers are temporary, so they are not treated as trusted device
 IDs. Pairing and authenticated transport have separate listeners. Receive shows
-IPv4 interface addresses and both ports; Send owns discovery, manual pairing,
-and trusted connection controls. DiscoveryManager enumerates local interfaces;
+IPv4 interface addresses and both ports in connection details; Send owns guided
+discovery, manual pairing, and trusted connection controls. Discovery candidates
+do not carry display names, so nearby entries show a neutral label and endpoint.
+Verified pairing and connection records provide device names after authentication.
+DiscoveryManager enumerates local interfaces;
 the client refreshes addresses every five seconds and retains advertisement
 Handles for the current pairing listener. The client also retains one background
 receive Handle, re-arms it after every terminal result, and refreshes advertisements
@@ -212,7 +220,13 @@ the owning controller intentionally keeps alive.
 
 `ActivityManager` owns persistent device-grouped activity through private recording,
 storage, and retry controllers. `HistoryUiController` presents its snapshots in
-History device cards, timelines, and recent Send/Receive activity. It owns device
+History's latest 50 content items, device cards, timelines, and the five recent Send/Receive
+activity. Recent History items are ordered by their latest recorded activity time;
+device timelines retain older content and connection sessions. Shared Activity
+cards expose Open, Retry, reconnect guidance, and expandable details. Clear-history
+and forget-device actions require an explicit inline confirmation before invoking
+their existing owners. These confirmations do not change trust or storage rules.
+The controller owns device
 unread indicators, while the shell owns navigation unread properties.
 
 ### Appearance and native components
@@ -225,12 +239,17 @@ brightness dims the client without changing monitor settings. Device-name save
 confirmation is emitted only after DeviceManager accepts the saved value.
 
 The official MIT Slint Material library is vendored at version 1.17.1. The client
-uses its NavigationDrawer above the compact breakpoint and NavigationBar below
-it. Presentation follows a task-first hierarchy: destination and content are the
-primary Send actions, link tools are grouped separately, and discovery, manual
-pairing, connection details, transfers, and activity remain contextual sections.
-Standard actions use compact button metrics; emphasized content choices use tonal
-tiles. Button semantics remain distinct from navigation and radio selection.
+uses a labeled navigation rail above the compact breakpoint and NavigationBar
+below it. First launch presents the application's purpose and an Add a device
+action. Disconnected trusted devices expose connection controls without requiring
+users to find a hidden panel. Send has four labeled content actions: File, Folder,
+Link, and Continue activity. File accepts ordinary documents without continuation;
+specialized image, media, and video filters remain contextual. Continue activity
+owns entry to the existing video preview, entered-time video/YouTube, and document
+preparation flows. Manual positions remain explicit; progress in external apps is
+not inferred. Standard actions use compact button metrics; emphasized content
+choices use tonal tiles. Button semantics remain distinct from navigation and
+radio selection.
 These are presentation decisions only and do not move operation state out of the
 focused Rust controllers. Native Windows picker filters live in the platform
 adapter. The Slint window and Windows resource build use the supplied application

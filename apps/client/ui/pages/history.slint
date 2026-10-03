@@ -1,68 +1,90 @@
-import { Title, Label, Card, Badge } from "../components.slint";
-import { TooltipSystem } from "../tooltip.slint";
+import { Title, Label, Card, Badge, Button, SecondaryButton, QuietButton } from "../components.slint";
 import { MaterialPalette } from "@material";
 import { ContentRow } from "../models.slint";
+import { ActivityCard } from "activity.slint";
 
 export component HistoryPage inherits VerticalLayout {
     in property <bool> rtl;
     in property <string> history-error;
     in-out property <string> history-device;
     in property <[ContentRow]> history-devices;
+    in property <[ContentRow]> recent-history;
     in property <bool> ready;
     in property <bool> preview-visible;
     callback history-action(string, string);
-    in property <string> connected-text;
     in property <bool> connection-busy;
     callback reconnect-requested(string);
     in property <string> history-device-name;
     in property <[ContentRow]> history-entries;
-    in property <string> retry-text;
-    in property <string> open-text;
-    in property <string> remove-text;
+    property <bool> by-device: false;
+    property <bool> confirm-clear: false;
+    property <bool> interactive: root.ready && !root.preview-visible;
 
     spacing: 12px;
     Title { text: root.rtl ? "تاریخچه" : "History"; rtl: root.rtl; }
     if root.history-error != "": Label { text: root.history-error; rtl: root.rtl; color: MaterialPalette.error; }
     if root.history-device == "": VerticalLayout {
         spacing: 12px;
-        Label { text: root.rtl ? "برای دیدن فعالیت‌ها یک دستگاه را انتخاب کنید." : "Choose a device to view its activity timeline."; rtl: root.rtl; }
-        if root.history-devices.length == 0: Label { text: root.rtl ? "هنوز فعالیتی ثبت نشده است." : "No activity yet."; rtl: root.rtl; }
-        for item in root.history-devices: Card {
-            VerticalLayout {
-                padding: 14px; spacing: 10px;
-                HorizontalLayout {
-                    Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
-                    Badge { shown: item.unread; }
-                }
-                Label { text: item.detail; rtl: root.rtl; }
-                HorizontalLayout {
-                    spacing: 4px;
-                    TooltipSystem { icon: @image-url("../../assets/open.svg"); label: root.rtl ? "مشاهده فعالیت‌ها" : "View activity"; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "device"); } }
-                    if !item.connected: TooltipSystem { icon: @image-url("../../assets/connect.svg"); label: root.rtl ? "اتصال دوباره" : "Reconnect"; enabled: !root.connection-busy && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.reconnect-requested(item.id); } }
+        HorizontalLayout {
+            spacing: 8px;
+            SecondaryButton { text: root.rtl ? "اخیر" : "Recent"; enabled: root.interactive && root.by-device; clicked => { root.by-device = false; } }
+            SecondaryButton { text: root.rtl ? "بر اساس دستگاه" : "By device"; enabled: root.interactive && !root.by-device; clicked => { root.by-device = true; } }
+        }
+        if root.history-devices.length == 0: Label { text: root.rtl ? "فعالیت‌ها پس از اولین ارسال یا دریافت اینجا نمایش داده می‌شوند." : "Your activity will appear here after your first send or receive."; rtl: root.rtl; }
+        if !root.by-device: VerticalLayout {
+            spacing: 12px;
+            for item in root.recent-history: ActivityCard {
+                rtl: root.rtl; item: item;
+                interactive: root.interactive;
+                connection-busy: root.connection-busy;
+                allow-remove: true;
+                history-action(id, action) => { root.history-action(id, action); }
+                reconnect-requested(id) => { root.reconnect-requested(id); }
+            }
+            if root.recent-history.length == 0 && root.history-devices.length > 0: Label { text: root.rtl ? "هنوز محتوایی ارسال نشده است. برای دیدن اتصال‌ها «بر اساس دستگاه» را انتخاب کنید." : "No content shared yet. Choose By device to view connection history."; rtl: root.rtl; }
+            if root.recent-history.length == 50: Label { text: root.rtl ? "۵۰ مورد اخیر نمایش داده می‌شود. برای دیدن موارد قدیمی‌تر، یک دستگاه را انتخاب کنید." : "Showing the latest 50 items. Choose a device to see older activity."; rtl: root.rtl; }
+        }
+        if root.by-device: VerticalLayout {
+            spacing: 12px;
+            for item in root.history-devices: Card {
+                VerticalLayout {
+                    padding: 14px; spacing: 10px;
+                    HorizontalLayout {
+                        Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
+                        Badge { shown: item.unread; }
+                    }
+                    Label { text: item.detail; rtl: root.rtl; }
+                    Button { text: root.rtl ? "مشاهده فعالیت‌ها" : "View activity"; enabled: root.interactive; clicked => { root.history-action(item.id, "device"); } }
+                    if !item.connected: SecondaryButton { text: root.rtl ? "اتصال دوباره" : "Reconnect"; enabled: !root.connection-busy && root.interactive; clicked => { root.reconnect-requested(item.id); } }
                 }
             }
         }
-        TooltipSystem { icon: @image-url("../../assets/clear.svg"); label: root.rtl ? "پاک کردن تاریخچه" : "Clear history"; enabled: (root.history-devices.length > 0) && root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action("", "clear"); } }
+        if root.history-devices.length > 0: QuietButton { text: root.rtl ? "پاک کردن تاریخچه" : "Clear history"; enabled: root.interactive; clicked => { root.confirm-clear = true; } }
+        if root.confirm-clear: Card {
+            VerticalLayout {
+                padding: 14px; spacing: 10px;
+                Label { text: root.rtl ? "فعالیت‌های پایان‌یافته پاک شوند؟ فایل‌های دریافتی و دستگاه‌های جفت‌شده باقی می‌مانند." : "Clear finished activity? Received files and paired devices will be kept."; rtl: root.rtl; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    SecondaryButton { text: root.rtl ? "پاک کردن تاریخچه" : "Clear history"; enabled: root.interactive; clicked => { root.history-action("", "clear"); root.confirm-clear = false; } }
+                    QuietButton { text: root.rtl ? "لغو" : "Cancel"; clicked => { root.confirm-clear = false; } }
+                }
+            }
+        }
     }
     if root.history-device != "": VerticalLayout {
         spacing: 12px;
-        TooltipSystem { icon: @image-url("../../assets/back.svg"); label: root.rtl ? "بازگشت به دستگاه‌ها" : "Back to devices"; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action("", "back"); } }
+        QuietButton { text: root.rtl ? "بازگشت به دستگاه‌ها" : "Back to devices"; enabled: root.interactive; clicked => { root.history-action("", "back"); root.by-device = true; root.confirm-clear = false; } }
         Title { text: root.history-device-name; rtl: root.rtl; font-size: 20px; }
         if root.history-entries.length == 0: Label { text: root.rtl ? "فعالیتی وجود ندارد." : "No activity."; rtl: root.rtl; }
-        for item in root.history-entries: Card {
-            VerticalLayout {
-                padding: 14px; spacing: 10px;
-                Label { text: item.title; rtl: root.rtl; color: MaterialPalette.on-surface; font-size: 18px; }
-                Label { text: item.status; rtl: root.rtl; color: #ffd16a; }
-                Label { text: item.detail; rtl: root.rtl; }
-                if item.retryable && !item.can-retry: Label { text: root.rtl ? "برای تلاش دوباره ابتدا به دستگاه متصل شوید." : "Reconnect to the device before retrying."; rtl: root.rtl; }
-                HorizontalLayout {
-                    spacing: 4px;
-                    if item.retryable: TooltipSystem { icon: @image-url("../../assets/retry.svg"); label: root.retry-text; enabled: item.can-retry && root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "retry"); } }
-                    if item.can-open: TooltipSystem { icon: @image-url("../../assets/open.svg"); label: root.open-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "open"); } }
-                    if !item.active: TooltipSystem { icon: @image-url("../../assets/remove.svg"); label: root.remove-text; enabled: root.ready && !root.preview-visible; min-width: 44px; min-height: 44px; clicked => { root.history-action(item.id, "remove"); } }
-                }
-            }
+        for item in root.history-entries: ActivityCard {
+            rtl: root.rtl; item: item;
+            interactive: root.interactive;
+            connection-busy: root.connection-busy;
+            allow-remove: true;
+            show-details: true;
+            history-action(id, action) => { root.history-action(id, action); }
+            reconnect-requested(id) => { root.reconnect-requested(id); }
         }
     }
 }
