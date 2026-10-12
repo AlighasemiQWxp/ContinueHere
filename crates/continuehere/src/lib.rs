@@ -13,6 +13,7 @@ mod handles;
 mod handoff;
 mod locales;
 mod models;
+pub mod pagination;
 mod pairing;
 mod security;
 mod settings;
@@ -21,8 +22,8 @@ mod transport;
 
 pub use activity::{
     Activity, ActivityChange, ActivityChangedDelegate, ActivityChangedSubscription,
-    ActivityDirection, ActivityError, ActivityKind, ActivityManager, ActivitySnapshot,
-    ActivityStatus,
+    ActivityDirection, ActivityError, ActivityKind, ActivityManager, ActivityPage,
+    ActivitySnapshot, ActivityStatus,
 };
 pub use app::{ContinueHere, ContinueHereBuilder};
 pub use core::error::Error;
@@ -51,6 +52,7 @@ pub use models::{
     Capability, Device, DeviceId, DeviceIdError, DeviceState, LocalDeviceIdentity, Platform,
     ProtocolVersion,
 };
+pub use pagination::{Page, Pagination, PaginationError};
 pub use pairing::{
     PairingError, PairingFailure, PairingHandle, PairingManager, PairingMode, PairingRole,
     PairingSession, PairingSessionChange, PairingSessionChangedDelegate,

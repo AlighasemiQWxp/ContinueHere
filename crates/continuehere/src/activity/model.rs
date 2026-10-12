@@ -1,4 +1,7 @@
-use crate::models::Platform;
+use crate::{
+    models::Platform,
+    pagination::{Page, PaginationError},
+};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +52,8 @@ pub enum ActivityStatus {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ActivityError {
+    #[error(transparent)]
+    Pagination(#[from] PaginationError),
     #[error("History storage failed: {0}")]
     Storage(#[from] std::io::Error),
     #[error("History data is invalid or uses an unsupported version")]
@@ -182,6 +187,18 @@ impl Activity {
     }
     pub(super) fn is_finished(&self) -> bool {
         self.status != ActivityStatus::Active
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivityPage {
+    pub page: Page<Activity>,
+    pub(super) storage_error: Option<String>,
+}
+
+impl ActivityPage {
+    pub fn storage_error(&self) -> Option<&str> {
+        self.storage_error.as_deref()
     }
 }
 

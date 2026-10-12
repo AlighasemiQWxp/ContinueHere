@@ -324,3 +324,88 @@ fn retention_keeps_active_entries_and_source_validation_rejects_changed_files() 
     let store = ActivityStore::new(directory.path().to_owned());
     store.save(&entries).expect("bounded history should save");
 }
+
+#[test]
+fn pages_use_latest_activity_time_and_stable_id_ties() {
+    let directory = tempdir().expect("directory should exist");
+    let history = controller(directory.path());
+    history.handoff(HandoffChange::Added(url()));
+    let template = history.snapshot().expect("snapshot should exist").entries()[0].clone();
+    history.stop().expect("history should stop");
+    let entries = [("a", 10, Some(30)), ("b", 20, None), ("c", 20, None)]
+        .into_iter()
+        .map(|(id, started_at, completed_at)| {
+            let mut entry = template.clone();
+            entry.id = id.to_owned();
+            entry.started_at = started_at;
+            entry.completed_at = completed_at;
+            entry.status = ActivityStatus::Completed;
+            entry
+        })
+        .collect::<Vec<_>>();
+    ActivityStore::new(directory.path().to_owned())
+        .save(&entries)
+        .expect("history should save");
+    let history = controller(directory.path());
+    let read = |page| history.page(crate::Pagination { page, page_size: 2 });
+    let first = read(1).expect("first page should exist");
+    assert_eq!(
+        first
+            .page
+            .items
+            .iter()
+            .map(Activity::id)
+            .collect::<Vec<_>>(),
+        vec!["a", "c"]
+    );
+    assert_eq!(first.page.total_items, 3);
+    assert_eq!(first.page.total_pages(), 2);
+    assert!(first.page.has_next_page());
+    assert!(first.storage_error().is_none());
+    let last = read(2).expect("last page should exist");
+    assert_eq!(last.page.items[0].id(), "b");
+    assert_eq!(last.page.items.len(), 1);
+    assert!(!last.page.has_next_page());
+    assert!(
+        read(3)
+            .expect("missing page should be empty")
+            .page
+            .items
+            .is_empty()
+    );
+    history
+        .remove(Some("a"))
+        .expect("activity should be removed");
+    assert_eq!(read(1).expect("page should refresh").page.total_items, 2);
+    assert!(matches!(read(0), Err(super::ActivityError::Pagination(_))));
+    history.stop().expect("history should stop");
+    assert!(matches!(read(1), Err(super::ActivityError::NotRunning)));
+}
+
+#[test]
+fn empty_pages_preserve_storage_warnings_and_do_not_publish_events() {
+    let directory = tempdir().expect("directory should exist");
+    let trusted = TrustedDeviceRegistry::new(directory.path().to_owned());
+    let event = ActivityChangedEvent::default();
+    let history =
+        ActivityController::new(directory.path().to_owned(), trusted.lookup(), event.clone());
+    history.start().expect("history should start");
+    let empty = history
+        .page(crate::Pagination::default())
+        .expect("page should exist");
+    assert!(empty.page.items.is_empty());
+    assert_eq!(empty.page.total_items, 0);
+    fs::remove_file(directory.path().join("history.bin")).expect("history should be removed");
+    fs::create_dir(directory.path().join("history.bin")).expect("writes should be blocked");
+    history.handoff(HandoffChange::Added(url()));
+    let (send, receive) = std::sync::mpsc::channel();
+    let _subscription = event.subscribe(ActivityChangedDelegate::new(move |change| {
+        send.send(change).expect("receiver should exist");
+    }));
+    let page = history
+        .page(crate::Pagination::default())
+        .expect("page should remain readable");
+    assert!(page.storage_error().is_some());
+    assert_eq!(page.page.items.len(), 1);
+    assert!(receive.try_recv().is_err());
+}

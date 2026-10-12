@@ -1,5 +1,6 @@
 use super::{
-    Activity, ActivityDirection, ActivityError, ActivityKind, ActivitySnapshot, ActivityStatus,
+    Activity, ActivityDirection, ActivityError, ActivityKind, ActivityPage, ActivitySnapshot,
+    ActivityStatus,
     event::ActivityChangedEvent,
     model::now,
     store::{ActivityStore, MAX_ENTRIES},
@@ -7,6 +8,7 @@ use super::{
 use crate::{
     handoff::{HandoffChange, HandoffPayload, HandoffState, IncomingHandoffChange},
     models::{DeviceId, Platform},
+    pagination::{Page, Pagination},
     pairing::TrustedPeerLookup,
     transfer::{FileTransfer, FileTransferChange, FileTransferDirection, FileTransferState},
     transport::ConnectionChange,
@@ -84,6 +86,41 @@ impl ActivityController {
         entries.sort_by_key(|entry| std::cmp::Reverse((entry.started_at, entry.revision)));
         Ok(ActivitySnapshot {
             entries,
+            storage_error: state.storage_error.clone(),
+        })
+    }
+
+    pub(super) fn page(&self, pagination: Pagination) -> Result<ActivityPage, ActivityError> {
+        let state = self.lock()?;
+        if !state.running {
+            return Err(ActivityError::NotRunning);
+        }
+        let range = pagination.range(state.entries.len())?;
+        let mut entries: Vec<_> = state.entries.iter().collect();
+        entries.sort_unstable_by_key(|entry| {
+            let time = [
+                Some(entry.started_at),
+                entry.ended_at,
+                entry.completed_at,
+                entry.file_completed_at,
+                entry.disconnected_at,
+            ]
+            .into_iter()
+            .flatten()
+            .max()
+            .unwrap_or(entry.started_at);
+            std::cmp::Reverse((time, entry.id.as_str()))
+        });
+        Ok(ActivityPage {
+            page: Page {
+                items: entries[range]
+                    .iter()
+                    .map(|entry| (*entry).clone())
+                    .collect(),
+                page: pagination.page,
+                page_size: pagination.page_size,
+                total_items: entries.len(),
+            },
             storage_error: state.storage_error.clone(),
         })
     }

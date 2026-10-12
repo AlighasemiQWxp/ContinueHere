@@ -8,8 +8,8 @@ mod store;
 pub use event::{ActivityChangedDelegate, ActivityChangedSubscription};
 pub use manager::ActivityManager;
 pub use model::{
-    Activity, ActivityChange, ActivityDirection, ActivityError, ActivityKind, ActivitySnapshot,
-    ActivityStatus,
+    Activity, ActivityChange, ActivityDirection, ActivityError, ActivityKind, ActivityPage,
+    ActivitySnapshot, ActivityStatus,
 };
 
 #[cfg(test)]

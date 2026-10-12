@@ -229,6 +229,34 @@ their existing owners. These confirmations do not change trust or storage rules.
 The controller owns device
 unread indicators, while the shell owns navigation unread properties.
 
+### Backend pagination
+
+The public `pagination` module provides stateless `Pagination`, `Page<T>`, and
+`PaginationError` types, also exported at the crate root. It is shared by features
+without a Manager or registration in `CoreModules`. Each feature owns its data,
+filtering, ordering, and query API; `Pagination::range(total_items)` validates a
+request and returns safe slice bounds. A database-backed feature can use those
+bounds without loading all records into the pagination module.
+
+Page numbers start at 1. The default request uses 50 items, and page sizes must
+be between 1 and 100. Invalid numbers and offset overflow return errors. Pages
+past the available results return empty items with the requested page metadata.
+An empty collection has zero total pages. `Page<T>` exposes items, page number,
+page size, and total item count, with `total_pages()` and `has_next_page()` helpers.
+
+`ActivityManager::activity_page(Pagination { page: 2, page_size: 50 })` returns an
+`ActivityPage` containing a public `page: Page<Activity>` and a `storage_error()`
+warning. It includes all retained activities, including connection sessions.
+Latest recorded activity time sorts descending, with activity ID descending as
+an explicit tie-breaker. The controller reads under one state lock, sorts borrowed
+records, and clones only the requested items. Queries do not publish change events.
+
+Every request reads current data; additions, updates, removals, and retention can
+shift page boundaries between calls, so browsing may repeat or skip an item after
+a change. Consumers can use the existing activity change event to refresh later.
+The binary store, retention rules, full `activities()` API, and frontend remain
+unchanged. Pagination limits returned data; it does not provide lazy disk loading.
+
 ### Appearance and native components
 
 SettingsManager owns typed AppearanceSettings, ThemeStyle, and brightness inside

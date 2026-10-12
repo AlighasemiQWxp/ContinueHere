@@ -1,6 +1,7 @@
 use super::{
-    ActivityChangedDelegate, ActivityChangedSubscription, ActivityError, ActivitySnapshot,
-    controller::ActivityController, event::ActivityChangedEvent, retry::RetryController,
+    ActivityChangedDelegate, ActivityChangedSubscription, ActivityError, ActivityPage,
+    ActivitySnapshot, controller::ActivityController, event::ActivityChangedEvent,
+    retry::RetryController,
 };
 use crate::{
     core::{error::ModuleError, module::Module},
@@ -8,6 +9,7 @@ use crate::{
         HandoffCapability, HandoffChangedDelegate, HandoffChangedSubscription,
         IncomingHandoffChangedDelegate, IncomingHandoffChangedSubscription,
     },
+    pagination::Pagination,
     pairing::TrustedPeerLookup,
     transfer::{
         FileTransferCapability, FileTransferChangedDelegate, FileTransferChangedSubscription,
@@ -77,6 +79,10 @@ impl ActivityManager {
 
     pub fn activities(&self) -> Result<ActivitySnapshot, ActivityError> {
         self.controller.snapshot()
+    }
+    /// Reads a numbered page of current history, ordered by latest activity first.
+    pub fn activity_page(&self, pagination: Pagination) -> Result<ActivityPage, ActivityError> {
+        self.controller.page(pagination)
     }
     pub fn retry(&self, activity_id: &str) -> Result<(), ActivityError> {
         self.retry
